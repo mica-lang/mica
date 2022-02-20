@@ -20,25 +20,52 @@ impl Parser {
 
    fn precedence(token: &Token) -> i8 {
       match token.kind {
-         TokenKind::Plus => 10,
-         TokenKind::Minus => 10,
-         TokenKind::Star => 20,
-         TokenKind::Slash => 20,
+         | TokenKind::Equal
+         | TokenKind::NotEqual
+         | TokenKind::Less
+         | TokenKind::Greater
+         | TokenKind::LessEqual
+         | TokenKind::GreaterEqual => 5,
+         TokenKind::Plus | TokenKind::Minus => 10,
+         TokenKind::Star | TokenKind::Slash => 20,
          _ => 0,
       }
    }
 
-   fn parse_number(&mut self, number: Token) -> Result<Box<Node>, Error> {
-      if let TokenKind::Number(x) = &number.kind {
-         Ok(Box::new(Node::new(number.location, NodeKind::Number(*x))))
+   fn parse_number(&mut self, token: Token) -> Result<Box<Node>, Error> {
+      if let TokenKind::Number(x) = &token.kind {
+         Ok(Box::new(Node::new(token.location, NodeKind::Number(*x))))
       } else {
          panic!("next token must be a number");
       }
    }
 
+   fn parse_string(&mut self, token: Token) -> Result<Box<Node>, Error> {
+      if let TokenKind::String(s) = token.kind {
+         Ok(Box::new(Node::new(token.location, NodeKind::String(s))))
+      } else {
+         panic!("next token must be a string");
+      }
+   }
+
+   fn unary_operator(
+      &mut self,
+      token: Token,
+      kind: impl FnOnce(Box<Node>) -> NodeKind,
+   ) -> Result<Box<Node>, Error> {
+      let next_token = self.lexer.next()?;
+      Ok(Box::new(Node::new(
+         token.location,
+         kind(self.parse_prefix(next_token)?),
+      )))
+   }
+
    fn parse_prefix(&mut self, token: Token) -> Result<Box<Node>, Error> {
       match &token.kind {
          TokenKind::Number(_) => self.parse_number(token),
+         TokenKind::String(_) => self.parse_string(token),
+         TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),
+         TokenKind::Bang => self.unary_operator(token, NodeKind::Not),
          TokenKind::LeftParen => {
             let inner = self.parse_expression(0)?;
             if !matches!(self.lexer.next()?.kind, TokenKind::RightParen) {
@@ -50,26 +77,34 @@ impl Parser {
       }
    }
 
+   fn binary_operator(
+      &mut self,
+      left: Box<Node>,
+      token: Token,
+      kind: impl FnOnce(Box<Node>, Box<Node>) -> NodeKind,
+   ) -> Result<Box<Node>, Error> {
+      Ok(Box::new(Node::new(
+         token.location,
+         kind(left, self.parse_expression(Self::precedence(&token))?),
+      )))
+   }
+
    fn parse_infix(&mut self, left: Box<Node>, token: Token) -> Result<Box<Node>, Error> {
-      Ok(Box::new(match &token.kind {
-         TokenKind::Plus => Node::new(
-            token.location,
-            NodeKind::Add(left, self.parse_expression(Self::precedence(&token))?),
-         ),
-         TokenKind::Minus => Node::new(
-            token.location,
-            NodeKind::Subtract(left, self.parse_expression(Self::precedence(&token))?),
-         ),
-         TokenKind::Star => Node::new(
-            token.location,
-            NodeKind::Multiply(left, self.parse_expression(Self::precedence(&token))?),
-         ),
-         TokenKind::Slash => Node::new(
-            token.location,
-            NodeKind::Divide(left, self.parse_expression(Self::precedence(&token))?),
-         ),
-         _ => return Err(Self::error(&token, ErrorKind::InvalidInfixToken)),
-      }))
+      match &token.kind {
+         TokenKind::Plus => self.binary_operator(left, token, NodeKind::Add),
+         TokenKind::Minus => self.binary_operator(left, token, NodeKind::Subtract),
+         TokenKind::Star => self.binary_operator(left, token, NodeKind::Multiply),
+         TokenKind::Slash => self.binary_operator(left, token, NodeKind::Divide),
+
+         TokenKind::Equal => self.binary_operator(left, token, NodeKind::Equal),
+         TokenKind::NotEqual => self.binary_operator(left, token, NodeKind::NotEqual),
+         TokenKind::Less => self.binary_operator(left, token, NodeKind::Less),
+         TokenKind::Greater => self.binary_operator(left, token, NodeKind::Greater),
+         TokenKind::LessEqual => self.binary_operator(left, token, NodeKind::LessEqual),
+         TokenKind::GreaterEqual => self.binary_operator(left, token, NodeKind::GreaterEqual),
+
+         _ => Err(Self::error(&token, ErrorKind::InvalidInfixToken)),
+      }
    }
 
    fn parse_expression(&mut self, precedence: i8) -> Result<Box<Node>, Error> {

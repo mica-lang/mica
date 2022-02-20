@@ -3,11 +3,21 @@ use crate::common::{Error, ErrorKind, Location};
 #[derive(Debug)]
 pub enum TokenKind {
    Number(f64),
+   String(String),
 
-   Plus,       // +
-   Minus,      // -
-   Star,       // *
-   Slash,      // /
+   Plus,  // +
+   Minus, // -
+   Star,  // *
+   Slash, // /
+
+   Bang,         // !
+   Equal,        // ==
+   NotEqual,     // !=
+   Less,         // <
+   Greater,      // >
+   LessEqual,    // <=
+   GreaterEqual, // >=
+
    LeftParen,  // (
    RightParen, // )
 
@@ -94,9 +104,57 @@ impl Lexer {
       Ok(number)
    }
 
+   fn string(&mut self) -> Result<String, Error> {
+      self.advance();
+      let mut result = String::new();
+      while self.get() != '"' {
+         if self.get() == Self::EOF {
+            return Err(self.error(ErrorKind::MissingClosingQuote));
+         }
+         result.push(match self.get() {
+            '\\' => {
+               self.advance();
+               match self.get() {
+                  '"' => '"',
+                  '\\' => '\\',
+                  other => return Err(self.error(ErrorKind::InvalidEscape(other))),
+               }
+            }
+            other => other,
+         });
+         self.advance();
+      }
+      self.advance();
+      Ok(result)
+   }
+
    fn single_char_token(&mut self, kind: TokenKind) -> Token {
       self.advance();
       self.token(kind)
+   }
+
+   fn single_or_double_char_token(
+      &mut self,
+      single: TokenKind,
+      second: char,
+      double: TokenKind,
+   ) -> Token {
+      self.advance();
+      if self.get() == second {
+         self.advance();
+         self.token(double)
+      } else {
+         self.token(single)
+      }
+   }
+
+   fn double_char_token(&mut self, second: char, kind: TokenKind) -> Result<Token, Error> {
+      self.advance();
+      if self.get() != second {
+         return Err(self.error(ErrorKind::CharacterExpected(second)));
+      }
+      self.advance();
+      Ok(self.token(kind))
    }
 
    pub fn next(&mut self) -> Result<Token, Error> {
@@ -108,10 +166,23 @@ impl Lexer {
             let number = self.number()?;
             Ok(self.token(TokenKind::Number(number)))
          }
+         '"' => {
+            let string = self.string()?;
+            Ok(self.token(TokenKind::String(string)))
+         }
+
          '+' => Ok(self.single_char_token(TokenKind::Plus)),
          '-' => Ok(self.single_char_token(TokenKind::Minus)),
          '*' => Ok(self.single_char_token(TokenKind::Star)),
          '/' => Ok(self.single_char_token(TokenKind::Slash)),
+
+         '=' => self.double_char_token('=', TokenKind::Equal),
+         '!' => Ok(self.single_or_double_char_token(TokenKind::Bang, '=', TokenKind::NotEqual)),
+         '<' => Ok(self.single_or_double_char_token(TokenKind::Less, '=', TokenKind::LessEqual)),
+         '>' => {
+            Ok(self.single_or_double_char_token(TokenKind::Greater, '=', TokenKind::GreaterEqual))
+         }
+
          '(' => Ok(self.single_char_token(TokenKind::LeftParen)),
          ')' => Ok(self.single_char_token(TokenKind::RightParen)),
          Self::EOF => Ok(self.token(TokenKind::Eof)),

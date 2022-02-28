@@ -1,14 +1,55 @@
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
 use crate::ast::{Node, NodeKind};
-use crate::common::Error;
+use crate::common::{Error, ErrorKind};
 use crate::value::Value;
 
-pub struct Interpreter {}
+#[derive(Default)]
+struct Scope {
+   variables: HashMap<String, Value>,
+}
+
+pub struct Interpreter {
+   scopes: Vec<Scope>,
+}
 
 impl Interpreter {
    pub fn new() -> Self {
-      Self {}
+      Self {
+         scopes: vec![Default::default()],
+      }
+   }
+
+   fn top_scope_mut(&mut self) -> &mut Scope {
+      self.scopes.last_mut().unwrap()
+   }
+
+   pub fn set_variable(&mut self, name: &str, value: Value) {
+      for scope in self.scopes.iter_mut().rev() {
+         if scope.variables.contains_key(name) {
+            scope.variables.insert(name.to_owned(), value);
+            return;
+         }
+      }
+      self.top_scope_mut().variables.insert(name.to_owned(), value);
+   }
+
+   pub fn get_variable(&mut self, name: &str) -> Option<&Value> {
+      for scope in self.scopes.iter().rev() {
+         if scope.variables.contains_key(name) {
+            return scope.variables.get(name);
+         }
+      }
+      None
+   }
+
+   fn push_scope(&mut self) {
+      self.scopes.push(Default::default());
+   }
+
+   fn pop_scope(&mut self) {
+      self.scopes.pop();
    }
 
    pub fn interpret(&mut self, node: &Node) -> Result<Value, Error> {
@@ -45,8 +86,13 @@ impl Interpreter {
       }
 
       Ok(match &node.kind {
+         NodeKind::Nil => Value::Nil,
+         NodeKind::False => Value::False,
+         NodeKind::True => Value::True,
          NodeKind::Number(x) => Value::Number(*x),
          NodeKind::String(s) => Value::String(s.clone()),
+
+         NodeKind::Identifier(name) => self.get_variable(name).cloned().unwrap_or(Value::Nil),
 
          NodeKind::Negate(right) => {
             let right = self.interpret(right)?.number(node.location)?;
@@ -67,6 +113,26 @@ impl Interpreter {
          NodeKind::Greater(left, right) => binary_ordering(self, left, right, |o| o.is_gt())?,
          NodeKind::LessEqual(left, right) => binary_ordering(self, left, right, |o| o.is_le())?,
          NodeKind::GreaterEqual(left, right) => binary_ordering(self, left, right, |o| o.is_ge())?,
+
+         NodeKind::Assign(left, right) => {
+            if let NodeKind::Identifier(name) = &left.kind {
+               let value = self.interpret(right)?;
+               self.set_variable(name, value.clone());
+               value
+            } else {
+               return Err(left.error(ErrorKind::InvalidAssignment));
+            }
+         }
+
+         NodeKind::Do(expressions) => {
+            let mut result = Value::Nil;
+            self.push_scope();
+            for expression in expressions {
+               result = self.interpret(expression)?;
+            }
+            self.pop_scope();
+            result
+         }
       })
    }
 }

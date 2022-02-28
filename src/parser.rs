@@ -20,6 +20,7 @@ impl Parser {
 
    fn precedence(token: &Token) -> i8 {
       match token.kind {
+         TokenKind::Assign => 3,
          | TokenKind::Equal
          | TokenKind::NotEqual
          | TokenKind::Less
@@ -30,6 +31,17 @@ impl Parser {
          TokenKind::Star | TokenKind::Slash => 20,
          _ => 0,
       }
+   }
+
+   fn associativity(token: &Token) -> Associativity {
+      match token.kind {
+         TokenKind::Assign => Associativity::Right,
+         _ => Associativity::Left,
+      }
+   }
+
+   fn parse_unit(&mut self, token: Token, kind: NodeKind) -> Result<Box<Node>, Error> {
+      Ok(Box::new(Node::new(token.location, kind)))
    }
 
    fn parse_number(&mut self, token: Token) -> Result<Box<Node>, Error> {
@@ -48,6 +60,14 @@ impl Parser {
       }
    }
 
+   fn parse_identifier(&mut self, token: Token) -> Result<Box<Node>, Error> {
+      if let TokenKind::Identifier(i) = token.kind {
+         Ok(Box::new(Node::new(token.location, NodeKind::Identifier(i))))
+      } else {
+         panic!("next token must be an identifier");
+      }
+   }
+
    fn unary_operator(
       &mut self,
       token: Token,
@@ -60,12 +80,30 @@ impl Parser {
       )))
    }
 
+   fn do_block(&mut self, token: Token) -> Result<Box<Node>, Error> {
+      let mut children = Vec::new();
+      while self.lexer.peek()?.kind != TokenKind::End {
+         if self.lexer.peek()?.kind == TokenKind::Eof {
+            return Err(Self::error(&token, ErrorKind::MissingEnd));
+         }
+         children.push(self.parse_expression(0)?);
+      }
+      let _end = self.lexer.next();
+      Ok(Box::new(Node::new(token.location, NodeKind::Do(children))))
+   }
+
    fn parse_prefix(&mut self, token: Token) -> Result<Box<Node>, Error> {
       match &token.kind {
+         TokenKind::Nil => self.parse_unit(token, NodeKind::Nil),
+         TokenKind::False => self.parse_unit(token, NodeKind::False),
+         TokenKind::True => self.parse_unit(token, NodeKind::True),
          TokenKind::Number(_) => self.parse_number(token),
          TokenKind::String(_) => self.parse_string(token),
+         TokenKind::Identifier(_) => self.parse_identifier(token),
+
          TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),
          TokenKind::Bang => self.unary_operator(token, NodeKind::Not),
+
          TokenKind::LeftParen => {
             let inner = self.parse_expression(0)?;
             if !matches!(self.lexer.next()?.kind, TokenKind::RightParen) {
@@ -73,6 +111,9 @@ impl Parser {
             }
             Ok(inner)
          }
+
+         TokenKind::Do => self.do_block(token),
+
          _ => Err(Self::error(&token, ErrorKind::InvalidPrefixToken)),
       }
    }
@@ -83,9 +124,11 @@ impl Parser {
       token: Token,
       kind: impl FnOnce(Box<Node>, Box<Node>) -> NodeKind,
    ) -> Result<Box<Node>, Error> {
+      let precedence =
+         Self::precedence(&token) - (Self::associativity(&token) == Associativity::Right) as i8;
       Ok(Box::new(Node::new(
          token.location,
-         kind(left, self.parse_expression(Self::precedence(&token))?),
+         kind(left, self.parse_expression(precedence)?),
       )))
    }
 
@@ -102,6 +145,8 @@ impl Parser {
          TokenKind::Greater => self.binary_operator(left, token, NodeKind::Greater),
          TokenKind::LessEqual => self.binary_operator(left, token, NodeKind::LessEqual),
          TokenKind::GreaterEqual => self.binary_operator(left, token, NodeKind::GreaterEqual),
+
+         TokenKind::Assign => self.binary_operator(left, token, NodeKind::Assign),
 
          _ => Err(Self::error(&token, ErrorKind::InvalidInfixToken)),
       }
@@ -128,4 +173,11 @@ impl Parser {
          Ok(expression)
       }
    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+enum Associativity {
+   Left,
+   Right,
 }

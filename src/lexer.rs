@@ -1,9 +1,18 @@
 use crate::common::{Error, ErrorKind, Location};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
    Number(f64),
    String(String),
+
+   Identifier(String),
+
+   Nil,
+   True,
+   False,
+
+   Do,
+   End,
 
    Plus,  // +
    Minus, // -
@@ -17,6 +26,8 @@ pub enum TokenKind {
    Greater,      // >
    LessEqual,    // <=
    GreaterEqual, // >=
+
+   Assign, // =
 
    LeftParen,  // (
    RightParen, // )
@@ -148,13 +159,21 @@ impl Lexer {
       }
    }
 
-   fn double_char_token(&mut self, second: char, kind: TokenKind) -> Result<Token, Error> {
-      self.advance();
-      if self.get() != second {
-         return Err(self.error(ErrorKind::CharacterExpected(second)));
+   fn is_identifier_start_char(c: char) -> bool {
+      c.is_alphabetic() || c == '_'
+   }
+
+   fn is_identifier_char(c: char) -> bool {
+      c.is_alphanumeric() || c == '_'
+   }
+
+   fn identifier(&mut self) -> &str {
+      let start = self.location.byte;
+      while Self::is_identifier_char(self.get()) {
+         self.advance();
       }
-      self.advance();
-      Ok(self.token(kind))
+      let end = self.location.byte;
+      &self.input[start..end]
    }
 
    pub fn next(&mut self) -> Result<Token, Error> {
@@ -171,12 +190,22 @@ impl Lexer {
             Ok(self.token(TokenKind::String(string)))
          }
 
+         c if Self::is_identifier_start_char(c) => {
+            let identifier = self.identifier();
+            Ok(if let Some(keyword) = KEYWORDS.get(identifier) {
+               self.token(keyword.clone())
+            } else {
+               let identifier = identifier.to_owned();
+               self.token(TokenKind::Identifier(identifier))
+            })
+         }
+
          '+' => Ok(self.single_char_token(TokenKind::Plus)),
          '-' => Ok(self.single_char_token(TokenKind::Minus)),
          '*' => Ok(self.single_char_token(TokenKind::Star)),
          '/' => Ok(self.single_char_token(TokenKind::Slash)),
 
-         '=' => self.double_char_token('=', TokenKind::Equal),
+         '=' => Ok(self.single_or_double_char_token(TokenKind::Assign, '=', TokenKind::Equal)),
          '!' => Ok(self.single_or_double_char_token(TokenKind::Bang, '=', TokenKind::NotEqual)),
          '<' => Ok(self.single_or_double_char_token(TokenKind::Less, '=', TokenKind::LessEqual)),
          '>' => {
@@ -197,3 +226,12 @@ impl Lexer {
       Ok(token)
    }
 }
+
+const KEYWORDS: phf::Map<&'static str, TokenKind> = phf::phf_map! {
+   "nil" => TokenKind::Nil,
+   "true" => TokenKind::True,
+   "false" => TokenKind::False,
+
+   "do" => TokenKind::Do,
+   "end" => TokenKind::End,
+};

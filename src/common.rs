@@ -27,7 +27,6 @@ impl std::fmt::Display for Location {
 pub enum ErrorKind {
    // Lexer
    InvalidCharacter(char),
-   CharacterExpected(char),
    MissingDigitsAfterDecimalPoint,
    MissingClosingQuote,
    InvalidEscape(char),
@@ -37,16 +36,17 @@ pub enum ErrorKind {
    InvalidInfixToken,
    UnexpectedTokensAfterEof,
    MissingRightParen,
+   MissingEnd,
 
    // Runtime
    TypeError { expected: Type, got: Type },
+   InvalidAssignment,
 }
 
 impl std::fmt::Display for ErrorKind {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       match self {
          Self::InvalidCharacter(c) => write!(f, "invalid character: {c:?}"),
-         Self::CharacterExpected(c) => write!(f, "{c:?} expected"),
          Self::MissingDigitsAfterDecimalPoint => write!(f, "missing digits after decimal point"),
          Self::MissingClosingQuote => write!(f, "missing closing quote '\"'"),
          Self::InvalidEscape(c) => write!(f, "invalid escape: {c:?}"),
@@ -55,10 +55,12 @@ impl std::fmt::Display for ErrorKind {
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),
          Self::UnexpectedTokensAfterEof => write!(f, "unexpected tokens at end of input"),
          Self::MissingRightParen => write!(f, "missing right parenthesis ')'"),
+         Self::MissingEnd => write!(f, "missing 'end'"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
+         Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
       }
    }
 }

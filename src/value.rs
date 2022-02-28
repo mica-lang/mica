@@ -4,6 +4,7 @@ use crate::common::{Error, ErrorKind, Location};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
+   Nil,
    Boolean,
    Number,
    String,
@@ -15,8 +16,9 @@ impl std::fmt::Display for Type {
    }
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Value {
+   Nil,
    False,
    True,
    Number(f64),
@@ -26,9 +28,10 @@ pub enum Value {
 impl Value {
    pub fn typ(&self) -> Type {
       match self {
+         Value::Nil => Type::Nil,
          Value::False | Value::True => Type::Boolean,
          Value::Number(_) => Type::Number,
-         Value::String(s) => Type::String,
+         Value::String(_) => Type::String,
       }
    }
 
@@ -62,7 +65,7 @@ impl Value {
 
    pub fn string(&self, location: Location) -> Result<&str, Error> {
       if let Value::String(s) = self {
-         Ok(&s)
+         Ok(s)
       } else {
          Err(Error {
             kind: ErrorKind::TypeError {
@@ -89,6 +92,7 @@ impl Value {
          })
       } else {
          match self {
+            Self::Nil => Ok(Some(Ordering::Equal)),
             Self::False | Self::True => Ok(Some(
                self.boolean(location).unwrap().cmp(&other.boolean(location).unwrap()),
             )),
@@ -117,6 +121,7 @@ impl From<bool> for Value {
 impl std::fmt::Debug for Value {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       match self {
+         Value::Nil => f.write_str("nil"),
          Value::False => f.write_str("false"),
          Value::True => f.write_str("true"),
          Value::Number(x) => write!(f, "{x}"),

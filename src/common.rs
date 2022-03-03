@@ -35,8 +35,11 @@ pub enum ErrorKind {
    InvalidPrefixToken,
    InvalidInfixToken,
    UnexpectedTokensAfterEof,
+   MissingDo,
    MissingRightParen,
    MissingEnd,
+   InvalidIfBranchToken,
+   BranchAfterElse,
 
    // Runtime
    TypeError { expected: Type, got: Type },
@@ -54,8 +57,11 @@ impl std::fmt::Display for ErrorKind {
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),
          Self::UnexpectedTokensAfterEof => write!(f, "unexpected tokens at end of input"),
+         Self::MissingDo => write!(f, "'do' expected"),
          Self::MissingRightParen => write!(f, "missing right parenthesis ')'"),
          Self::MissingEnd => write!(f, "missing 'end'"),
+         Self::InvalidIfBranchToken => write!(f, "'elif', 'else', or 'end' expected"),
+         Self::BranchAfterElse => write!(f, "extraneous branch after 'else'"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

@@ -77,6 +77,14 @@ impl Value {
       }
    }
 
+   pub fn is_truthy(&self) -> bool {
+      !matches!(self, Value::Nil | Value::False)
+   }
+
+   pub fn is_falsy(&self) -> bool {
+      !self.is_truthy()
+   }
+
    pub fn try_partial_cmp(
       &self,
       other: &Self,

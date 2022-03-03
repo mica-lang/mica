@@ -12,6 +12,10 @@ pub enum TokenKind {
    False,
 
    Do,
+   If,
+   Elif,
+   Else,
+   While,
    End,
 
    Plus,  // +
@@ -20,6 +24,8 @@ pub enum TokenKind {
    Slash, // /
 
    Bang,         // !
+   And,          // and
+   Or,           // or
    Equal,        // ==
    NotEqual,     // !=
    Less,         // <
@@ -35,7 +41,7 @@ pub enum TokenKind {
    Eof,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
    pub kind: TokenKind,
    pub location: Location,
@@ -232,6 +238,13 @@ const KEYWORDS: phf::Map<&'static str, TokenKind> = phf::phf_map! {
    "true" => TokenKind::True,
    "false" => TokenKind::False,
 
+   "and" => TokenKind::And,
+   "or" => TokenKind::Or,
+
    "do" => TokenKind::Do,
+   "if" => TokenKind::If,
+   "elif" => TokenKind::Elif,
+   "else" => TokenKind::Else,
+   "while" => TokenKind::While,
    "end" => TokenKind::End,
 };

@@ -1,3 +1,5 @@
+#![allow(clippy::vec_box)]
+
 use ast::Node;
 use common::{Error, ErrorKind};
 use rustyline::completion::Completer;
@@ -61,6 +63,7 @@ fn interpret(interpreter: &mut Interpreter, input: String) -> Option<Value> {
          return None;
       }
    };
+   // root_node.dump_to_stdout();
    let result = match interpreter.interpret(&root_node) {
       Ok(value) => value,
       Err(error) => {
@@ -79,6 +82,7 @@ fn main() {
    while let Ok(line) = editor.readline("> ") {
       if let Some(result) = interpret(&mut interpreter, line) {
          println!("< {result:?}");
+         println!();
       }
    }
 }

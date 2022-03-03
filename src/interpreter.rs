@@ -107,6 +107,22 @@ impl Interpreter {
             let right = self.interpret(right)?.boolean(node.location)?;
             Value::from(!right)
          }
+         NodeKind::And(left, right) => {
+            let left = self.interpret(left)?;
+            if left.is_truthy() {
+               self.interpret(right)?
+            } else {
+               left
+            }
+         }
+         NodeKind::Or(left, right) => {
+            let left = self.interpret(left)?;
+            if left.is_falsy() {
+               self.interpret(right)?
+            } else {
+               left
+            }
+         }
          NodeKind::Equal(left, right) => binary_equality!(left, right, ==),
          NodeKind::NotEqual(left, right) => binary_equality!(left, right, !=),
          NodeKind::Less(left, right) => binary_ordering(self, left, right, |o| o.is_lt())?,
@@ -125,14 +141,53 @@ impl Interpreter {
          }
 
          NodeKind::Do(expressions) => {
-            let mut result = Value::Nil;
             self.push_scope();
-            for expression in expressions {
-               result = self.interpret(expression)?;
-            }
+            let result = self.interpret_all(expressions)?;
             self.pop_scope();
             result
          }
+
+         NodeKind::If(branches) => {
+            for branch in branches {
+               match &branch.kind {
+                  NodeKind::IfBranch(condition, then) => {
+                     self.push_scope();
+                     if self.interpret(condition)?.is_truthy() {
+                        let result = self.interpret_all(then);
+                        self.pop_scope();
+                        return result;
+                     } else {
+                        self.pop_scope();
+                     }
+                  }
+                  NodeKind::ElseBranch(then) => {
+                     self.push_scope();
+                     let result = self.interpret_all(then);
+                     self.pop_scope();
+                     return result;
+                  }
+                  _ => unreachable!(),
+               }
+            }
+            Value::Nil
+         }
+         NodeKind::IfBranch(_condition, _then) => unreachable!(),
+         NodeKind::ElseBranch(_then) => unreachable!(),
+
+         NodeKind::While(condition, then) => {
+            while self.interpret(condition)?.is_truthy() {
+               self.interpret_all(then)?;
+            }
+            Value::Nil
+         }
       })
+   }
+
+   fn interpret_all(&mut self, nodes: &[Box<Node>]) -> Result<Value, Error> {
+      let mut result = Value::Nil;
+      for expression in nodes {
+         result = self.interpret(expression)?;
+      }
+      Ok(result)
    }
 }

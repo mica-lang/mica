@@ -17,6 +17,8 @@ pub enum NodeKind {
    Divide(Box<Node>, Box<Node>),
 
    Not(Box<Node>),
+   And(Box<Node>, Box<Node>),
+   Or(Box<Node>, Box<Node>),
    Equal(Box<Node>, Box<Node>),
    NotEqual(Box<Node>, Box<Node>),
    Less(Box<Node>, Box<Node>),
@@ -27,6 +29,10 @@ pub enum NodeKind {
    Assign(Box<Node>, Box<Node>),
 
    Do(Vec<Box<Node>>),
+   If(Vec<Box<Node>>),
+   IfBranch(Box<Node>, Vec<Box<Node>>),
+   ElseBranch(Vec<Box<Node>>),
+   While(Box<Node>, Vec<Box<Node>>),
 }
 
 #[derive(Debug)]
@@ -64,6 +70,12 @@ impl Node {
             }};
          }
 
+         fn print_children(level: usize, nodes: &[Box<Node>]) {
+            for child in nodes {
+               inner(child, level + 1)
+            }
+         }
+
          for _ in 0..level {
             print!("  ");
          }
@@ -77,6 +89,8 @@ impl Node {
             NodeKind::Identifier(i) => println!("Identifier {i}"),
 
             NodeKind::Negate(right) => unary!("Negate", right, level),
+            NodeKind::And(left, right) => binary!("And", left, right, level),
+            NodeKind::Or(left, right) => binary!("Or", left, right, level),
             NodeKind::Add(left, right) => binary!("Add", left, right, level),
             NodeKind::Subtract(left, right) => binary!("Subtract", left, right, level),
             NodeKind::Multiply(left, right) => binary!("Multiply", left, right, level),
@@ -94,9 +108,25 @@ impl Node {
 
             NodeKind::Do(nodes) => {
                println!("Do");
-               for child in nodes {
-                  inner(child, level + 1)
-               }
+               print_children(level, nodes);
+            }
+            NodeKind::If(branches) => {
+               println!("If");
+               print_children(level, branches);
+            }
+            NodeKind::IfBranch(condition, then) => {
+               println!("IfBranch");
+               inner(condition, level + 1);
+               print_children(level, then);
+            }
+            NodeKind::ElseBranch(then) => {
+               println!("ElseBranch");
+               print_children(level, then);
+            }
+            NodeKind::While(condition, then) => {
+               println!("While");
+               inner(condition, level + 1);
+               print_children(level, then);
             }
          }
       }

@@ -16,7 +16,10 @@ pub enum TokenKind {
    Elif,
    Else,
    While,
+   Func,
    End,
+   Break,
+   Return,
 
    Plus,  // +
    Minus, // -
@@ -37,6 +40,7 @@ pub enum TokenKind {
 
    LeftParen,  // (
    RightParen, // )
+   Comma,      // ,
 
    Eof,
 }
@@ -220,6 +224,7 @@ impl Lexer {
 
          '(' => Ok(self.single_char_token(TokenKind::LeftParen)),
          ')' => Ok(self.single_char_token(TokenKind::RightParen)),
+         ',' => Ok(self.single_char_token(TokenKind::Comma)),
          Self::EOF => Ok(self.token(TokenKind::Eof)),
          other => Err(self.error(ErrorKind::InvalidCharacter(other))),
       }
@@ -246,5 +251,8 @@ const KEYWORDS: phf::Map<&'static str, TokenKind> = phf::phf_map! {
    "elif" => TokenKind::Elif,
    "else" => TokenKind::Else,
    "while" => TokenKind::While,
+   "func" => TokenKind::Func,
    "end" => TokenKind::End,
+   "break" => TokenKind::Break,
+   "return" => TokenKind::Return,
 };

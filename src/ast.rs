@@ -1,6 +1,6 @@
 use crate::common::{Error, ErrorKind, Location};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum NodeKind {
    Nil,
    False,
@@ -33,9 +33,18 @@ pub enum NodeKind {
    IfBranch(Box<Node>, Vec<Box<Node>>),
    ElseBranch(Vec<Box<Node>>),
    While(Box<Node>, Vec<Box<Node>>),
+   Break(Option<Box<Node>>),
+
+   Func {
+      name: String,
+      parameters: Vec<Box<Node>>,
+      body: Vec<Box<Node>>,
+   },
+   Call(Box<Node>, Vec<Box<Node>>),
+   Return(Option<Box<Node>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Node {
    pub kind: NodeKind,
    pub location: Location,
@@ -127,6 +136,35 @@ impl Node {
                println!("While");
                inner(condition, level + 1);
                print_children(level, then);
+            }
+            NodeKind::Break(value) => {
+               println!("Break");
+               if let Some(value) = value {
+                  inner(value, level + 1);
+               }
+            }
+            NodeKind::Return(value) => {
+               println!("Return");
+               if let Some(value) = value {
+                  inner(value, level + 1);
+               }
+            }
+
+            NodeKind::Func {
+               name,
+               parameters,
+               body,
+            } => {
+               println!("Func {name}");
+               println!("(parameters)");
+               print_children(level, parameters);
+               println!("(body)");
+               print_children(level, body);
+            }
+            NodeKind::Call(left, arguments) => {
+               println!("Call");
+               inner(left, level + 1);
+               print_children(level, arguments);
             }
          }
       }

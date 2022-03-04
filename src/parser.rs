@@ -21,13 +21,13 @@ impl Parser {
    fn expect(
       &mut self,
       kind: TokenKind,
-      error: impl FnOnce(Token) -> Error,
+      error: impl FnOnce(&Token) -> ErrorKind,
    ) -> Result<Token, Error> {
       let next_token = self.lexer.peek()?;
       if next_token.kind == kind {
          Ok(self.lexer.next()?)
       } else {
-         Err(error(next_token))
+         Err(Self::error(&next_token, error(&next_token)))
       }
    }
 
@@ -44,6 +44,7 @@ impl Parser {
          | TokenKind::GreaterEqual => 4,
          TokenKind::Plus | TokenKind::Minus => 5,
          TokenKind::Star | TokenKind::Slash => 6,
+         TokenKind::LeftParen => 7,
          _ => 0,
       }
    }
@@ -79,7 +80,7 @@ impl Parser {
       if let TokenKind::Identifier(i) = token.kind {
          Ok(Box::new(Node::new(token.location, NodeKind::Identifier(i))))
       } else {
-         panic!("next token must be an identifier");
+         Err(Self::error(&token, ErrorKind::IdentifierExpected))
       }
    }
 
@@ -105,19 +106,46 @@ impl Parser {
          if self.lexer.peek()?.kind == TokenKind::Eof {
             return Err(Self::error(token, ErrorKind::MissingEnd));
          }
-         children.push(self.parse_expression(0)?);
+         children.push(self.parse_item()?);
       }
       Ok(())
    }
 
-   fn do_block(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_comma_separated(
+      &mut self,
+      dest: &mut Vec<Box<Node>>,
+      end: TokenKind,
+      mut next: impl FnMut(&mut Self) -> Result<Box<Node>, Error>,
+   ) -> Result<(), Error> {
+      loop {
+         let token = self.lexer.peek()?;
+         match &token.kind {
+            TokenKind::Eof => return Err(Self::error(&token, ErrorKind::UnexpectedEof)),
+            kind if *kind == end => {
+               return Ok(());
+            }
+            _ => (),
+         }
+         dest.push(next(self)?);
+         match self.lexer.next()? {
+            Token {
+               kind: TokenKind::Comma,
+               ..
+            } => (),
+            t if t.kind == end => return Ok(()),
+            token => return Err(Self::error(&token, ErrorKind::CommaExpected)),
+         }
+      }
+   }
+
+   fn parse_do_block(&mut self, token: Token) -> Result<Box<Node>, Error> {
       let mut children = Vec::new();
       self.parse_terminated_block(&token, &mut children, |k| *k == TokenKind::End)?;
       let _end = self.lexer.next();
       Ok(Box::new(Node::new(token.location, NodeKind::Do(children))))
    }
 
-   fn if_expression(&mut self, if_token: Token) -> Result<Box<Node>, Error> {
+   fn parse_if_expression(&mut self, if_token: Token) -> Result<Box<Node>, Error> {
       let mut branches = Vec::new();
       let mut else_token = None;
 
@@ -126,7 +154,7 @@ impl Parser {
             (None, token)
          } else {
             let condition = self.parse_expression(0)?;
-            let do_token = self.expect(TokenKind::Do, |t| Self::error(&t, ErrorKind::MissingDo))?;
+            let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
             (Some(condition), do_token)
          };
          let mut branch = Vec::new();
@@ -164,9 +192,9 @@ impl Parser {
       )))
    }
 
-   fn while_expression(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_while_expression(&mut self, token: Token) -> Result<Box<Node>, Error> {
       let condition = self.parse_expression(0)?;
-      let do_token = self.expect(TokenKind::Do, |t| Self::error(&t, ErrorKind::MissingDo))?;
+      let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
       let mut body = Vec::new();
       self.parse_terminated_block(&do_token, &mut body, |k| *k == TokenKind::End)?;
       let _end = self.lexer.next();
@@ -174,6 +202,54 @@ impl Parser {
          token.location,
          NodeKind::While(condition, body),
       )))
+   }
+
+   fn parse_function_declaration(&mut self) -> Result<Box<Node>, Error> {
+      let func = self.lexer.next()?;
+
+      let name = self.lexer.next()?;
+      let name = self.parse_identifier(name)?;
+      let name = if let NodeKind::Identifier(name) = name.kind {
+         name
+      } else {
+         unreachable!()
+      };
+
+      let _left_paren = self.expect(TokenKind::LeftParen, |_| ErrorKind::LeftParenExpected);
+      let mut parameters = Vec::new();
+      self.parse_comma_separated(&mut parameters, TokenKind::RightParen, |p| {
+         let name = p.lexer.next()?;
+         p.parse_identifier(name)
+      })?;
+
+      let mut body = Vec::new();
+      self.parse_terminated_block(&func, &mut body, |k| *k == TokenKind::End)?;
+      let _end = self.lexer.next();
+
+      Ok(Box::new(Node::new(
+         func.location,
+         NodeKind::Func {
+            name,
+            parameters,
+            body,
+         },
+      )))
+   }
+
+   fn parse_break_like(
+      &mut self,
+      token: Token,
+      kind: impl FnOnce(Option<Box<Node>>) -> NodeKind,
+   ) -> Result<Box<Node>, Error> {
+      let next_token = self.lexer.peek()?;
+      let result = if next_token.location.line > token.location.line
+         || matches!(next_token.kind, TokenKind::End)
+      {
+         None
+      } else {
+         Some(self.parse_expression(0)?)
+      };
+      Ok(Box::new(Node::new(token.location, kind(result))))
    }
 
    fn parse_prefix(&mut self, token: Token) -> Result<Box<Node>, Error> {
@@ -196,9 +272,12 @@ impl Parser {
             Ok(inner)
          }
 
-         TokenKind::Do => self.do_block(token),
-         TokenKind::If => self.if_expression(token),
-         TokenKind::While => self.while_expression(token),
+         TokenKind::Do => self.parse_do_block(token),
+         TokenKind::If => self.parse_if_expression(token),
+         TokenKind::While => self.parse_while_expression(token),
+
+         TokenKind::Break => self.parse_break_like(token, NodeKind::Break),
+         TokenKind::Return => self.parse_break_like(token, NodeKind::Return),
 
          _ => Err(Self::error(&token, ErrorKind::InvalidPrefixToken)),
       }
@@ -215,6 +294,17 @@ impl Parser {
       Ok(Box::new(Node::new(
          token.location,
          kind(left, self.parse_expression(precedence)?),
+      )))
+   }
+
+   fn function_call(&mut self, left: Box<Node>, left_paren: Token) -> Result<Box<Node>, Error> {
+      let mut arguments = Vec::new();
+      self.parse_comma_separated(&mut arguments, TokenKind::RightParen, |p| {
+         p.parse_expression(0)
+      })?;
+      Ok(Box::new(Node::new(
+         left_paren.location,
+         NodeKind::Call(left, arguments),
       )))
    }
 
@@ -236,6 +326,8 @@ impl Parser {
 
          TokenKind::Assign => self.binary_operator(left, token, NodeKind::Assign),
 
+         TokenKind::LeftParen => self.function_call(left, token),
+
          _ => Err(Self::error(&token, ErrorKind::InvalidInfixToken)),
       }
    }
@@ -252,13 +344,21 @@ impl Parser {
       Ok(left)
    }
 
+   fn parse_item(&mut self) -> Result<Box<Node>, Error> {
+      let token = self.lexer.peek()?;
+      match &token.kind {
+         TokenKind::Func => self.parse_function_declaration(),
+         _ => self.parse_expression(0),
+      }
+   }
+
    pub fn parse(mut self) -> Result<Box<Node>, Error> {
-      let expression = self.parse_expression(0)?;
+      let item = self.parse_item()?;
       let eof = self.lexer.next()?;
       if !matches!(eof.kind, TokenKind::Eof) {
          Err(Self::error(&eof, ErrorKind::UnexpectedTokensAfterEof))
       } else {
-         Ok(expression)
+         Ok(item)
       }
    }
 }

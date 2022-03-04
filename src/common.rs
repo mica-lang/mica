@@ -1,4 +1,4 @@
-use crate::value::Type;
+use crate::value::{Type, Value};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
@@ -40,10 +40,22 @@ pub enum ErrorKind {
    MissingEnd,
    InvalidIfBranchToken,
    BranchAfterElse,
+   IdentifierExpected,
+   LeftParenExpected,
+   UnexpectedEof,
+   CommaExpected,
 
    // Runtime
-   TypeError { expected: Type, got: Type },
+   TypeError {
+      expected: Type,
+      got: Type,
+   },
    InvalidAssignment,
+   CannotCall(Type),
+   /// This is raised when a `break` expression is encountered.
+   Break(Value),
+   /// This is raised when an early `return` expression is encountered.
+   Return(Value),
 }
 
 impl std::fmt::Display for ErrorKind {
@@ -62,11 +74,19 @@ impl std::fmt::Display for ErrorKind {
          Self::MissingEnd => write!(f, "missing 'end'"),
          Self::InvalidIfBranchToken => write!(f, "'elif', 'else', or 'end' expected"),
          Self::BranchAfterElse => write!(f, "extraneous branch after 'else'"),
+         Self::IdentifierExpected => write!(f, "identifier expected"),
+         Self::LeftParenExpected => write!(f, "left parenthesis '(' expected"),
+         Self::UnexpectedEof => write!(f, "unexpected end of file"),
+         Self::CommaExpected => write!(f, "comma ',' expected"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
+         Self::CannotCall(typ) => write!(f, "{typ} values cannot be called"),
+
+         Self::Break(_) => write!(f, "cannot break out: not in a loop"),
+         Self::Return(_) => write!(f, "cannot return: not in a function"),
       }
    }
 }

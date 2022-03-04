@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::ast::{Node, NodeKind};
 use crate::common::{Error, ErrorKind};
-use crate::value::Value;
+use crate::value::{Function, Value};
 
 #[derive(Default)]
 struct Scope {
@@ -176,9 +177,76 @@ impl Interpreter {
 
          NodeKind::While(condition, then) => {
             while self.interpret(condition)?.is_truthy() {
-               self.interpret_all(then)?;
+               match self.interpret_all(then) {
+                  Ok(_) => (),
+                  Err(Error {
+                     kind: ErrorKind::Break(value),
+                     ..
+                  }) => return Ok(value),
+                  Err(error) => return Err(error),
+               }
             }
             Value::Nil
+         }
+
+         NodeKind::Func {
+            name,
+            parameters,
+            body,
+         } => {
+            let value = Value::Function(Rc::new(Function {
+               parameters: parameters
+                  .iter()
+                  .map(|node| {
+                     if let NodeKind::Identifier(name) = &node.kind {
+                        name.clone()
+                     } else {
+                        unreachable!()
+                     }
+                  })
+                  .collect(),
+               body: body.clone(),
+            }));
+            self.set_variable(name, value);
+            Value::Nil
+         }
+         NodeKind::Call(left, arguments) => {
+            let function = self.interpret(left)?;
+            let function = if let Value::Function(function) = function {
+               function
+            } else {
+               return Err(left.error(ErrorKind::CannotCall(function.typ())));
+            };
+            let mut interpreter = Interpreter::new();
+            for (argument, parameter_name) in arguments.iter().zip(&function.parameters) {
+               let argument = self.interpret(argument)?;
+               interpreter.set_variable(parameter_name, argument)
+            }
+            match interpreter.interpret_all(&function.body) {
+               Ok(value) => value,
+               Err(Error {
+                  kind: ErrorKind::Return(value),
+                  ..
+               }) => return Ok(value),
+               Err(error) => return Err(error),
+            }
+         }
+
+         NodeKind::Break(right) => {
+            let value = if let Some(right) = right {
+               self.interpret(right)?
+            } else {
+               Value::Nil
+            };
+            return Err(node.error(ErrorKind::Break(value)));
+         }
+         NodeKind::Return(right) => {
+            let value = if let Some(right) = right {
+               self.interpret(right)?
+            } else {
+               Value::Nil
+            };
+            return Err(node.error(ErrorKind::Return(value)));
          }
       })
    }

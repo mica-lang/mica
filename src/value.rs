@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
+use std::rc::Rc;
 
+use crate::ast::Node;
 use crate::common::{Error, ErrorKind, Location};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8,6 +10,7 @@ pub enum Type {
    Boolean,
    Number,
    String,
+   Function,
 }
 
 impl std::fmt::Display for Type {
@@ -16,13 +19,14 @@ impl std::fmt::Display for Type {
    }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub enum Value {
    Nil,
    False,
    True,
    Number(f64),
    String(String),
+   Function(Rc<Function>),
 }
 
 impl Value {
@@ -32,6 +36,7 @@ impl Value {
          Value::False | Value::True => Type::Boolean,
          Value::Number(_) => Type::Number,
          Value::String(_) => Type::String,
+         Value::Function(_) => Type::Function,
       }
    }
 
@@ -112,6 +117,7 @@ impl Value {
                   unreachable!()
                }
             }
+            Self::Function(_) => Ok(None),
          }
       }
    }
@@ -134,6 +140,24 @@ impl std::fmt::Debug for Value {
          Value::True => f.write_str("true"),
          Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s:?}"),
+         Value::Function(_) => write!(f, "<func>"),
       }
    }
+}
+
+impl PartialEq for Value {
+   fn eq(&self, other: &Self) -> bool {
+      match (self, other) {
+         (Self::Number(l), Self::Number(r)) => l == r,
+         (Self::String(l), Self::String(r)) => l == r,
+         (Self::Function(l), Self::Function(r)) => Rc::ptr_eq(l, r),
+         _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+      }
+   }
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+   pub parameters: Vec<String>,
+   pub body: Vec<Box<Node>>,
 }

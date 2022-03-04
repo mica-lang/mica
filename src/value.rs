@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-use crate::ast::Node;
+use crate::ast::NodeId;
 use crate::common::{Error, ErrorKind, Location};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,5 +159,5 @@ impl PartialEq for Value {
 #[derive(Debug, Clone)]
 pub struct Function {
    pub parameters: Vec<String>,
-   pub body: Vec<Box<Node>>,
+   pub body: Vec<NodeId>,
 }

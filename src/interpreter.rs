@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::ast::{Node, NodeKind};
+use crate::ast::{Ast, NodeId, NodeKind};
 use crate::common::{Error, ErrorKind};
 use crate::value::{Function, Value};
 
@@ -53,32 +53,35 @@ impl Interpreter {
       self.scopes.pop();
    }
 
-   pub fn interpret(&mut self, node: &Node) -> Result<Value, Error> {
+   pub fn interpret(&mut self, ast: &Ast, node: NodeId) -> Result<Value, Error> {
       macro_rules! binary_arithmetic {
-         ($left:expr, $right:expr, $op:tt) => {{
-            let left = self.interpret($left)?.number($left.location)?;
-            let right = self.interpret($right)?.number($right.location)?;
+         ($op:tt) => {{
+            let (left, right) = ast.node_pair(node);
+            let left = self.interpret(ast, left)?.number(ast.location(left))?;
+            let right = self.interpret(ast, right)?.number(ast.location(right))?;
             Value::Number(left $op right)
          }};
       }
 
       macro_rules! binary_equality {
-         ($left:expr, $right:expr, $op:tt) => {{
-            let left = self.interpret($left)?;
-            let right = self.interpret($right)?;
+         ($op:tt) => {{
+            let (left, right) = ast.node_pair(node);
+            let left = self.interpret(ast, left)?;
+            let right = self.interpret(ast, right)?;
             Value::from(left $op right)
          }};
       }
 
       fn binary_ordering(
          this: &mut Interpreter,
-         left_node: &Node,
-         right_node: &Node,
+         ast: &Ast,
+         node: NodeId,
          check: impl FnOnce(Ordering) -> bool,
       ) -> Result<Value, Error> {
-         let left = this.interpret(left_node)?;
-         let right = this.interpret(right_node)?;
-         let ordering = left.try_partial_cmp(&right, right_node.location)?;
+         let (left_node, right_node) = ast.node_pair(node);
+         let left = this.interpret(ast, left_node)?;
+         let right = this.interpret(ast, right_node)?;
+         let ordering = left.try_partial_cmp(&right, ast.location(right_node))?;
          if let Some(ordering) = ordering {
             Ok(Value::from(check(ordering)))
          } else {
@@ -86,84 +89,99 @@ impl Interpreter {
          }
       }
 
-      Ok(match &node.kind {
+      Ok(match ast.kind(node) {
+         NodeKind::Empty => panic!("cannot evaluate Empty node"),
          NodeKind::Nil => Value::Nil,
          NodeKind::False => Value::False,
          NodeKind::True => Value::True,
-         NodeKind::Number(x) => Value::Number(*x),
-         NodeKind::String(s) => Value::String(s.clone()),
+         NodeKind::Number => Value::Number(ast.number(node).unwrap()),
+         NodeKind::String => Value::String(ast.string(node).map(|s| s.to_owned()).unwrap()),
 
-         NodeKind::Identifier(name) => self.get_variable(name).cloned().unwrap_or(Value::Nil),
+         NodeKind::Identifier => {
+            let name = ast.string(node).unwrap();
+            self.get_variable(name).cloned().unwrap_or(Value::Nil)
+         }
 
-         NodeKind::Negate(right) => {
-            let right = self.interpret(right)?.number(node.location)?;
+         NodeKind::Negate => {
+            let (_, right) = ast.node_pair(node);
+            let right = self.interpret(ast, right)?.number(ast.location(node))?;
             Value::Number(-right)
          }
-         NodeKind::Add(left, right) => binary_arithmetic!(left, right, +),
-         NodeKind::Subtract(left, right) => binary_arithmetic!(left, right, -),
-         NodeKind::Multiply(left, right) => binary_arithmetic!(left, right, *),
-         NodeKind::Divide(left, right) => binary_arithmetic!(left, right, /),
+         NodeKind::Add => binary_arithmetic!(+),
+         NodeKind::Subtract => binary_arithmetic!(-),
+         NodeKind::Multiply => binary_arithmetic!(*),
+         NodeKind::Divide => binary_arithmetic!(/),
 
-         NodeKind::Not(right) => {
-            let right = self.interpret(right)?.boolean(node.location)?;
+         NodeKind::Not => {
+            let (_, right) = ast.node_pair(node);
+            let right = self.interpret(ast, right)?.boolean(ast.location(node))?;
             Value::from(!right)
          }
-         NodeKind::And(left, right) => {
-            let left = self.interpret(left)?;
+         NodeKind::And => {
+            let (left, right) = ast.node_pair(node);
+            let left = self.interpret(ast, left)?;
             if left.is_truthy() {
-               self.interpret(right)?
+               self.interpret(ast, right)?
             } else {
                left
             }
          }
-         NodeKind::Or(left, right) => {
-            let left = self.interpret(left)?;
+         NodeKind::Or => {
+            let (left, right) = ast.node_pair(node);
+            let left = self.interpret(ast, left)?;
             if left.is_falsy() {
-               self.interpret(right)?
+               self.interpret(ast, right)?
             } else {
                left
             }
          }
-         NodeKind::Equal(left, right) => binary_equality!(left, right, ==),
-         NodeKind::NotEqual(left, right) => binary_equality!(left, right, !=),
-         NodeKind::Less(left, right) => binary_ordering(self, left, right, |o| o.is_lt())?,
-         NodeKind::Greater(left, right) => binary_ordering(self, left, right, |o| o.is_gt())?,
-         NodeKind::LessEqual(left, right) => binary_ordering(self, left, right, |o| o.is_le())?,
-         NodeKind::GreaterEqual(left, right) => binary_ordering(self, left, right, |o| o.is_ge())?,
+         NodeKind::Equal => binary_equality!(==),
+         NodeKind::NotEqual => binary_equality!(!=),
+         NodeKind::Less => binary_ordering(self, ast, node, |o| o.is_lt())?,
+         NodeKind::Greater => binary_ordering(self, ast, node, |o| o.is_gt())?,
+         NodeKind::LessEqual => binary_ordering(self, ast, node, |o| o.is_le())?,
+         NodeKind::GreaterEqual => binary_ordering(self, ast, node, |o| o.is_ge())?,
 
-         NodeKind::Assign(left, right) => {
-            if let NodeKind::Identifier(name) = &left.kind {
-               let value = self.interpret(right)?;
+         NodeKind::Assign => {
+            let (left, right) = ast.node_pair(node);
+            if ast.kind(left) == NodeKind::Identifier {
+               let value = self.interpret(ast, right)?;
+               let name = ast.string(left).unwrap();
                self.set_variable(name, value.clone());
                value
             } else {
-               return Err(left.error(ErrorKind::InvalidAssignment));
+               return Err(ast.error(left, ErrorKind::InvalidAssignment));
             }
          }
 
-         NodeKind::Do(expressions) => {
+         NodeKind::Do => {
             self.push_scope();
-            let result = self.interpret_all(expressions)?;
+            let expressions = ast.children(node).unwrap();
+            let result = self.interpret_all(ast, expressions)?;
             self.pop_scope();
             result
          }
 
-         NodeKind::If(branches) => {
-            for branch in branches {
-               match &branch.kind {
-                  NodeKind::IfBranch(condition, then) => {
+         NodeKind::If => {
+            let branches = ast.children(node).unwrap();
+            for &branch in branches {
+               match ast.kind(branch) {
+                  NodeKind::IfBranch => {
+                     let (condition, _) = ast.node_pair(branch);
+                     let then = ast.children(branch).unwrap();
                      self.push_scope();
-                     if self.interpret(condition)?.is_truthy() {
-                        let result = self.interpret_all(then);
+                     if self.interpret(ast, condition)?.is_truthy() {
+                        let result = self.interpret_all(ast, then);
                         self.pop_scope();
                         return result;
                      } else {
                         self.pop_scope();
                      }
                   }
-                  NodeKind::ElseBranch(then) => {
+                  NodeKind::ElseBranch => {
+                     let then = ast.children(branch).unwrap();
                      self.push_scope();
-                     let result = self.interpret_all(then);
+                     let result = self.interpret_all(ast, then);
                      self.pop_scope();
                      return result;
                   }
@@ -172,12 +190,14 @@ impl Interpreter {
             }
             Value::Nil
          }
-         NodeKind::IfBranch(_condition, _then) => unreachable!(),
-         NodeKind::ElseBranch(_then) => unreachable!(),
+         NodeKind::IfBranch => unreachable!(),
+         NodeKind::ElseBranch => unreachable!(),
 
-         NodeKind::While(condition, then) => {
-            while self.interpret(condition)?.is_truthy() {
-               match self.interpret_all(then) {
+         NodeKind::While => {
+            let (condition, _) = ast.node_pair(node);
+            let then = ast.children(node).unwrap();
+            while self.interpret(ast, condition)?.is_truthy() {
+               match self.interpret_all(ast, then) {
                   Ok(_) => (),
                   Err(Error {
                      kind: ErrorKind::Break(value),
@@ -189,40 +209,36 @@ impl Interpreter {
             Value::Nil
          }
 
-         NodeKind::Func {
-            name,
-            parameters,
-            body,
-         } => {
+         NodeKind::Func => {
+            let (name, parameters) = ast.node_pair(node);
+            let parameters = ast.children(parameters).unwrap();
+            let body = ast.children(node).unwrap();
             let value = Value::Function(Rc::new(Function {
                parameters: parameters
                   .iter()
-                  .map(|node| {
-                     if let NodeKind::Identifier(name) = &node.kind {
-                        name.clone()
-                     } else {
-                        unreachable!()
-                     }
-                  })
+                  .map(|&node| ast.string(node).unwrap().to_owned())
                   .collect(),
-               body: body.clone(),
+               body: body.to_owned(),
             }));
-            self.set_variable(name, value);
+            self.set_variable(ast.string(name).unwrap(), value);
             Value::Nil
          }
-         NodeKind::Call(left, arguments) => {
-            let function = self.interpret(left)?;
+         NodeKind::Parameters => unreachable!(),
+         NodeKind::Call => {
+            let (left, _) = ast.node_pair(node);
+            let function = self.interpret(ast, left)?;
             let function = if let Value::Function(function) = function {
                function
             } else {
-               return Err(left.error(ErrorKind::CannotCall(function.typ())));
+               return Err(ast.error(left, ErrorKind::CannotCall(function.typ())));
             };
             let mut interpreter = Interpreter::new();
-            for (argument, parameter_name) in arguments.iter().zip(&function.parameters) {
-               let argument = self.interpret(argument)?;
+            let arguments = ast.children(node).unwrap();
+            for (&argument, parameter_name) in arguments.iter().zip(&function.parameters) {
+               let argument = self.interpret(ast, argument)?;
                interpreter.set_variable(parameter_name, argument)
             }
-            match interpreter.interpret_all(&function.body) {
+            match interpreter.interpret_all(ast, &function.body) {
                Ok(value) => value,
                Err(Error {
                   kind: ErrorKind::Return(value),
@@ -232,29 +248,31 @@ impl Interpreter {
             }
          }
 
-         NodeKind::Break(right) => {
-            let value = if let Some(right) = right {
-               self.interpret(right)?
+         NodeKind::Break => {
+            let (right, _) = ast.node_pair(node);
+            let value = if right != NodeId::EMPTY {
+               self.interpret(ast, right)?
             } else {
                Value::Nil
             };
-            return Err(node.error(ErrorKind::Break(value)));
+            return Err(ast.error(node, ErrorKind::Break(value)));
          }
-         NodeKind::Return(right) => {
-            let value = if let Some(right) = right {
-               self.interpret(right)?
+         NodeKind::Return => {
+            let (right, _) = ast.node_pair(node);
+            let value = if right != NodeId::EMPTY {
+               self.interpret(ast, right)?
             } else {
                Value::Nil
             };
-            return Err(node.error(ErrorKind::Return(value)));
+            return Err(ast.error(node, ErrorKind::Return(value)));
          }
       })
    }
 
-   fn interpret_all(&mut self, nodes: &[Box<Node>]) -> Result<Value, Error> {
+   fn interpret_all(&mut self, ast: &Ast, nodes: &[NodeId]) -> Result<Value, Error> {
       let mut result = Value::Nil;
-      for expression in nodes {
-         result = self.interpret(expression)?;
+      for &expression in nodes {
+         result = self.interpret(ast, expression)?;
       }
       Ok(result)
    }

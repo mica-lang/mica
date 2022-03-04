@@ -1,6 +1,6 @@
 #![allow(clippy::vec_box)]
 
-use ast::Node;
+use ast::{Ast, NodeId};
 use common::{Error, ErrorKind};
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
@@ -49,22 +49,22 @@ impl Validator for MicaValidator {
    }
 }
 
-fn parse(input: String) -> Result<Box<Node>, Error> {
+fn parse(input: String) -> Result<(Ast, NodeId), Error> {
    let lexer = Lexer::new(input);
    let parser = Parser::new(lexer);
    parser.parse()
 }
 
 fn interpret(interpreter: &mut Interpreter, input: String) -> Option<Value> {
-   let root_node = match parse(input) {
-      Ok(node) => node,
+   let (ast, root_node) = match parse(input) {
+      Ok(pair) => pair,
       Err(error) => {
          eprintln!("{error}");
          return None;
       }
    };
    // root_node.dump_to_stdout();
-   let result = match interpreter.interpret(&root_node) {
+   let result = match interpreter.interpret(&ast, root_node) {
       Ok(value) => value,
       Err(error) => {
          eprintln!("{error}");

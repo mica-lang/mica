@@ -1,5 +1,7 @@
 #![allow(clippy::vec_box)]
 
+use std::path::PathBuf;
+
 use ast::Node;
 use common::{Error, ErrorKind};
 use rustyline::completion::Completer;
@@ -11,6 +13,7 @@ use rustyline::{Editor, Helper};
 use interpreter::Interpreter;
 use lexer::Lexer;
 use parser::Parser;
+use structopt::StructOpt;
 use value::Value;
 
 mod ast;
@@ -19,6 +22,12 @@ mod interpreter;
 mod lexer;
 mod parser;
 mod value;
+
+#[derive(StructOpt)]
+#[structopt(name = "mica")]
+struct Opts {
+   file: Option<PathBuf>,
+}
 
 struct MicaValidator;
 
@@ -74,7 +83,7 @@ fn interpret(interpreter: &mut Interpreter, input: String) -> Option<Value> {
    Some(result)
 }
 
-fn main() {
+fn repl() {
    let mut editor =
       Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
    editor.set_helper(Some(MicaValidator));
@@ -85,4 +94,18 @@ fn main() {
          println!();
       }
    }
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+   let opts = Opts::from_args();
+   if let Some(path) = &opts.file {
+      let file = std::fs::read_to_string(path)?;
+      if let Some(value) = interpret(&mut Interpreter::new(), file) {
+         println!("{value:?}");
+      }
+   } else {
+      repl();
+   }
+
+   Ok(())
 }

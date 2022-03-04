@@ -28,6 +28,7 @@ pub enum NodeKind {
 
    Assign(Box<Node>, Box<Node>),
 
+   Main(Vec<Box<Node>>),
    Do(Vec<Box<Node>>),
    If(Vec<Box<Node>>),
    IfBranch(Box<Node>, Vec<Box<Node>>),
@@ -114,6 +115,11 @@ impl Node {
             NodeKind::GreaterEqual(left, right) => binary!("GreaterEqual", left, right, level),
 
             NodeKind::Assign(left, right) => binary!("Assign", left, right, level),
+
+            NodeKind::Main(nodes) => {
+               println!("Main");
+               print_children(level, nodes);
+            }
 
             NodeKind::Do(nodes) => {
                println!("Do");

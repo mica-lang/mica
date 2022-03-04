@@ -353,13 +353,16 @@ impl Parser {
    }
 
    pub fn parse(mut self) -> Result<Box<Node>, Error> {
-      let item = self.parse_item()?;
-      let eof = self.lexer.next()?;
-      if !matches!(eof.kind, TokenKind::Eof) {
-         Err(Self::error(&eof, ErrorKind::UnexpectedTokensAfterEof))
-      } else {
-         Ok(item)
-      }
+      let first_token = self.lexer.peek()?;
+      let mut main = Vec::new();
+      Ok(loop {
+         let item = self.parse_item()?;
+         main.push(item);
+         if self.lexer.peek()?.kind == TokenKind::Eof {
+            let main = Box::new(Node::new(first_token.location, NodeKind::Main(main)));
+            break main;
+         }
+      })
    }
 }
 

@@ -141,6 +141,8 @@ impl Interpreter {
             }
          }
 
+         NodeKind::Main(expressions) => self.interpret_all(expressions)?,
+
          NodeKind::Do(expressions) => {
             self.push_scope();
             let result = self.interpret_all(expressions)?;

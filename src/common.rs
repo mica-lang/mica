@@ -7,6 +7,20 @@ pub struct Location {
    pub column: u32,
 }
 
+impl Location {
+   pub fn uninit() -> Self {
+      Self {
+         byte: 0,
+         line: 0,
+         column: 0,
+      }
+   }
+
+   pub fn is_uninit(&self) -> bool {
+      self.line == 0 || self.column == 0
+   }
+}
+
 impl Default for Location {
    fn default() -> Self {
       Self {

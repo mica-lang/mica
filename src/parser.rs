@@ -1,14 +1,18 @@
-use crate::ast::{Node, NodeKind};
+use crate::ast::{Ast, NodeId, NodeKind};
 use crate::common::{Error, ErrorKind};
 use crate::lexer::{Lexer, Token, TokenKind};
 
 pub struct Parser {
    lexer: Lexer,
+   ast: Ast,
 }
 
 impl Parser {
    pub fn new(lexer: Lexer) -> Self {
-      Self { lexer }
+      Self {
+         lexer,
+         ast: Ast::new(),
+      }
    }
 
    fn error(token: &Token, kind: ErrorKind) -> Error {
@@ -56,50 +60,59 @@ impl Parser {
       }
    }
 
-   fn parse_unit(&mut self, token: Token, kind: NodeKind) -> Result<Box<Node>, Error> {
-      Ok(Box::new(Node::new(token.location, kind)))
+   fn parse_unit(&mut self, token: Token, kind: NodeKind) -> NodeId {
+      self.ast.build_node(kind, ()).with_location(token.location).done()
    }
 
-   fn parse_number(&mut self, token: Token) -> Result<Box<Node>, Error> {
-      if let TokenKind::Number(x) = &token.kind {
-         Ok(Box::new(Node::new(token.location, NodeKind::Number(*x))))
+   fn parse_number(&mut self, token: Token) -> NodeId {
+      if let &TokenKind::Number(x) = &token.kind {
+         self
+            .ast
+            .build_node(NodeKind::Number, ())
+            .with_location(token.location)
+            .with_number(x)
+            .done()
       } else {
          panic!("next token must be a number");
       }
    }
 
-   fn parse_string(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_string(&mut self, token: Token) -> NodeId {
       if let TokenKind::String(s) = token.kind {
-         Ok(Box::new(Node::new(token.location, NodeKind::String(s))))
+         self
+            .ast
+            .build_node(NodeKind::String, ())
+            .with_location(token.location)
+            .with_string(s)
+            .done()
       } else {
          panic!("next token must be a string");
       }
    }
 
-   fn parse_identifier(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_identifier(&mut self, token: Token) -> Result<NodeId, Error> {
       if let TokenKind::Identifier(i) = token.kind {
-         Ok(Box::new(Node::new(token.location, NodeKind::Identifier(i))))
+         Ok(self
+            .ast
+            .build_node(NodeKind::Identifier, ())
+            .with_location(token.location)
+            .with_string(i)
+            .done())
       } else {
          Err(Self::error(&token, ErrorKind::IdentifierExpected))
       }
    }
 
-   fn unary_operator(
-      &mut self,
-      token: Token,
-      kind: impl FnOnce(Box<Node>) -> NodeKind,
-   ) -> Result<Box<Node>, Error> {
+   fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
       let next_token = self.lexer.next()?;
-      Ok(Box::new(Node::new(
-         token.location,
-         kind(self.parse_prefix(next_token)?),
-      )))
+      let right = self.parse_prefix(next_token)?;
+      Ok(self.ast.build_node(kind, right).with_location(token.location).done())
    }
 
    fn parse_terminated_block(
       &mut self,
       token: &Token,
-      children: &mut Vec<Box<Node>>,
+      children: &mut Vec<NodeId>,
       is_terminator: impl Fn(&TokenKind) -> bool,
    ) -> Result<(), Error> {
       while !is_terminator(&self.lexer.peek()?.kind) {
@@ -113,9 +126,9 @@ impl Parser {
 
    fn parse_comma_separated(
       &mut self,
-      dest: &mut Vec<Box<Node>>,
+      dest: &mut Vec<NodeId>,
       end: TokenKind,
-      mut next: impl FnMut(&mut Self) -> Result<Box<Node>, Error>,
+      mut next: impl FnMut(&mut Self) -> Result<NodeId, Error>,
    ) -> Result<(), Error> {
       loop {
          let token = self.lexer.peek()?;
@@ -138,14 +151,19 @@ impl Parser {
       }
    }
 
-   fn parse_do_block(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_do_block(&mut self, token: Token) -> Result<NodeId, Error> {
       let mut children = Vec::new();
       self.parse_terminated_block(&token, &mut children, |k| *k == TokenKind::End)?;
       let _end = self.lexer.next();
-      Ok(Box::new(Node::new(token.location, NodeKind::Do(children))))
+      Ok(self
+         .ast
+         .build_node(NodeKind::Do, ())
+         .with_location(token.location)
+         .with_children(children)
+         .done())
    }
 
-   fn parse_if_expression(&mut self, if_token: Token) -> Result<Box<Node>, Error> {
+   fn parse_if_expression(&mut self, if_token: Token) -> Result<NodeId, Error> {
       let mut branches = Vec::new();
       let mut else_token = None;
 
@@ -161,14 +179,15 @@ impl Parser {
          self.parse_terminated_block(&do_token, &mut branch, |k| {
             matches!(k, TokenKind::Elif | TokenKind::Else | TokenKind::End)
          })?;
-         branches.push(Box::new(Node::new(
-            do_token.location,
+         branches.push(
             if let Some(condition) = condition {
-               NodeKind::IfBranch(condition, branch)
+               self.ast.build_node(NodeKind::IfBranch, condition).with_children(branch)
             } else {
-               NodeKind::ElseBranch(branch)
-            },
-         )));
+               self.ast.build_node(NodeKind::ElseBranch, ())
+            }
+            .with_location(do_token.location)
+            .done(),
+         );
 
          let next_token = self.lexer.next()?;
          match &next_token.kind {
@@ -186,79 +205,78 @@ impl Parser {
          }
       }
 
-      Ok(Box::new(Node::new(
-         if_token.location,
-         NodeKind::If(branches),
-      )))
+      Ok(self
+         .ast
+         .build_node(NodeKind::If, ())
+         .with_location(if_token.location)
+         .with_children(branches)
+         .done())
    }
 
-   fn parse_while_expression(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_while_expression(&mut self, token: Token) -> Result<NodeId, Error> {
       let condition = self.parse_expression(0)?;
       let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
       let mut body = Vec::new();
       self.parse_terminated_block(&do_token, &mut body, |k| *k == TokenKind::End)?;
       let _end = self.lexer.next();
-      Ok(Box::new(Node::new(
-         token.location,
-         NodeKind::While(condition, body),
-      )))
+      Ok(self
+         .ast
+         .build_node(NodeKind::While, condition)
+         .with_location(token.location)
+         .with_children(body)
+         .done())
    }
 
-   fn parse_function_declaration(&mut self) -> Result<Box<Node>, Error> {
+   fn parse_function_declaration(&mut self) -> Result<NodeId, Error> {
       let func = self.lexer.next()?;
 
       let name = self.lexer.next()?;
       let name = self.parse_identifier(name)?;
-      let name = if let NodeKind::Identifier(name) = name.kind {
-         name
-      } else {
-         unreachable!()
-      };
 
-      let _left_paren = self.expect(TokenKind::LeftParen, |_| ErrorKind::LeftParenExpected);
+      let left_paren = self.expect(TokenKind::LeftParen, |_| ErrorKind::LeftParenExpected)?;
       let mut parameters = Vec::new();
       self.parse_comma_separated(&mut parameters, TokenKind::RightParen, |p| {
          let name = p.lexer.next()?;
          p.parse_identifier(name)
       })?;
+      let parameters = self
+         .ast
+         .build_node(NodeKind::Parameters, ())
+         .with_location(left_paren.location)
+         .with_children(parameters)
+         .done();
 
       let mut body = Vec::new();
       self.parse_terminated_block(&func, &mut body, |k| *k == TokenKind::End)?;
       let _end = self.lexer.next();
 
-      Ok(Box::new(Node::new(
-         func.location,
-         NodeKind::Func {
-            name,
-            parameters,
-            body,
-         },
-      )))
+      Ok(self
+         .ast
+         .build_node(NodeKind::Func, (name, parameters))
+         .with_location(func.location)
+         .with_children(body)
+         .done())
    }
 
-   fn parse_break_like(
-      &mut self,
-      token: Token,
-      kind: impl FnOnce(Option<Box<Node>>) -> NodeKind,
-   ) -> Result<Box<Node>, Error> {
+   fn parse_break_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
       let next_token = self.lexer.peek()?;
       let result = if next_token.location.line > token.location.line
          || matches!(next_token.kind, TokenKind::End)
       {
-         None
+         NodeId::EMPTY
       } else {
-         Some(self.parse_expression(0)?)
+         self.parse_expression(0)?
       };
-      Ok(Box::new(Node::new(token.location, kind(result))))
+      Ok(self.ast.build_node(kind, result).with_location(token.location).done())
    }
 
-   fn parse_prefix(&mut self, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_prefix(&mut self, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
-         TokenKind::Nil => self.parse_unit(token, NodeKind::Nil),
-         TokenKind::False => self.parse_unit(token, NodeKind::False),
-         TokenKind::True => self.parse_unit(token, NodeKind::True),
-         TokenKind::Number(_) => self.parse_number(token),
-         TokenKind::String(_) => self.parse_string(token),
+         TokenKind::Nil => Ok(self.parse_unit(token, NodeKind::Nil)),
+         TokenKind::False => Ok(self.parse_unit(token, NodeKind::False)),
+         TokenKind::True => Ok(self.parse_unit(token, NodeKind::True)),
+         TokenKind::Number(_) => Ok(self.parse_number(token)),
+         TokenKind::String(_) => Ok(self.parse_string(token)),
          TokenKind::Identifier(_) => self.parse_identifier(token),
 
          TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),
@@ -285,30 +303,30 @@ impl Parser {
 
    fn binary_operator(
       &mut self,
-      left: Box<Node>,
+      left: NodeId,
       token: Token,
-      kind: impl FnOnce(Box<Node>, Box<Node>) -> NodeKind,
-   ) -> Result<Box<Node>, Error> {
+      kind: NodeKind,
+   ) -> Result<NodeId, Error> {
       let precedence =
          Self::precedence(&token) - (Self::associativity(&token) == Associativity::Right) as i8;
-      Ok(Box::new(Node::new(
-         token.location,
-         kind(left, self.parse_expression(precedence)?),
-      )))
+      let right = self.parse_expression(precedence)?;
+      Ok(self.ast.build_node(kind, (left, right)).with_location(token.location).done())
    }
 
-   fn function_call(&mut self, left: Box<Node>, left_paren: Token) -> Result<Box<Node>, Error> {
+   fn function_call(&mut self, left: NodeId, left_paren: Token) -> Result<NodeId, Error> {
       let mut arguments = Vec::new();
       self.parse_comma_separated(&mut arguments, TokenKind::RightParen, |p| {
          p.parse_expression(0)
       })?;
-      Ok(Box::new(Node::new(
-         left_paren.location,
-         NodeKind::Call(left, arguments),
-      )))
+      Ok(self
+         .ast
+         .build_node(NodeKind::Call, left)
+         .with_location(left_paren.location)
+         .with_children(arguments)
+         .done())
    }
 
-   fn parse_infix(&mut self, left: Box<Node>, token: Token) -> Result<Box<Node>, Error> {
+   fn parse_infix(&mut self, left: NodeId, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
          TokenKind::Plus => self.binary_operator(left, token, NodeKind::Add),
          TokenKind::Minus => self.binary_operator(left, token, NodeKind::Subtract),
@@ -332,7 +350,7 @@ impl Parser {
       }
    }
 
-   fn parse_expression(&mut self, precedence: i8) -> Result<Box<Node>, Error> {
+   fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, Error> {
       let mut token = self.lexer.next()?;
       let mut left = self.parse_prefix(token)?;
 
@@ -344,7 +362,7 @@ impl Parser {
       Ok(left)
    }
 
-   fn parse_item(&mut self) -> Result<Box<Node>, Error> {
+   fn parse_item(&mut self) -> Result<NodeId, Error> {
       let token = self.lexer.peek()?;
       match &token.kind {
          TokenKind::Func => self.parse_function_declaration(),
@@ -352,15 +370,20 @@ impl Parser {
       }
    }
 
-   pub fn parse(mut self) -> Result<Box<Node>, Error> {
+   pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
       let first_token = self.lexer.peek()?;
       let mut main = Vec::new();
       Ok(loop {
          let item = self.parse_item()?;
          main.push(item);
          if self.lexer.peek()?.kind == TokenKind::Eof {
-            let main = Box::new(Node::new(first_token.location, NodeKind::Main(main)));
-            break main;
+            let main = self
+               .ast
+               .build_node(NodeKind::Main, ())
+               .with_location(first_token.location)
+               .with_children(main)
+               .done();
+            break (self.ast, main);
          }
       })
    }

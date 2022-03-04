@@ -2,43 +2,42 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct NodeId(usize);
+pub struct NodeId(u32);
 
 impl NodeId {
    pub const EMPTY: Self = NodeId(0);
 }
 
 pub struct Ast {
-   kinds: Vec<NodeKind>,
-   pairs: Vec<(usize, usize)>,
+   nodes: Vec<(NodeKind, (u32, u32))>,
    locations: Vec<Location>,
 
-   numbers: HashMap<NodeId, f64>,
-   strings: HashMap<NodeId, String>,
-   children: HashMap<NodeId, Vec<NodeId>>,
+   data: Vec<Option<NodeData>>,
+}
+
+enum NodeData {
+   Number(f64),
+   String(String),
+   Children(Vec<NodeId>),
 }
 
 impl Ast {
    pub fn new() -> Self {
       let mut ast = Self {
-         kinds: Vec::new(),
-         pairs: Vec::new(),
+         nodes: Vec::new(),
          locations: Vec::new(),
-
-         numbers: HashMap::new(),
-         strings: HashMap::new(),
-         children: HashMap::new(),
+         data: Vec::new(),
       };
       let _empty = ast.create_node(NodeKind::Empty, ());
       ast
    }
 
    fn create_node(&mut self, kind: NodeKind, pair: impl ToNodePair) -> NodeId {
-      let id = self.kinds.len();
-      self.kinds.push(kind);
-      self.pairs.push(pair.to_node_pair());
+      let id = self.nodes.len();
+      self.nodes.push((kind, pair.to_node_pair()));
       self.locations.push(Location::uninit());
-      NodeId(id)
+      self.data.push(None);
+      NodeId(id as u32)
    }
 
    pub fn build_node(&mut self, kind: NodeKind, pair: impl ToNodePair) -> NodeBuilder<'_> {
@@ -47,27 +46,36 @@ impl Ast {
    }
 
    pub fn kind(&self, node: NodeId) -> NodeKind {
-      unsafe { *self.kinds.get_unchecked(node.0) }
+      unsafe { self.nodes.get_unchecked(node.0 as usize).0 }
    }
 
-   pub fn pair(&self, node: NodeId) -> (usize, usize) {
-      unsafe { *self.pairs.get_unchecked(node.0) }
+   pub fn pair(&self, node: NodeId) -> (u32, u32) {
+      unsafe { self.nodes.get_unchecked(node.0 as usize).1 }
    }
 
    pub fn location(&self, node: NodeId) -> Location {
-      unsafe { *self.locations.get_unchecked(node.0) }
+      unsafe { *self.locations.get_unchecked(node.0 as usize) }
    }
 
    pub fn number(&self, node: NodeId) -> Option<f64> {
-      self.numbers.get(&node).cloned()
+      if let &Some(NodeData::Number(n)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
+         return Some(n);
+      }
+      None
    }
 
    pub fn string(&self, node: NodeId) -> Option<&str> {
-      self.strings.get(&node).map(|x| x.as_str())
+      if let Some(NodeData::String(s)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
+         return Some(s);
+      }
+      None
    }
 
    pub fn children(&self, node: NodeId) -> Option<&[NodeId]> {
-      self.children.get(&node).map(|x| x.as_slice())
+      if let Some(NodeData::Children(c)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
+         return Some(c);
+      }
+      None
    }
 
    pub fn node_pair(&self, node: NodeId) -> (NodeId, NodeId) {
@@ -89,25 +97,32 @@ pub struct NodeBuilder<'a> {
 }
 
 impl<'a> NodeBuilder<'a> {
-   pub fn with_location(mut self, location: Location) -> Self {
+   pub fn with_location(self, location: Location) -> Self {
       unsafe {
-         *self.ast.locations.get_unchecked_mut(self.node.0) = location;
+         *self.ast.locations.get_unchecked_mut(self.node.0 as usize) = location;
       }
       self
    }
 
-   pub fn with_number(mut self, number: f64) -> Self {
-      self.ast.numbers.insert(self.node, number);
+   pub fn with_number(self, number: f64) -> Self {
+      unsafe {
+         *self.ast.data.get_unchecked_mut(self.node.0 as usize) = Some(NodeData::Number(number));
+      }
       self
    }
 
-   pub fn with_string(mut self, string: String) -> Self {
-      self.ast.strings.insert(self.node, string);
+   pub fn with_string(self, string: String) -> Self {
+      unsafe {
+         *self.ast.data.get_unchecked_mut(self.node.0 as usize) = Some(NodeData::String(string));
+      }
       self
    }
 
-   pub fn with_children(mut self, children: Vec<NodeId>) -> Self {
-      self.ast.children.insert(self.node, children);
+   pub fn with_children(self, children: Vec<NodeId>) -> Self {
+      unsafe {
+         *self.ast.data.get_unchecked_mut(self.node.0 as usize) =
+            Some(NodeData::Children(children));
+      }
       self
    }
 
@@ -117,29 +132,29 @@ impl<'a> NodeBuilder<'a> {
 }
 
 pub trait ToNodePair {
-   fn to_node_pair(&self) -> (usize, usize);
+   fn to_node_pair(&self) -> (u32, u32);
 }
 
-impl ToNodePair for (usize, usize) {
-   fn to_node_pair(&self) -> (usize, usize) {
+impl ToNodePair for (u32, u32) {
+   fn to_node_pair(&self) -> (u32, u32) {
       *self
    }
 }
 
 impl ToNodePair for (NodeId, NodeId) {
-   fn to_node_pair(&self) -> (usize, usize) {
+   fn to_node_pair(&self) -> (u32, u32) {
       (self.0 .0, self.1 .0)
    }
 }
 
 impl ToNodePair for NodeId {
-   fn to_node_pair(&self) -> (usize, usize) {
+   fn to_node_pair(&self) -> (u32, u32) {
       (self.0, 0)
    }
 }
 
 impl ToNodePair for () {
-   fn to_node_pair(&self) -> (usize, usize) {
+   fn to_node_pair(&self) -> (u32, u32) {
       (0, 0)
    }
 }

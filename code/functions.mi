@@ -1,0 +1,18 @@
+func factorial(n)
+   i = 1
+   x = 1
+   while i <= n do
+      x = x * i
+      i = i + 1
+   end
+   x
+end
+
+iteration = 1
+result = 0
+while iteration <= 10000 do
+   result = factorial(15)
+   iteration = iteration + 1
+end
+
+result

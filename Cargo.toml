@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 rustyline = "9.1.2"
 phf = { version = "0.10.1", features = ["macros"] }
+structopt = "0.3.26"

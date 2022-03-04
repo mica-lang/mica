@@ -154,6 +154,11 @@ impl Interpreter {
             }
          }
 
+         NodeKind::Main => {
+            let nodes = ast.children(node).unwrap();
+            self.interpret_all(ast, nodes)?
+         }
+
          NodeKind::Do => {
             self.push_scope();
             let expressions = ast.children(node).unwrap();

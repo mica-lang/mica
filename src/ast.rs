@@ -175,6 +175,7 @@ pub enum NodeKind {
 
    Assign,
 
+   Main,
    Do,
    If,
    IfBranch,

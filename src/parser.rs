@@ -371,13 +371,21 @@ impl Parser {
    }
 
    pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
-      let item = self.parse_item()?;
-      let eof = self.lexer.next()?;
-      if !matches!(eof.kind, TokenKind::Eof) {
-         Err(Self::error(&eof, ErrorKind::UnexpectedTokensAfterEof))
-      } else {
-         Ok((self.ast, item))
-      }
+      let first_token = self.lexer.peek()?;
+      let mut main = Vec::new();
+      Ok(loop {
+         let item = self.parse_item()?;
+         main.push(item);
+         if self.lexer.peek()?.kind == TokenKind::Eof {
+            let main = self
+               .ast
+               .build_node(NodeKind::Main, ())
+               .with_location(first_token.location)
+               .with_children(main)
+               .done();
+            break (self.ast, main);
+         }
+      })
    }
 }
 

@@ -315,6 +315,14 @@ impl Debug for Chunk {
          match opcode {
             Opcode::PushNumber => write!(f, "{}", unsafe { self.read_number(&mut pc) })?,
             Opcode::PushString => write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?,
+            | Opcode::JumpForward(amount)
+            | Opcode::JumpForwardIfFalsy(amount)
+            | Opcode::JumpForwardIfTruthy(amount) => {
+               write!(f, "-> {:08x}", pc + u32::from(amount) as usize)?;
+            }
+            Opcode::JumpBackward(amount) => {
+               write!(f, "-> {:08x}", pc - u32::from(amount) as usize)?;
+            }
             _ => (),
          }
 

@@ -8,17 +8,11 @@ pub struct Location {
 }
 
 impl Location {
-   pub fn uninit() -> Self {
-      Self {
-         byte: 0,
-         line: 0,
-         column: 0,
-      }
-   }
-
-   pub fn is_uninit(&self) -> bool {
-      self.line == 0 || self.column == 0
-   }
+   pub const UNINIT: Self = Self {
+      byte: 0,
+      line: 0,
+      column: 0,
+   };
 }
 
 impl Default for Location {
@@ -48,7 +42,6 @@ pub enum ErrorKind {
    // Parser
    InvalidPrefixToken,
    InvalidInfixToken,
-   UnexpectedTokensAfterEof,
    MissingDo,
    MissingRightParen,
    MissingEnd,
@@ -59,17 +52,18 @@ pub enum ErrorKind {
    UnexpectedEof,
    CommaExpected,
 
+   // Code generator
+   VariableDoesNotExist(String),
+   TooManyLocals,
+   TooManyGlobals,
+   IfBranchTooLarge,
+   IfExpressionTooLarge,
+   LoopTooLarge,
+
    // Runtime
-   TypeError {
-      expected: Type,
-      got: Type,
-   },
+   TypeError { expected: Type, got: Type },
    InvalidAssignment,
    CannotCall(Type),
-   /// This is raised when a `break` expression is encountered.
-   Break(Value),
-   /// This is raised when an early `return` expression is encountered.
-   Return(Value),
 }
 
 impl std::fmt::Display for ErrorKind {
@@ -82,7 +76,6 @@ impl std::fmt::Display for ErrorKind {
 
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),
-         Self::UnexpectedTokensAfterEof => write!(f, "unexpected tokens at end of input"),
          Self::MissingDo => write!(f, "'do' expected"),
          Self::MissingRightParen => write!(f, "missing right parenthesis ')'"),
          Self::MissingEnd => write!(f, "missing 'end'"),
@@ -93,14 +86,18 @@ impl std::fmt::Display for ErrorKind {
          Self::UnexpectedEof => write!(f, "unexpected end of file"),
          Self::CommaExpected => write!(f, "comma ',' expected"),
 
+         Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
+         Self::TooManyLocals => write!(f, "too many local variables"),
+         Self::TooManyGlobals => write!(f, "too many global variables"),
+         Self::IfBranchTooLarge => write!(f, "'if' branch is too large"),
+         Self::IfExpressionTooLarge => write!(f, "'if' expression is too large"),
+         Self::LoopTooLarge => write!(f, "loop is too large"),
+
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
          Self::CannotCall(typ) => write!(f, "{typ} values cannot be called"),
-
-         Self::Break(_) => write!(f, "cannot break out: not in a loop"),
-         Self::Return(_) => write!(f, "cannot return: not in a function"),
       }
    }
 }

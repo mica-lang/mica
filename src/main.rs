@@ -2,7 +2,8 @@
 
 use std::path::PathBuf;
 
-use ast::{Ast, NodeId};
+use bytecode::{Chunk, GlobalInfo};
+use codegen::CodeGenerator;
 use common::{Error, ErrorKind};
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
@@ -10,18 +11,20 @@ use rustyline::hint::Hinter;
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::{Editor, Helper};
 
-use interpreter::Interpreter;
 use lexer::Lexer;
 use parser::Parser;
 use structopt::StructOpt;
 use value::Value;
+use vm::{Globals, Vm};
 
 mod ast;
+mod bytecode;
+mod codegen;
 mod common;
-mod interpreter;
 mod lexer;
 mod parser;
 mod value;
+mod vm;
 
 #[derive(StructOpt)]
 #[structopt(name = "mica")]
@@ -45,35 +48,43 @@ impl Completer for MicaValidator {
 
 impl Validator for MicaValidator {
    fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
-      let input = ctx.input();
-      match parse(input.to_owned()) {
-         Ok(_) => Ok(ValidationResult::Valid(None)),
-         Err(error) => match &error.kind {
+      let lexer = Lexer::new(ctx.input().to_owned());
+      let parser = Parser::new(lexer);
+      if let Err(error) = parser.parse() {
+         match error.kind {
             | ErrorKind::MissingClosingQuote
-            | ErrorKind::MissingRightParen
-            | ErrorKind::MissingEnd => Ok(ValidationResult::Incomplete),
-            _ => Ok(ValidationResult::Invalid(Some(error.to_string()))),
-         },
+            | ErrorKind::MissingEnd
+            | ErrorKind::MissingRightParen => return Ok(ValidationResult::Incomplete),
+            _ => (),
+         }
       }
+      Ok(ValidationResult::Valid(None))
    }
 }
 
-fn parse(input: String) -> Result<(Ast, NodeId), Error> {
+fn compile(globals: &mut GlobalInfo, input: String) -> Result<Chunk, Error> {
    let lexer = Lexer::new(input);
    let parser = Parser::new(lexer);
-   parser.parse()
+   let (ast, root_node) = parser.parse()?;
+   CodeGenerator::new(globals).generate(&ast, root_node)
 }
 
-fn interpret(interpreter: &mut Interpreter, input: String) -> Option<Value> {
-   let (ast, root_node) = match parse(input) {
-      Ok(pair) => pair,
+fn interpret(
+   vm: &mut Vm,
+   (globals, global_info): (&mut Globals, &mut GlobalInfo),
+   input: String,
+) -> Option<Value> {
+   let chunk = match compile(global_info, input) {
+      Ok(chunk) => chunk,
       Err(error) => {
          eprintln!("{error}");
          return None;
       }
    };
-   // root_node.dump_to_stdout();
-   let result = match interpreter.interpret(&ast, root_node) {
+   // println!("{chunk:?}");
+   println!("{global_info:?}");
+   println!("{chunk:?}");
+   let result = match vm.interpret(&chunk, globals) {
       Ok(value) => value,
       Err(error) => {
          eprintln!("{error}");
@@ -87,9 +98,11 @@ fn repl() {
    let mut editor =
       Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
    editor.set_helper(Some(MicaValidator));
-   let mut interpreter = Interpreter::new();
+   let mut vm = Vm::new();
+   let mut globals = Globals::new();
+   let mut global_info = GlobalInfo::new();
    while let Ok(line) = editor.readline("> ") {
-      if let Some(result) = interpret(&mut interpreter, line) {
+      if let Some(result) = interpret(&mut vm, (&mut globals, &mut global_info), line) {
          println!("< {result:?}");
          println!();
       }
@@ -100,8 +113,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
    let opts = Opts::from_args();
    if let Some(path) = &opts.file {
       let file = std::fs::read_to_string(path)?;
-      if let Some(value) = interpret(&mut Interpreter::new(), file) {
-         println!("{value:?}");
+      if let Some(value) = interpret(
+         &mut Vm::new(),
+         (&mut Globals::new(), &mut GlobalInfo::new()),
+         file,
+      ) {
+         println!("{value:#?}");
       }
    } else {
       repl();

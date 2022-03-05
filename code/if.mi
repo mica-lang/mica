@@ -1,0 +1,11 @@
+i = 4
+if i + 1 == 2 do
+   x = "good stuff"
+   x
+elif i + 1 == 3 do
+   "oh no"
+elif i + 1 == 4 do
+   "four"
+else
+   "yes"
+end

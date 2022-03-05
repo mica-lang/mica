@@ -35,7 +35,7 @@ impl Ast {
    fn create_node(&mut self, kind: NodeKind, pair: impl ToNodePair) -> NodeId {
       let id = self.nodes.len();
       self.nodes.push((kind, pair.to_node_pair()));
-      self.locations.push(Location::uninit());
+      self.locations.push(Location::UNINIT);
       self.data.push(None);
       NodeId(id as u32)
    }

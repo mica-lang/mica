@@ -183,7 +183,7 @@ impl Parser {
             if let Some(condition) = condition {
                self.ast.build_node(NodeKind::IfBranch, condition).with_children(branch)
             } else {
-               self.ast.build_node(NodeKind::ElseBranch, ())
+               self.ast.build_node(NodeKind::ElseBranch, ()).with_children(branch)
             }
             .with_location(do_token.location)
             .done(),

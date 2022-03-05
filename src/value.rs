@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 
 use crate::ast::NodeId;
-use crate::common::{Error, ErrorKind, Location};
+use crate::common::ErrorKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type {
@@ -25,7 +25,7 @@ pub enum Value {
    False,
    True,
    Number(f64),
-   String(String),
+   String(Rc<str>),
    Function(Rc<Function>),
 }
 
@@ -40,44 +40,35 @@ impl Value {
       }
    }
 
-   pub fn boolean(&self, location: Location) -> Result<bool, Error> {
+   pub fn boolean(&self) -> Result<bool, ErrorKind> {
       match self {
          Value::False => Ok(false),
          Value::True => Ok(true),
-         _ => Err(Error {
-            kind: ErrorKind::TypeError {
-               expected: Type::Boolean,
-               got: self.typ(),
-            },
-            location,
+         _ => Err(ErrorKind::TypeError {
+            expected: Type::Boolean,
+            got: self.typ(),
          }),
       }
    }
 
-   pub fn number(&self, location: Location) -> Result<f64, Error> {
+   pub fn number(&self) -> Result<f64, ErrorKind> {
       if let &Value::Number(x) = self {
          Ok(x)
       } else {
-         Err(Error {
-            kind: ErrorKind::TypeError {
-               expected: Type::Number,
-               got: self.typ(),
-            },
-            location,
+         Err(ErrorKind::TypeError {
+            expected: Type::Number,
+            got: self.typ(),
          })
       }
    }
 
-   pub fn string(&self, location: Location) -> Result<&str, Error> {
+   pub fn string(&self) -> Result<&str, ErrorKind> {
       if let Value::String(s) = self {
          Ok(s)
       } else {
-         Err(Error {
-            kind: ErrorKind::TypeError {
-               expected: Type::String,
-               got: self.typ(),
-            },
-            location,
+         Err(ErrorKind::TypeError {
+            expected: Type::String,
+            got: self.typ(),
          })
       }
    }
@@ -90,26 +81,19 @@ impl Value {
       !self.is_truthy()
    }
 
-   pub fn try_partial_cmp(
-      &self,
-      other: &Self,
-      location: Location,
-   ) -> Result<Option<Ordering>, Error> {
+   pub fn try_partial_cmp(&self, other: &Self) -> Result<Option<Ordering>, ErrorKind> {
       if self.typ() != other.typ() {
-         Err(Error {
-            kind: ErrorKind::TypeError {
-               expected: self.typ(),
-               got: other.typ(),
-            },
-            location,
+         Err(ErrorKind::TypeError {
+            expected: self.typ(),
+            got: other.typ(),
          })
       } else {
          match self {
             Self::Nil => Ok(Some(Ordering::Equal)),
-            Self::False | Self::True => Ok(Some(
-               self.boolean(location).unwrap().cmp(&other.boolean(location).unwrap()),
-            )),
-            Self::Number(x) => Ok(x.partial_cmp(&other.number(location).unwrap())),
+            Self::False | Self::True => {
+               Ok(Some(self.boolean().unwrap().cmp(&other.boolean().unwrap())))
+            }
+            Self::Number(x) => Ok(x.partial_cmp(&other.number().unwrap())),
             Self::String(s) => {
                if let Value::String(t) = &other {
                   Ok(s.partial_cmp(t))

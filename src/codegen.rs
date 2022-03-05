@@ -18,12 +18,20 @@ enum Variable {
    Local(Opr24),
 }
 
+#[derive(Debug, Default)]
+struct BreakableBlock {
+   /// A list of offsets where `breaks` should be backpatched.
+   breaks: Vec<usize>,
+   start: usize,
+}
+
 pub struct CodeGenerator<'gi> {
    chunk: Chunk,
    globals: &'gi mut GlobalInfo,
    scopes: Vec<Scope>,
    /// The next stack slot to be occupied by a variable.
    local_count: u32,
+   breakable_blocks: Vec<BreakableBlock>,
 }
 
 impl<'gi> CodeGenerator<'gi> {
@@ -34,6 +42,7 @@ impl<'gi> CodeGenerator<'gi> {
          globals,
          scopes: Vec::new(),
          local_count: 0,
+         breakable_blocks: Vec::new(),
       }
    }
 
@@ -90,6 +99,29 @@ impl<'gi> CodeGenerator<'gi> {
          Variable::Global(slot) => Opcode::AssignGlobal(slot),
          Variable::Local(slot) => Opcode::AssignLocal(slot),
       });
+   }
+
+   /// Pushes a new breakable block.
+   fn push_breakable_block(&mut self) {
+      let start = self.chunk.push(Opcode::Nop);
+      self.breakable_blocks.push(BreakableBlock {
+         breaks: Vec::new(),
+         start,
+      });
+   }
+
+   /// Pops the topmost breakable block.
+   fn pop_breakable_block(&mut self) {
+      let block = self.breakable_blocks.pop().unwrap();
+      if !block.breaks.is_empty() {
+         self.chunk.patch(block.start, Opcode::EnterBreakableBlock);
+         for jump in block.breaks {
+            // Unwrapping is safe here because if the loop is too large the error was caught already
+            // before `pop_breakable_block` was called.
+            self.chunk.patch(jump, Opcode::jump_forward(jump, self.chunk.len()).unwrap());
+         }
+         self.chunk.push(Opcode::ExitBreakableBlock(1));
+      }
    }
 
    /// Generates code for a list of nodes. The last node's value is the one left on the stack.
@@ -271,10 +303,45 @@ impl<'gi> CodeGenerator<'gi> {
       Ok(())
    }
 
+   /// Generates code for an `and` infix operator.
+   fn generate_and(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (left, right) = ast.node_pair(node);
+      self.generate_node(ast, left)?;
+      let jump_past_right = self.chunk.push(Opcode::Nop);
+      self.chunk.push(Opcode::Discard);
+      self.generate_node(ast, right)?;
+      self.chunk.patch(
+         jump_past_right,
+         Opcode::jump_forward_if_falsy(jump_past_right, self.chunk.len())
+            .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
+      );
+      Ok(())
+   }
+
+   /// Generates code for an `or` infix operator.
+   fn generate_or(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (left, right) = ast.node_pair(node);
+      self.generate_node(ast, left)?;
+      let jump_past_right = self.chunk.push(Opcode::Nop);
+      self.chunk.push(Opcode::Discard);
+      self.generate_node(ast, right)?;
+      self.chunk.patch(
+         jump_past_right,
+         Opcode::jump_forward_if_truthy(jump_past_right, self.chunk.len())
+            .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
+      );
+      Ok(())
+   }
+
    /// Generates code for a `while..do..end` loop.
    fn generate_while(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (condition, _) = ast.node_pair(node);
       let body = ast.children(node).unwrap();
+
+      // The outer scope, so that variables can be declared in the condition.
+      self.push_scope();
+      // The breakable block.
+      self.push_breakable_block();
 
       let start = self.chunk.len();
       self.generate_node(ast, condition)?;
@@ -301,6 +368,24 @@ impl<'gi> CodeGenerator<'gi> {
       // Because while loops are an expression, they must produce a value. That value is `nil`.
       self.chunk.push(Opcode::PushNil);
 
+      // `break`s produce a value (or `nil` by default), so we need to jump over the
+      // fallback `PushNil`.
+      self.pop_breakable_block();
+      self.pop_scope();
+
+      Ok(())
+   }
+
+   /// Generates a `break` expression.
+   fn generate_break(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (right, _) = ast.node_pair(node);
+      self.generate_node(ast, right)?;
+      let jump = self.chunk.push(Opcode::Nop);
+      if let Some(block) = self.breakable_blocks.last_mut() {
+         block.breaks.push(jump);
+      } else {
+         return Err(ast.error(node, ErrorKind::BreakOutsideOfLoop));
+      }
       Ok(())
    }
 
@@ -331,7 +416,8 @@ impl<'gi> CodeGenerator<'gi> {
          | NodeKind::LessEqual
          | NodeKind::GreaterEqual => self.generate_binary(ast, node)?,
 
-         NodeKind::And | NodeKind::Or => todo!("and/or are NYI"),
+         NodeKind::And => self.generate_and(ast, node)?,
+         NodeKind::Or => self.generate_or(ast, node)?,
 
          NodeKind::Assign => self.generate_assignment(ast, node)?,
 
@@ -340,7 +426,7 @@ impl<'gi> CodeGenerator<'gi> {
          NodeKind::Do => self.generate_do(ast, node)?,
          NodeKind::If => self.generate_if(ast, node)?,
          NodeKind::While => self.generate_while(ast, node)?,
-         NodeKind::Break => todo!("break is NYI"),
+         NodeKind::Break => self.generate_break(ast, node)?,
 
          NodeKind::Func => todo!("functions are NYI"),
          NodeKind::Call => todo!("calls are NYI"),
@@ -357,6 +443,7 @@ impl<'gi> CodeGenerator<'gi> {
    /// Generates code for the given AST.
    pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Chunk, Error> {
       self.generate_node(ast, root_node)?;
+      self.chunk.push(Opcode::Halt);
       Ok(self.chunk)
    }
 }

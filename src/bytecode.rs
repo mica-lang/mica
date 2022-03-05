@@ -13,6 +13,7 @@ pub struct Opr24 {
 }
 
 /// A u32 is too big to fit in an `Opr24`.
+#[derive(Debug)]
 pub struct U32TooBig(());
 
 impl Opr24 {
@@ -92,11 +93,19 @@ pub enum Opcode {
    /// Jumps the program counter forward by an amount of bytes.
    JumpForward(Opr24),
    /// Jumps the program counter forward by an amount of bytes if the value at the top of the stack
-   /// is `false`.
+   /// is falsy.
    JumpForwardIfFalsy(Opr24),
+   /// Jumps the program counter forward by an amount of bytes if the value at the top of the stack
+   /// is truthy.
+   JumpForwardIfTruthy(Opr24),
    /// Jumps the program counter backward by an amount of bytes.
    /// Due to how the VM increments the program counter, the actual amount is `operand - 4`.
    JumpBackward(Opr24),
+   /// Enters a breakable block by pushing the break sentinel value onto the stack.
+   EnterBreakableBlock,
+   /// Exits the n-th breakable block (counted from innermost) by popping values off the stack
+   /// until `.0` sentinels are removed.
+   ExitBreakableBlock(u16),
 
    /// Negates a number (prefix `-`).
    Negate,
@@ -118,11 +127,15 @@ pub enum Opcode {
    /// Compares two values for less-than-or-equal relation.
    LessEqual,
 
+   /// Halts the interpreter loop.
+   Halt,
+
    /// Padding value, used to make sure the enum is 4 bytes large.
    #[doc(hidden)]
    __Padding([u8; 3]),
 }
 
+#[derive(Debug)]
 pub struct JumpTooFar(());
 
 impl Opcode {
@@ -153,6 +166,11 @@ impl Opcode {
    pub fn jump_forward_if_falsy(from: usize, to: usize) -> Result<Self, JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
       Ok(Self::JumpForwardIfFalsy(offset))
+   }
+
+   pub fn jump_forward_if_truthy(from: usize, to: usize) -> Result<Self, JumpTooFar> {
+      let offset = Self::forward_jump_offset(from, to)?;
+      Ok(Self::JumpForwardIfTruthy(offset))
    }
 
    fn backward_jump_offset(from: usize, to: usize) -> Result<Opr24, JumpTooFar> {
@@ -206,8 +224,8 @@ impl Chunk {
 
    /// Pushes a number into the chunk.
    pub fn push_number(&mut self, number: f64) {
-      let bytes = bytemuck::bytes_of(&number);
-      self.bytes.extend_from_slice(bytes);
+      let bytes = number.to_le_bytes();
+      self.bytes.extend_from_slice(&bytes);
       // 8 bytes, so push twice.
       self.locations.push(self.codegen_location);
       self.locations.push(self.codegen_location);
@@ -223,9 +241,13 @@ impl Chunk {
       let len_bytes: [u8; 8] = len.to_le_bytes();
       self.bytes.extend_from_slice(&len_bytes);
       self.bytes.extend(string.as_bytes());
-      let padding = ((string.len() + 3) & !3) - string.len();
+      let padded_len = (string.len() + 3) & !3;
+      let padding = padded_len - string.len();
       for _ in 0..padding {
          self.bytes.push(0);
+      }
+      for _ in (0..padded_len).step_by(4) {
+         self.locations.push(self.codegen_location);
       }
    }
 
@@ -235,32 +257,34 @@ impl Chunk {
       self.bytes[position..position + Opcode::SIZE].copy_from_slice(bytes);
    }
 
-   /// Reads an opcode.
-   pub fn read_opcode(&self, pc: &mut usize) -> Opcode {
-      let opcode = *bytemuck::from_bytes(&self.bytes[*pc..*pc + Opcode::SIZE]);
+   /// Reads an opcode. Assumes that `pc` is within the chunk's bounds.
+   pub unsafe fn read_opcode(&self, pc: &mut usize) -> Opcode {
+      let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::SIZE);
+      let opcode = *bytemuck::from_bytes(bytes);
       *pc += Opcode::SIZE;
       opcode
    }
 
-   /// Reads a number.
-   pub fn read_number(&self, pc: &mut usize) -> f64 {
+   /// Reads a number. Assumes that `pc` is within the chunk's bounds.
+   pub unsafe fn read_number(&self, pc: &mut usize) -> f64 {
       const SIZE: usize = std::mem::size_of::<f64>();
-      let bytes: [u8; SIZE] = self.bytes[*pc..*pc + SIZE].try_into().unwrap();
-      let number = *bytemuck::from_bytes(&bytes);
+      let bytes = self.bytes.get_unchecked(*pc..*pc + SIZE);
+      let bytes: [u8; SIZE] = bytes.try_into().unwrap_unchecked();
+      let number = f64::from_le_bytes(bytes);
       *pc += SIZE;
       number
    }
 
    /// Reads a string. This assumes the original string was encoded as proper UTF-8 (which it should
    /// have been considering the only way to write a string is to use a `&str` in the first place).
-   pub fn read_string(&self, pc: &mut usize) -> &str {
+   pub unsafe fn read_string(&self, pc: &mut usize) -> &str {
       let len_bytes: [u8; 8] = self.bytes[*pc..*pc + size_of::<u64>()].try_into().unwrap();
       let len = u64::from_le_bytes(len_bytes);
       *pc += size_of::<u64>();
       let string = &self.bytes[*pc..*pc + len as usize];
       let padded_len = (len + 3) & !3;
       *pc += padded_len as usize;
-      unsafe { std::str::from_utf8_unchecked(string) }
+      std::str::from_utf8_unchecked(string)
    }
 
    /// Returns the length of the chunk (in bytes).
@@ -284,13 +308,13 @@ impl Debug for Chunk {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       let mut pc = 0;
       while !self.at_end(pc) {
-         let opcode = self.read_opcode(&mut pc);
+         let opcode = unsafe { self.read_opcode(&mut pc) };
          write!(f, "{pc:08x} {opcode:?} ")?;
 
          #[allow(clippy::single_match)]
          match opcode {
-            Opcode::PushNumber => write!(f, "{}", self.read_number(&mut pc))?,
-            Opcode::PushString => write!(f, "{:?}", self.read_string(&mut pc))?,
+            Opcode::PushNumber => write!(f, "{}", unsafe { self.read_number(&mut pc) })?,
+            Opcode::PushString => write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?,
             _ => (),
          }
 

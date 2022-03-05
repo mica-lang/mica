@@ -58,7 +58,9 @@ pub enum ErrorKind {
    TooManyGlobals,
    IfBranchTooLarge,
    IfExpressionTooLarge,
+   OperatorRhsTooLarge,
    LoopTooLarge,
+   BreakOutsideOfLoop,
 
    // Runtime
    TypeError { expected: Type, got: Type },
@@ -91,7 +93,9 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyGlobals => write!(f, "too many global variables"),
          Self::IfBranchTooLarge => write!(f, "'if' branch is too large"),
          Self::IfExpressionTooLarge => write!(f, "'if' expression is too large"),
+         Self::OperatorRhsTooLarge => write!(f, "the right-hand side of the operator is too large"),
          Self::LoopTooLarge => write!(f, "loop is too large"),
+         Self::BreakOutsideOfLoop => write!(f, "'break' cannot be used outside of a loop"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

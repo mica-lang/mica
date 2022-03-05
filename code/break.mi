@@ -1,0 +1,7 @@
+i = 3
+while true do
+   i = i + i
+   if i >= 100 do
+      break i
+   end
+end

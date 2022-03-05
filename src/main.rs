@@ -81,9 +81,8 @@ fn interpret(
          return None;
       }
    };
+   // println!("{global_info:?}");
    // println!("{chunk:?}");
-   println!("{global_info:?}");
-   println!("{chunk:?}");
    let result = match vm.interpret(&chunk, globals) {
       Ok(value) => value,
       Err(error) => {

@@ -38,6 +38,12 @@ impl Globals {
    }
 }
 
+impl Default for Globals {
+   fn default() -> Self {
+      Self::new()
+   }
+}
+
 struct ReturnPoint {
    chunk: Rc<Chunk>,
    pc: usize,
@@ -84,7 +90,7 @@ impl Fiber {
    }
 
    fn push(&mut self, value: Value) {
-      self.stack.push(value.clone());
+      self.stack.push(value);
    }
 
    fn pop(&mut self) -> Value {

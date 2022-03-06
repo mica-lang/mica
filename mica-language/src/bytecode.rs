@@ -269,7 +269,10 @@ impl Chunk {
       self.bytes[position..position + Opcode::SIZE].copy_from_slice(bytes);
    }
 
-   /// Reads an opcode. Assumes that `pc` is within the chunk's bounds.
+   /// Reads an opcode.
+   ///
+   /// # Safety
+   /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
    pub unsafe fn read_opcode(&self, pc: &mut usize) -> Opcode {
       let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::SIZE);
       let opcode = *bytemuck::from_bytes(bytes);
@@ -277,7 +280,10 @@ impl Chunk {
       opcode
    }
 
-   /// Reads a number. Assumes that `pc` is within the chunk's bounds.
+   /// Reads a number.
+   ///
+   /// # Safety
+   /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
    pub unsafe fn read_number(&self, pc: &mut usize) -> f64 {
       const SIZE: usize = std::mem::size_of::<f64>();
       let bytes = self.bytes.get_unchecked(*pc..*pc + SIZE);
@@ -287,7 +293,10 @@ impl Chunk {
       number
    }
 
-   /// Reads a string. This assumes the original string was encoded as proper UTF-8 (which it should
+   /// Reads a string.
+   ///
+   /// # Safety
+   /// This assumes the original string was encoded as proper UTF-8 (which it should
    /// have been considering the only way to write a string is to use a `&str` in the first place).
    pub unsafe fn read_string(&self, pc: &mut usize) -> &str {
       let len_bytes: [u8; 8] = self.bytes[*pc..*pc + size_of::<u64>()].try_into().unwrap();
@@ -302,6 +311,11 @@ impl Chunk {
    /// Returns the length of the chunk (in bytes).
    pub fn len(&self) -> usize {
       self.bytes.len()
+   }
+
+   /// Returns whether the chunk is empty.
+   pub fn is_empty(&self) -> bool {
+      self.len() == 0
    }
 
    /// Returns the location (in file) of the program counter.
@@ -420,5 +434,11 @@ impl Environment {
    /// `unsafe`.
    pub(crate) unsafe fn get_function_unchecked(&mut self, id: Opr24) -> &Function {
       self.functions.get_unchecked(u32::from(id) as usize)
+   }
+}
+
+impl Default for Environment {
+   fn default() -> Self {
+      Self::new()
    }
 }

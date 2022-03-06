@@ -1,8 +1,7 @@
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-use crate::ast::NodeId;
-use crate::bytecode::{Function, Opr24};
+use crate::bytecode::Opr24;
 use crate::common::ErrorKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

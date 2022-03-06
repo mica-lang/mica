@@ -1,13 +1,17 @@
 [package]
-name = "mica"
+name = "Mica"
+description = "A user-friendly embeddable scripting language"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = [
+   "mica-cli",
+   "mica-language",
+]
+
 [dependencies]
-rustyline = "9.1.2"
-phf = { version = "0.10.1", features = ["macros"] }
-structopt = "0.3.26"
-bytemuck = "1.8.0"
+mica-language = { path = "mica-language" }
 
 [profile.release]
 debug = 1

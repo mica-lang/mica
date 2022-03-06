@@ -1,31 +1,20 @@
-#![allow(clippy::vec_box)]
-
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use bytecode::{Chunk, Environment, Function, FunctionKind};
-use codegen::CodeGenerator;
-use common::{Error, ErrorKind};
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::{Editor, Helper};
-
-use lexer::Lexer;
-use parser::Parser;
 use structopt::StructOpt;
-use value::{Closure, Value};
-use vm::{Fiber, Globals};
 
-mod ast;
-mod bytecode;
-mod codegen;
-mod common;
-mod lexer;
-mod parser;
-mod value;
-mod vm;
+use mica_language::bytecode::{Chunk, Environment, Function, FunctionKind};
+use mica_language::codegen::CodeGenerator;
+use mica_language::common::{Error, ErrorKind};
+use mica_language::lexer::Lexer;
+use mica_language::parser::Parser;
+use mica_language::value::{Closure, Value};
+use mica_language::vm::{Fiber, Globals};
 
 #[derive(StructOpt)]
 #[structopt(name = "mica")]

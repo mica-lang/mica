@@ -191,7 +191,7 @@ impl Lexer {
       &self.input[start..end]
    }
 
-   pub fn next(&mut self) -> Result<Token, Error> {
+   pub fn next_token(&mut self) -> Result<Token, Error> {
       self.skip_whitespace();
       self.token_start = self.location;
 
@@ -235,9 +235,9 @@ impl Lexer {
       }
    }
 
-   pub fn peek(&mut self) -> Result<Token, Error> {
+   pub fn peek_token(&mut self) -> Result<Token, Error> {
       let location = self.location;
-      let token = self.next()?;
+      let token = self.next_token()?;
       self.location = location;
       Ok(token)
    }

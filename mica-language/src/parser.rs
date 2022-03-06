@@ -30,9 +30,9 @@ impl Parser {
       kind: TokenKind,
       error: impl FnOnce(&Token) -> ErrorKind,
    ) -> Result<Token, Error> {
-      let next_token = self.lexer.peek()?;
+      let next_token = self.lexer.peek_token()?;
       if next_token.kind == kind {
-         Ok(self.lexer.next()?)
+         Ok(self.lexer.next_token()?)
       } else {
          Err(self.error(&next_token, error(&next_token)))
       }
@@ -107,7 +107,7 @@ impl Parser {
    }
 
    fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
-      let next_token = self.lexer.next()?;
+      let next_token = self.lexer.next_token()?;
       let right = self.parse_prefix(next_token)?;
       Ok(self.ast.build_node(kind, right).with_location(token.location).done())
    }
@@ -118,8 +118,8 @@ impl Parser {
       children: &mut Vec<NodeId>,
       is_terminator: impl Fn(&TokenKind) -> bool,
    ) -> Result<(), Error> {
-      while !is_terminator(&self.lexer.peek()?.kind) {
-         if self.lexer.peek()?.kind == TokenKind::Eof {
+      while !is_terminator(&self.lexer.peek_token()?.kind) {
+         if self.lexer.peek_token()?.kind == TokenKind::Eof {
             return Err(self.error(token, ErrorKind::MissingEnd));
          }
          children.push(self.parse_item()?);
@@ -134,7 +134,7 @@ impl Parser {
       mut next: impl FnMut(&mut Self) -> Result<NodeId, Error>,
    ) -> Result<(), Error> {
       loop {
-         let token = self.lexer.peek()?;
+         let token = self.lexer.peek_token()?;
          match &token.kind {
             TokenKind::Eof => return Err(self.error(&token, ErrorKind::UnexpectedEof)),
             kind if *kind == end => {
@@ -143,7 +143,7 @@ impl Parser {
             _ => (),
          }
          dest.push(next(self)?);
-         match self.lexer.next()? {
+         match self.lexer.next_token()? {
             Token {
                kind: TokenKind::Comma,
                ..
@@ -157,7 +157,7 @@ impl Parser {
    fn parse_do_block(&mut self, token: Token) -> Result<NodeId, Error> {
       let mut children = Vec::new();
       self.parse_terminated_block(&token, &mut children, |k| *k == TokenKind::End)?;
-      let _end = self.lexer.next();
+      let _end = self.lexer.next_token();
       Ok(self
          .ast
          .build_node(NodeKind::Do, ())
@@ -192,7 +192,7 @@ impl Parser {
             .done(),
          );
 
-         let next_token = self.lexer.next()?;
+         let next_token = self.lexer.next_token()?;
          match &next_token.kind {
             TokenKind::Elif => {
                if else_token.is_some() {
@@ -221,7 +221,7 @@ impl Parser {
       let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
       let mut body = Vec::new();
       self.parse_terminated_block(&do_token, &mut body, |k| *k == TokenKind::End)?;
-      let _end = self.lexer.next();
+      let _end = self.lexer.next_token();
       Ok(self
          .ast
          .build_node(NodeKind::While, condition)
@@ -231,15 +231,15 @@ impl Parser {
    }
 
    fn parse_function_declaration(&mut self) -> Result<NodeId, Error> {
-      let func = self.lexer.next()?;
+      let func = self.lexer.next_token()?;
 
-      let name = self.lexer.next()?;
+      let name = self.lexer.next_token()?;
       let name = self.parse_identifier(name)?;
 
       let left_paren = self.expect(TokenKind::LeftParen, |_| ErrorKind::LeftParenExpected)?;
       let mut parameters = Vec::new();
       self.parse_comma_separated(&mut parameters, TokenKind::RightParen, |p| {
-         let name = p.lexer.next()?;
+         let name = p.lexer.next_token()?;
          p.parse_identifier(name)
       })?;
       let parameters = self
@@ -251,7 +251,7 @@ impl Parser {
 
       let mut body = Vec::new();
       self.parse_terminated_block(&func, &mut body, |k| *k == TokenKind::End)?;
-      let _end = self.lexer.next();
+      let _end = self.lexer.next_token();
 
       Ok(self
          .ast
@@ -262,7 +262,7 @@ impl Parser {
    }
 
    fn parse_break_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
-      let next_token = self.lexer.peek()?;
+      let next_token = self.lexer.peek_token()?;
       let result = if next_token.location.line > token.location.line
          || matches!(next_token.kind, TokenKind::End)
       {
@@ -287,7 +287,7 @@ impl Parser {
 
          TokenKind::LeftParen => {
             let inner = self.parse_expression(0)?;
-            if !matches!(self.lexer.next()?.kind, TokenKind::RightParen) {
+            if !matches!(self.lexer.next_token()?.kind, TokenKind::RightParen) {
                return Err(self.error(&token, ErrorKind::MissingRightParen));
             }
             Ok(inner)
@@ -354,11 +354,11 @@ impl Parser {
    }
 
    fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, Error> {
-      let mut token = self.lexer.next()?;
+      let mut token = self.lexer.next_token()?;
       let mut left = self.parse_prefix(token)?;
 
-      while precedence < Self::precedence(&self.lexer.peek()?) {
-         token = self.lexer.next()?;
+      while precedence < Self::precedence(&self.lexer.peek_token()?) {
+         token = self.lexer.next_token()?;
          left = self.parse_infix(left, token)?;
       }
 
@@ -366,7 +366,7 @@ impl Parser {
    }
 
    fn parse_item(&mut self) -> Result<NodeId, Error> {
-      let token = self.lexer.peek()?;
+      let token = self.lexer.peek_token()?;
       match &token.kind {
          TokenKind::Func => self.parse_function_declaration(),
          _ => self.parse_expression(0),
@@ -374,12 +374,12 @@ impl Parser {
    }
 
    pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
-      let first_token = self.lexer.peek()?;
+      let first_token = self.lexer.peek_token()?;
       let mut main = Vec::new();
       Ok(loop {
          let item = self.parse_item()?;
          main.push(item);
-         if self.lexer.peek()?.kind == TokenKind::Eof {
+         if self.lexer.peek_token()?.kind == TokenKind::Eof {
             let main = self
                .ast
                .build_node(NodeKind::Main, ())

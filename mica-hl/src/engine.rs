@@ -133,15 +133,12 @@ impl Engine {
    /// # Errors
    ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn raw_function<G, F>(
+   pub fn raw_function(
       &self,
       name: &str,
       parameter_count: impl Into<Option<u16>>,
       f: Box<dyn FnMut(&[Value]) -> Value>,
-   ) -> Result<(), Error>
-   where
-      G: ToGlobalId,
-   {
+   ) -> Result<(), Error> {
       let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
       let global_id = name.to_global_id(&mut runtime_env.env)?;
       let function_id = runtime_env

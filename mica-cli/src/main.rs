@@ -65,6 +65,12 @@ fn interpret(engine: &Engine, filename: &str, input: String) -> impl Iterator<It
    .flatten()
 }
 
+fn engine() -> Result<Engine, mica::Error> {
+   let engine = Engine::new();
+   mica::std::load(&engine)?;
+   Ok(engine)
+}
+
 fn repl() -> Result<(), mica::Error> {
    println!("Mica {} REPL", env!("CARGO_PKG_VERSION"));
    println!("Press Ctrl-C to exit.");
@@ -74,7 +80,7 @@ fn repl() -> Result<(), mica::Error> {
       Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
    editor.set_helper(Some(MicaValidator));
 
-   let engine = Engine::new();
+   let engine = engine()?;
    while let Ok(line) = editor.readline("> ") {
       for result in interpret(&engine, "(repl)", line) {
          println!("< {result:?}");
@@ -89,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
    let opts = Opts::from_args();
    if let Some(path) = &opts.file {
       let file = std::fs::read_to_string(path)?;
-      let engine = Engine::new();
+      let engine = engine()?;
       let _ = interpret(&engine, path.to_str().unwrap(), file);
    } else {
       repl()?;

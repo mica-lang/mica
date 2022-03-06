@@ -5,3 +5,4 @@ while true do
       1 + break i
    end
 end
+print(i)

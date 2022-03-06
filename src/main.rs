@@ -65,7 +65,7 @@ impl Validator for MicaValidator {
    }
 }
 
-fn compile(globals: &mut Environment, filename: &str, input: String) -> Result<Chunk, Error> {
+fn compile(globals: &mut Environment, filename: &str, input: String) -> Result<Rc<Chunk>, Error> {
    let module_name = Rc::from(filename);
    let lexer = Lexer::new(Rc::clone(&module_name), input);
    let parser = Parser::new(lexer);
@@ -87,7 +87,7 @@ fn interpret(
    };
    println!("{env:?}");
    println!("{chunk:?}");
-   let mut fiber = Fiber::new(&chunk);
+   let mut fiber = Fiber::new(chunk);
    let result = match fiber.interpret(env, globals) {
       Ok(value) => value,
       Err(error) => {

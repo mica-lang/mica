@@ -15,4 +15,4 @@ while iteration <= 10000 do
    iteration = iteration + 1
 end
 
-result
+print(result)

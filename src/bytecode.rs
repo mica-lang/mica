@@ -113,6 +113,8 @@ pub enum Opcode {
 
    /// Calls a function with `.0` arguments.
    Call(u16),
+   /// Returns to the calling function.
+   Return,
 
    /// Negates a number (prefix `-`).
    Negate,
@@ -316,6 +318,13 @@ impl Chunk {
 
 impl Debug for Chunk {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      writeln!(f, "module_name = {:?}", self.module_name)?;
+      writeln!(
+         f,
+         "preallocate_stack_slots = {:?}",
+         self.preallocate_stack_slots
+      )?;
+
       let mut pc = 0;
       while !self.at_end(pc) {
          let opcode = unsafe { self.read_opcode(&mut pc) };
@@ -344,7 +353,7 @@ impl Debug for Chunk {
 
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
-   Bytecode(Chunk),
+   Bytecode(Rc<Chunk>),
    Foreign(fn(&[Value]) -> Value),
 }
 

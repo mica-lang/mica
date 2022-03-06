@@ -38,22 +38,32 @@ impl Globals {
    }
 }
 
-/// The virtual machine state.
-pub struct Fiber<'c> {
+struct ReturnPoint {
+   chunk: Rc<Chunk>,
    pc: usize,
-   chunk: &'c Chunk,
+   stack_bottom: usize,
+}
+
+/// The virtual machine state.
+pub struct Fiber {
+   pc: usize,
+   chunk: Rc<Chunk>,
 
    stack: Vec<Value>,
+   stack_bottom: usize,
+   call_stack: Vec<ReturnPoint>,
    breakable_block_stack: Vec<usize>,
 }
 
-impl<'c> Fiber<'c> {
+impl Fiber {
    /// Creates a new VM.
-   pub fn new(chunk: &'c Chunk) -> Self {
+   pub fn new(chunk: Rc<Chunk>) -> Self {
       Self {
          pc: 0,
          chunk,
          stack: Vec::new(),
+         stack_bottom: 0,
+         call_stack: Vec::new(),
          breakable_block_stack: Vec::new(),
       }
    }
@@ -61,24 +71,22 @@ impl<'c> Fiber<'c> {
    fn error(&self, kind: ErrorKind) -> Error {
       Error::Runtime {
          kind,
-         call_stack: vec![StackTraceEntry {
-            function_name: Rc::from("<main>"),
-            module_name: Rc::clone(&self.chunk.module_name),
-            location: self.chunk.location(self.pc),
-         }],
+         call_stack: self
+            .call_stack
+            .iter()
+            .map(|return_point| StackTraceEntry {
+               function_name: Rc::from("<function names TODO>"),
+               module_name: Rc::clone(&return_point.chunk.module_name),
+               location: return_point.chunk.location(return_point.pc - Opcode::SIZE),
+            })
+            .collect(),
       }
    }
 
-   fn wrap_error<T>(&self, result: Result<T, ErrorKind>) -> Result<T, Error> {
-      result.map_err(|kind| self.error(kind))
-   }
-
-   #[inline(always)]
    fn push(&mut self, value: Value) {
-      self.stack.push(value);
+      self.stack.push(value.clone());
    }
 
-   #[inline(always)]
    fn pop(&mut self) -> Value {
       #[cfg(debug_assertions)]
       {
@@ -90,7 +98,6 @@ impl<'c> Fiber<'c> {
       }
    }
 
-   #[inline(always)]
    fn stack_top(&self) -> &Value {
       #[cfg(debug_assertions)]
       {
@@ -102,7 +109,6 @@ impl<'c> Fiber<'c> {
       }
    }
 
-   #[inline(always)]
    fn stack_top_mut(&mut self) -> &mut Value {
       #[cfg(debug_assertions)]
       {
@@ -127,31 +133,58 @@ impl<'c> Fiber<'c> {
       }
    }
 
+   fn save_return_point(&mut self) {
+      self.call_stack.push(ReturnPoint {
+         chunk: Rc::clone(&self.chunk),
+         pc: self.pc,
+         stack_bottom: self.stack_bottom,
+      });
+   }
+
+   fn restore_return_point(&mut self) {
+      let return_point = self.call_stack.pop().unwrap();
+      // Remove unnecessary values from the stack (eg. arguments).
+      while self.stack.len() > self.stack_bottom {
+         self.stack.pop().unwrap();
+      }
+      // Restore state.
+      self.chunk = return_point.chunk;
+      self.pc = return_point.pc;
+      self.stack_bottom = return_point.stack_bottom;
+   }
+
+   fn allocate_chunk_storage_slots(&mut self, n: usize) {
+      self.stack.extend(std::iter::repeat_with(|| Value::Nil).take(n));
+   }
+
    /// Interprets bytecode in the chunk, with the provided global storage.
    pub fn interpret(
       &mut self,
       env: &mut Environment,
       globals: &mut Globals,
    ) -> Result<Value, Error> {
-      self.stack.extend(
-         std::iter::repeat_with(|| Value::Nil).take(self.chunk.preallocate_stack_slots as usize),
-      );
+      self.allocate_chunk_storage_slots(self.chunk.preallocate_stack_slots as usize);
 
       loop {
-         let instruction_pc = self.pc;
          let opcode = unsafe { self.chunk.read_opcode(&mut self.pc) };
 
          macro_rules! wrap_error {
             ($exp:expr) => {{
                let result = $exp;
-               self.wrap_error(result)
+               match result {
+                  Ok(value) => value,
+                  Err(kind) => {
+                     self.save_return_point();
+                     return Err(self.error(kind));
+                  }
+               }
             }};
          }
 
          macro_rules! binary_operator {
             ($op:tt) => {{
-               let right = wrap_error!(self.pop().number())?;
-               let left = wrap_error!(self.stack_top().number())?;
+               let right = wrap_error!(self.pop().number());
+               let left = wrap_error!(self.stack_top().number());
                *self.stack_top_mut() = Value::Number(left $op right);
             }};
          }
@@ -167,8 +200,8 @@ impl<'c> Fiber<'c> {
                self.push(Value::Number(number));
             }
             Opcode::PushString => {
-               let string = unsafe { self.chunk.read_string(&mut self.pc) };
-               self.push(Value::String(string.into()));
+               let string = Rc::from(unsafe { self.chunk.read_string(&mut self.pc) });
+               self.push(Value::String(string));
             }
             Opcode::CreateClosure(function_id) => {
                self.push(Value::Function(Rc::new(Closure { function_id })));
@@ -185,11 +218,11 @@ impl<'c> Fiber<'c> {
             Opcode::AssignLocal(slot) => {
                let slot = u32::from(slot) as usize;
                let value = self.stack_top().clone();
-               self.stack[slot] = value;
+               self.stack[self.stack_bottom + slot] = value;
             }
             Opcode::GetLocal(slot) => {
                let slot = u32::from(slot) as usize;
-               let value = self.stack[slot].clone();
+               let value = self.stack[self.stack_bottom + slot].clone();
                self.push(value);
             }
 
@@ -198,7 +231,7 @@ impl<'c> Fiber<'c> {
                self.stack.swap(len - 2, len - 1);
             }
             Opcode::Discard => {
-               self.stack.pop();
+               self.pop();
             }
 
             Opcode::JumpForward(amount) => {
@@ -230,7 +263,9 @@ impl<'c> Fiber<'c> {
                for _ in 0..n {
                   unsafe {
                      let top = self.breakable_block_stack.pop().unwrap_unchecked();
-                     self.stack.set_len(top)
+                     while self.stack.len() > top {
+                        self.stack.pop().unwrap();
+                     }
                   }
                }
                self.push(result);
@@ -239,10 +274,16 @@ impl<'c> Fiber<'c> {
             Opcode::Call(argument_count) => {
                let argument_count = argument_count as usize;
                let function_value = self.nth_from_top(argument_count + 1);
-               let closure = wrap_error!(function_value.function())?;
-               let function = unsafe { &env.get_function_unchecked(closure.function_id) };
+               let closure = wrap_error!(function_value.function());
+               let function = unsafe { env.get_function_unchecked(closure.function_id) };
                match &function.kind {
-                  FunctionKind::Bytecode(_chunk) => todo!(),
+                  FunctionKind::Bytecode(chunk) => {
+                     self.save_return_point();
+                     self.chunk = Rc::clone(chunk);
+                     self.pc = 0;
+                     self.stack_bottom = self.stack.len() - argument_count;
+                     self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
+                  }
                   FunctionKind::Foreign(f) => {
                      let arguments =
                         unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
@@ -251,10 +292,18 @@ impl<'c> Fiber<'c> {
                   }
                }
             }
+            Opcode::Return => {
+               let result = self.pop();
+               self.restore_return_point();
+               // Remove the function from the stack.
+               self.stack.pop().unwrap();
+               // Push the result onto the stack.
+               self.push(result);
+            }
 
             Opcode::Negate => {
                // TODO: Debug info.
-               let number = wrap_error!(self.pop().number())?;
+               let number = wrap_error!(self.pop().number());
                self.push(Value::Number(-number))
             }
             Opcode::Add => binary_operator!(+),
@@ -274,7 +323,7 @@ impl<'c> Fiber<'c> {
             Opcode::Less => {
                let right = self.pop();
                let left = self.pop();
-               let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right))? {
+               let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right)) {
                   ordering.is_lt()
                } else {
                   false
@@ -284,7 +333,7 @@ impl<'c> Fiber<'c> {
             Opcode::LessEqual => {
                let right = self.pop();
                let left = self.pop();
-               let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right))? {
+               let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right)) {
                   ordering.is_le()
                } else {
                   false

@@ -10,13 +10,23 @@ use crate::common::{Error, ErrorKind};
 #[derive(Debug, Default)]
 struct Scope {
    /// Mapping from variable names to stack slots.
-   variables: HashMap<String, Opr24>,
+   variables: HashMap<String, (Opr24, VariableAllocation)>,
+   allocated_variable_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Variable {
    Global(Opr24),
    Local(Opr24),
+}
+
+/// The kind of a variable allocation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VariableAllocation {
+   /// Inherit the allocation from the caller (parameter passing).
+   Inherit,
+   /// Allocate new storage for the variable.
+   Allocate,
 }
 
 #[derive(Debug, Default)]
@@ -32,6 +42,8 @@ pub struct CodeGenerator<'e> {
    scopes: Vec<Scope>,
    /// The next stack slot to be occupied by a variable.
    local_count: u32,
+   /// The total amount of locals allocated at a time.
+   allocated_local_count: u32,
    breakable_blocks: Vec<BreakableBlock>,
 }
 
@@ -43,20 +55,30 @@ impl<'e> CodeGenerator<'e> {
          env,
          scopes: Vec::new(),
          local_count: 0,
+         allocated_local_count: 0,
          breakable_blocks: Vec::new(),
       }
    }
 
    /// Creates a variable. If there is a scope on the stack, the variable is local; otherwise it
    /// is global.
-   fn create_variable(&mut self, name: &str) -> Result<Variable, ErrorKind> {
+   fn create_variable(
+      &mut self,
+      name: &str,
+      allocation: VariableAllocation,
+   ) -> Result<Variable, ErrorKind> {
       if !self.scopes.is_empty() {
          let slot = self.local_count;
          let slot = Opr24::new(slot).map_err(|_| ErrorKind::TooManyLocals)?;
-         self.scopes.last_mut().unwrap().variables.insert(name.to_owned(), slot);
+         let scope = self.scopes.last_mut().unwrap();
+         scope.variables.insert(name.to_owned(), (slot, allocation));
          self.local_count += 1;
-         self.chunk.preallocate_stack_slots =
-            self.chunk.preallocate_stack_slots.max(self.local_count);
+         if allocation == VariableAllocation::Allocate {
+            self.allocated_local_count += 1;
+            scope.allocated_variable_count += 1;
+            self.chunk.preallocate_stack_slots =
+               self.chunk.preallocate_stack_slots.max(self.allocated_local_count);
+         }
          Ok(Variable::Local(slot))
       } else {
          let slot = self.env.create_global(name)?;
@@ -69,7 +91,7 @@ impl<'e> CodeGenerator<'e> {
    fn lookup_variable(&mut self, name: &str) -> Option<Variable> {
       for scope in self.scopes.iter().rev() {
          if scope.variables.contains_key(name) {
-            return scope.variables.get(name).copied().map(Variable::Local);
+            return scope.variables.get(name).copied().map(|(slot, _)| Variable::Local(slot));
          }
       }
       self.env.get_global(name).map(Variable::Global)
@@ -84,6 +106,7 @@ impl<'e> CodeGenerator<'e> {
    fn pop_scope(&mut self) {
       let scope = self.scopes.pop().expect("no scopes left on the stack");
       self.local_count -= scope.variables.len() as u32;
+      self.allocated_local_count -= scope.allocated_variable_count;
    }
 
    /// Generates a variable load instruction (GetLocal or GetGlobal).
@@ -231,7 +254,9 @@ impl<'e> CodeGenerator<'e> {
             let variable = if let Some(slot) = self.lookup_variable(name) {
                slot
             } else {
-               self.create_variable(name).map_err(|kind| ast.error(node, kind))?
+               self
+                  .create_variable(name, VariableAllocation::Allocate)
+                  .map_err(|kind| ast.error(node, kind))?
             };
             self.generate_variable_assign(variable);
          }
@@ -412,7 +437,9 @@ impl<'e> CodeGenerator<'e> {
       let name = ast.string(name_node).unwrap();
 
       // Create the variable before compiling the function, to allow for recursion.
-      let variable = self.create_variable(name).map_err(|kind| ast.error(name_node, kind))?;
+      let variable = self
+         .create_variable(name, VariableAllocation::Allocate)
+         .map_err(|kind| ast.error(name_node, kind))?;
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
       // Push a scope to enforce creating local variables.
@@ -420,17 +447,20 @@ impl<'e> CodeGenerator<'e> {
       // Create local variables for all the parameters.
       for &parameter in parameter_list {
          let parameter_name = ast.string(parameter).unwrap();
-         generator.create_variable(parameter_name).map_err(|kind| ast.error(parameter, kind))?;
+         generator
+            .create_variable(parameter_name, VariableAllocation::Inherit)
+            .map_err(|kind| ast.error(parameter, kind))?;
       }
       // Generate the body.
       generator.generate_node_list(ast, body)?;
       generator.pop_scope();
+      generator.chunk.push(Opcode::Return);
 
       let function = Function {
          name: Rc::from(name),
          parameter_count: u16::try_from(parameter_list.len())
             .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
-         kind: FunctionKind::Bytecode(generator.chunk),
+         kind: FunctionKind::Bytecode(Rc::new(generator.chunk)),
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
       self.chunk.push(Opcode::CreateClosure(function_id));
@@ -491,9 +521,9 @@ impl<'e> CodeGenerator<'e> {
    }
 
    /// Generates code for the given AST.
-   pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Chunk, Error> {
+   pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Rc<Chunk>, Error> {
       self.generate_node(ast, root_node)?;
       self.chunk.push(Opcode::Halt);
-      Ok(self.chunk)
+      Ok(Rc::new(self.chunk))
    }
 }

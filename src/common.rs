@@ -70,7 +70,6 @@ pub enum ErrorKind {
    // Runtime
    TypeError { expected: Type, got: Type },
    InvalidAssignment,
-   CannotCall(Type),
 }
 
 impl std::fmt::Display for ErrorKind {
@@ -109,7 +108,6 @@ impl std::fmt::Display for ErrorKind {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
-         Self::CannotCall(typ) => write!(f, "{typ} values cannot be called"),
       }
    }
 }
@@ -154,16 +152,16 @@ impl std::fmt::Display for Error {
             write!(f, "{}:{}: error: {}", module_name, location, kind)
          }
          Error::Runtime { kind, call_stack } => {
-            write!(f, "error: {}", kind);
+            write!(f, "error: {}", kind)?;
             let file_location_width = call_stack
                .iter()
                .map(|entry| format!("{}", FileLocation(&entry.module_name, entry.location)).len())
                .max()
-               .unwrap();
+               .unwrap_or(20);
             for entry in call_stack {
                write!(
                   f,
-                  "    {:width$}  {}",
+                  "\n    {:width$}  {}",
                   FileLocation(&entry.module_name, entry.location),
                   entry.function_name,
                   width = file_location_width,

@@ -10,7 +10,7 @@ end
 
 iteration = 1
 result = 0
-while iteration <= 10000 do
+while iteration <= 100000 do
    result = factorial(15)
    iteration = iteration + 1
 end

@@ -9,7 +9,7 @@ local function factorial(n)
 end
 
 local result = 0
-for _ = 1, 10000 do
+for _ = 1, 100000 do
    result = factorial(15)
 end
 return result

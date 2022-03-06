@@ -5,7 +5,7 @@ An actually good embeddable scripting language, with ambitions.
 Intended to sit somewhere in between Lua and Ruby in terms of syntax, and be at least as convenient
 as Rust (if not more).
 
-Still highly work in progress! You can try out the REPL with `cargo run --release`.
+Still highly work in progress! You can try out the REPL with `cargo run -p mica-cli --release`.
 
 ## Performance
 

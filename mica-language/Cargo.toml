@@ -1,5 +1,6 @@
 [package]
 name = "mica-language"
+description = "Low-level interface for the Mica scripting language"
 version = "0.1.0"
 edition = "2021"
 

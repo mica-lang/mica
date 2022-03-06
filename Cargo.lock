@@ -3,13 +3,6 @@
 version = 3
 
 [[package]]
-name = "Mica"
-version = "0.1.0"
-dependencies = [
- "mica-language",
-]
-
-[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -229,6 +222,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "mica"
+version = "0.1.0"
+dependencies = [
+ "mica-language",
 ]
 
 [[package]]

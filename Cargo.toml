@@ -1,5 +1,5 @@
 [package]
-name = "Mica"
+name = "mica"
 description = "A user-friendly embeddable scripting language"
 version = "0.1.0"
 edition = "2021"

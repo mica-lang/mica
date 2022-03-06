@@ -7,6 +7,7 @@ use crate::common::{Error, ErrorKind, StackTraceEntry};
 use crate::value::{Closure, Value};
 
 /// Storage for global variables.
+#[derive(Debug)]
 pub struct Globals {
    values: Vec<Value>,
 }

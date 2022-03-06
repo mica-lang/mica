@@ -20,6 +20,17 @@ use mica_language::vm::{Fiber, Globals};
 #[structopt(name = "mica")]
 struct Opts {
    file: Option<PathBuf>,
+
+   #[structopt(flatten)]
+   interpret_options: InterpretOptions,
+}
+
+#[derive(StructOpt)]
+struct InterpretOptions {
+   #[structopt(long)]
+   dump_environment: bool,
+   #[structopt(long)]
+   dump_bytecode: bool,
 }
 
 struct MicaValidator;
@@ -66,6 +77,7 @@ fn interpret(
    (env, globals): (&mut Environment, &mut Globals),
    filename: &str,
    input: String,
+   options: &InterpretOptions,
 ) -> Option<Value> {
    let chunk = match compile(env, filename, input) {
       Ok(chunk) => chunk,
@@ -74,8 +86,13 @@ fn interpret(
          return None;
       }
    };
-   println!("{env:?}");
-   println!("{chunk:?}");
+   if options.dump_environment {
+      println!("{env:?}");
+      println!("{globals:?}");
+   }
+   if options.dump_bytecode {
+      println!("{chunk:?}");
+   }
    let mut fiber = Fiber::new(chunk);
    let result = match fiber.interpret(env, globals) {
       Ok(value) => value,
@@ -115,13 +132,17 @@ fn env() -> (Environment, Globals) {
    (env, globals)
 }
 
-fn repl() {
+fn repl(options: &InterpretOptions) {
+   println!("Mica {} REPL", env!("CARGO_PKG_VERSION"));
+   println!("Press Ctrl-C to exit.");
+   println!();
+
    let mut editor =
       Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
    editor.set_helper(Some(MicaValidator));
    let (mut env, mut globals) = env();
    while let Ok(line) = editor.readline("> ") {
-      if let Some(result) = interpret((&mut env, &mut globals), "(repl)", line) {
+      if let Some(result) = interpret((&mut env, &mut globals), "(repl)", line, options) {
          println!("< {result:?}");
          println!();
       }
@@ -133,9 +154,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
    if let Some(path) = &opts.file {
       let file = std::fs::read_to_string(path)?;
       let (mut env, mut globals) = env();
-      let _ = interpret((&mut env, &mut globals), path.to_str().unwrap(), file);
+      let _ = interpret(
+         (&mut env, &mut globals),
+         path.to_str().unwrap(),
+         file,
+         &opts.interpret_options,
+      );
    } else {
-      repl();
+      repl(&opts.interpret_options);
    }
 
    Ok(())

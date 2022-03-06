@@ -1,6 +1,9 @@
 //! Error reporting.
 
+use std::borrow::Cow;
+
 pub type LanguageError = mica_language::common::Error;
+pub type LanguageErrorKind = mica_language::common::ErrorKind;
 
 /// An error.
 #[derive(Debug)]
@@ -11,6 +14,15 @@ pub enum Error {
    Runtime(LanguageError),
    /// The execution engine is in use.
    EngineInUse,
+   /// There are too many globals.
+   TooManyGlobals,
+   /// Too many functions were created.
+   TooManyFunctions,
+   /// A type mismatch occured.
+   TypeMismatch {
+      expected: Cow<'static, str>,
+      got: Cow<'static, str>,
+   },
 }
 
 impl From<LanguageError> for Error {
@@ -27,6 +39,13 @@ impl std::fmt::Display for Error {
       match self {
          Self::Compile(error) | Self::Runtime(error) => error.fmt(f),
          Self::EngineInUse => f.write_str("execution engine is in use by another fiber"),
+         Self::TooManyGlobals => f.write_str("too many globals"),
+         Self::TooManyFunctions => f.write_str("too many functions"),
+         Self::TypeMismatch { expected, got } => {
+            write!(f, "type mismatch, expected {expected} but got {got}")
+         }
       }
    }
 }
+
+impl std::error::Error for Error {}

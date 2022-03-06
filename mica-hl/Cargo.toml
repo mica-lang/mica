@@ -1,0 +1,7 @@
+[package]
+name = "mica-hl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mica-language = { path = "../mica-language" }

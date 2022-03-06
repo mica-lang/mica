@@ -458,8 +458,10 @@ impl<'e> CodeGenerator<'e> {
 
       let function = Function {
          name: Rc::from(name),
-         parameter_count: u16::try_from(parameter_list.len())
-            .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
+         parameter_count: Some(
+            u16::try_from(parameter_list.len())
+               .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
+         ),
          kind: FunctionKind::Bytecode(Rc::new(generator.chunk)),
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;

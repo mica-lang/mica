@@ -228,16 +228,24 @@ dependencies = [
 name = "mica"
 version = "0.1.0"
 dependencies = [
- "mica-language",
+ "mica-hl",
+ "mica-std",
 ]
 
 [[package]]
 name = "mica-cli"
 version = "0.1.0"
 dependencies = [
- "mica-language",
+ "mica",
  "rustyline",
  "structopt",
+]
+
+[[package]]
+name = "mica-hl"
+version = "0.1.0"
+dependencies = [
+ "mica-language",
 ]
 
 [[package]]
@@ -247,6 +255,10 @@ dependencies = [
  "bytemuck",
  "phf",
 ]
+
+[[package]]
+name = "mica-std"
+version = "0.1.0"
 
 [[package]]
 name = "nibble_vec"

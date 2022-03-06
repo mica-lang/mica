@@ -7,11 +7,14 @@ edition = "2021"
 [workspace]
 members = [
    "mica-cli",
+   "mica-hl",
    "mica-language",
+   "mica-std",
 ]
 
 [dependencies]
-mica-language = { path = "mica-language" }
+mica-hl = { path = "mica-hl" }
+mica-std = { path = "mica-std" }
 
 [profile.release]
 debug = 1

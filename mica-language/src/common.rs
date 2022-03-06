@@ -1,6 +1,5 @@
+use std::borrow::Cow;
 use std::rc::Rc;
-
-use crate::value::Type;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
@@ -68,7 +67,10 @@ pub enum ErrorKind {
    TooManyParameters,
 
    // Runtime
-   TypeError { expected: Type, got: Type },
+   TypeError {
+      expected: Cow<'static, str>,
+      got: Cow<'static, str>,
+   },
    InvalidAssignment,
 }
 

@@ -290,8 +290,8 @@ impl Fiber {
                let argument_count = argument_count as usize;
                let function_value = self.nth_from_top(argument_count + 1);
                let closure = wrap_error!(function_value.function());
-               let function = unsafe { env.get_function_unchecked(closure.function_id) };
-               match &function.kind {
+               let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
+               match &mut function.kind {
                   FunctionKind::Bytecode(chunk) => {
                      self.save_return_point();
                      self.chunk = Rc::clone(chunk);

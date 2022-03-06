@@ -9,7 +9,7 @@ use crate::common::{ErrorKind, Location};
 use crate::value::Value;
 
 /// A 24-bit integer encoding an instruction operand.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Opr24 {
    bytes: [u8; 3],
 }
@@ -368,7 +368,7 @@ impl Debug for Chunk {
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
    Bytecode(Rc<Chunk>),
-   Foreign(fn(&[Value]) -> Value),
+   Foreign(Box<dyn FnMut(&[Value]) -> Value>),
 }
 
 impl std::fmt::Debug for FunctionKind {
@@ -384,7 +384,7 @@ impl std::fmt::Debug for FunctionKind {
 #[derive(Debug)]
 pub struct Function {
    pub name: Rc<str>,
-   pub parameter_count: u16,
+   pub parameter_count: Option<u16>,
    pub kind: FunctionKind,
 }
 
@@ -432,8 +432,8 @@ impl Environment {
    /// Returns the function with the given ID, as returned by `create_function`.
    /// This function is for internal use in the VM and does not perform any checks, thus is marked
    /// `unsafe`.
-   pub(crate) unsafe fn get_function_unchecked(&mut self, id: Opr24) -> &Function {
-      self.functions.get_unchecked(u32::from(id) as usize)
+   pub(crate) unsafe fn get_function_unchecked_mut(&mut self, id: Opr24) -> &mut Function {
+      self.functions.get_unchecked_mut(u32::from(id) as usize)
    }
 }
 

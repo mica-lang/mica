@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::mem::size_of;
+use std::rc::Rc;
 
 use bytemuck::{Pod, Zeroable};
 
 use crate::common::{ErrorKind, Location};
+use crate::value::Value;
 
 /// A 24-bit integer encoding an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -74,6 +76,8 @@ pub enum Opcode {
    PushNumber,
    /// Pushes a string onto the stack. Must be followed by a string.
    PushString,
+   /// Creates a closure from the function with the given ID and pushes it onto the stack.
+   CreateClosure(Opr24),
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal(Opr24),
    /// Loads a value from a global.
@@ -106,6 +110,9 @@ pub enum Opcode {
    /// Exits the n-th breakable block (counted from innermost) by popping values off the stack
    /// until `.0` sentinels are removed.
    ExitBreakableBlock(u16),
+
+   /// Calls a function with `.0` arguments.
+   Call(u16),
 
    /// Negates a number (prefix `-`).
    Negate,
@@ -193,6 +200,8 @@ unsafe impl Pod for Opcode {}
 
 /// A chunk of bytecode.
 pub struct Chunk {
+   /// The name of the module where the chunk is located.
+   pub module_name: Rc<str>,
    /// The actual bytecode.
    bytes: Vec<u8>,
    /// Locations. These are placed at multiples of four bytes (Opcode::SIZE).
@@ -205,8 +214,9 @@ pub struct Chunk {
 
 impl Chunk {
    /// Constructs an empty chunk.
-   pub fn new() -> Self {
+   pub fn new(module_name: Rc<str>) -> Self {
       Self {
+         module_name,
          bytes: Vec::new(),
          locations: Vec::new(),
          codegen_location: Location::UNINIT,
@@ -332,32 +342,74 @@ impl Debug for Chunk {
    }
 }
 
-/// An environment containing information about declared globals.
-#[derive(Debug, Clone)]
-pub struct GlobalInfo {
-   /// Mapping from global names to global slots.
-   globals: HashMap<String, Opr24>,
+/// The kind of the function (bytecode or FFI).
+pub enum FunctionKind {
+   Bytecode(Chunk),
+   Foreign(fn(&[Value]) -> Value),
 }
 
-impl GlobalInfo {
+impl std::fmt::Debug for FunctionKind {
+   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      match self {
+         Self::Bytecode(chunk) => f.debug_tuple("Bytecode").field(chunk).finish(),
+         Self::Foreign(..) => f.debug_struct("Foreign").finish_non_exhaustive(),
+      }
+   }
+}
+
+/// A function prototype.
+#[derive(Debug)]
+pub struct Function {
+   pub name: Rc<str>,
+   pub parameter_count: u16,
+   pub kind: FunctionKind,
+}
+
+/// An environment containing information about declared globals, functions, vtables.
+#[derive(Debug)]
+pub struct Environment {
+   /// Mapping from global names to global slots.
+   globals: HashMap<String, Opr24>,
+   /// Functions in the environment.
+   functions: Vec<Function>,
+}
+
+impl Environment {
    /// Creates a new, empty environment.
    pub fn new() -> Self {
       Self {
          globals: HashMap::new(),
+         functions: Vec::new(),
       }
    }
 
    /// Tries to create a global. Returns the global slot number, or an error if there are too many
    /// globals.
-   pub fn create(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
-      let slot = Opr24::new(self.globals.len().try_into().unwrap())
+   pub fn create_global(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
+      let slot = Opr24::new(self.globals.len().try_into().map_err(|_| ErrorKind::TooManyGlobals)?)
          .map_err(|_| ErrorKind::TooManyGlobals)?;
       self.globals.insert(name.to_owned(), slot);
       Ok(slot)
    }
 
    /// Tries to look up a global. Returns `None` if the global doesn't exist.
-   pub fn get(&mut self, name: &str) -> Option<Opr24> {
+   pub fn get_global(&mut self, name: &str) -> Option<Opr24> {
       self.globals.get(name).copied()
+   }
+
+   /// Creates a function and returns its ID.
+   pub fn create_function(&mut self, function: Function) -> Result<Opr24, ErrorKind> {
+      let slot =
+         Opr24::new(self.functions.len().try_into().map_err(|_| ErrorKind::TooManyFunctions)?)
+            .map_err(|_| ErrorKind::TooManyFunctions)?;
+      self.functions.push(function);
+      Ok(slot)
+   }
+
+   /// Returns the function with the given ID, as returned by `create_function`.
+   /// This function is for internal use in the VM and does not perform any checks, thus is marked
+   /// `unsafe`.
+   pub(crate) unsafe fn get_function_unchecked(&mut self, id: Opr24) -> &Function {
+      self.functions.get_unchecked(u32::from(id) as usize)
    }
 }

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::common::{Error, ErrorKind, Location};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -9,6 +11,8 @@ impl NodeId {
 }
 
 pub struct Ast {
+   module_name: Rc<str>,
+
    nodes: Vec<(NodeKind, (u32, u32))>,
    locations: Vec<Location>,
 
@@ -22,8 +26,9 @@ enum NodeData {
 }
 
 impl Ast {
-   pub fn new() -> Self {
+   pub fn new(module_name: Rc<str>) -> Self {
       let mut ast = Self {
+         module_name,
          nodes: Vec::new(),
          locations: Vec::new(),
          data: Vec::new(),
@@ -84,7 +89,8 @@ impl Ast {
    }
 
    pub fn error(&self, node: NodeId, kind: ErrorKind) -> Error {
-      Error {
+      Error::Compile {
+         module_name: Rc::clone(&self.module_name),
          kind,
          location: self.location(node),
       }

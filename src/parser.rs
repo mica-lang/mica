@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::ast::{Ast, NodeId, NodeKind};
 use crate::common::{Error, ErrorKind};
 use crate::lexer::{Lexer, Token, TokenKind};
@@ -10,13 +12,14 @@ pub struct Parser {
 impl Parser {
    pub fn new(lexer: Lexer) -> Self {
       Self {
+         ast: Ast::new(Rc::clone(&lexer.module_name)),
          lexer,
-         ast: Ast::new(),
       }
    }
 
-   fn error(token: &Token, kind: ErrorKind) -> Error {
-      Error {
+   fn error(&self, token: &Token, kind: ErrorKind) -> Error {
+      Error::Compile {
+         module_name: Rc::clone(&self.lexer.module_name),
          kind,
          location: token.location,
       }
@@ -31,7 +34,7 @@ impl Parser {
       if next_token.kind == kind {
          Ok(self.lexer.next()?)
       } else {
-         Err(Self::error(&next_token, error(&next_token)))
+         Err(self.error(&next_token, error(&next_token)))
       }
    }
 
@@ -99,7 +102,7 @@ impl Parser {
             .with_string(i)
             .done())
       } else {
-         Err(Self::error(&token, ErrorKind::IdentifierExpected))
+         Err(self.error(&token, ErrorKind::IdentifierExpected))
       }
    }
 
@@ -117,7 +120,7 @@ impl Parser {
    ) -> Result<(), Error> {
       while !is_terminator(&self.lexer.peek()?.kind) {
          if self.lexer.peek()?.kind == TokenKind::Eof {
-            return Err(Self::error(token, ErrorKind::MissingEnd));
+            return Err(self.error(token, ErrorKind::MissingEnd));
          }
          children.push(self.parse_item()?);
       }
@@ -133,7 +136,7 @@ impl Parser {
       loop {
          let token = self.lexer.peek()?;
          match &token.kind {
-            TokenKind::Eof => return Err(Self::error(&token, ErrorKind::UnexpectedEof)),
+            TokenKind::Eof => return Err(self.error(&token, ErrorKind::UnexpectedEof)),
             kind if *kind == end => {
                return Ok(());
             }
@@ -146,7 +149,7 @@ impl Parser {
                ..
             } => (),
             t if t.kind == end => return Ok(()),
-            token => return Err(Self::error(&token, ErrorKind::CommaExpected)),
+            token => return Err(self.error(&token, ErrorKind::CommaExpected)),
          }
       }
    }
@@ -193,15 +196,15 @@ impl Parser {
          match &next_token.kind {
             TokenKind::Elif => {
                if else_token.is_some() {
-                  return Err(Self::error(&next_token, ErrorKind::BranchAfterElse));
+                  return Err(self.error(&next_token, ErrorKind::BranchAfterElse));
                }
             }
             TokenKind::Else => {
                else_token = Some(next_token);
             }
-            TokenKind::Eof => return Err(Self::error(&do_token, ErrorKind::MissingEnd)),
+            TokenKind::Eof => return Err(self.error(&do_token, ErrorKind::MissingEnd)),
             TokenKind::End => break,
-            _ => return Err(Self::error(&next_token, ErrorKind::InvalidIfBranchToken)),
+            _ => return Err(self.error(&next_token, ErrorKind::InvalidIfBranchToken)),
          }
       }
 
@@ -285,7 +288,7 @@ impl Parser {
          TokenKind::LeftParen => {
             let inner = self.parse_expression(0)?;
             if !matches!(self.lexer.next()?.kind, TokenKind::RightParen) {
-               return Err(Self::error(&token, ErrorKind::MissingRightParen));
+               return Err(self.error(&token, ErrorKind::MissingRightParen));
             }
             Ok(inner)
          }
@@ -297,7 +300,7 @@ impl Parser {
          TokenKind::Break => self.parse_break_like(token, NodeKind::Break),
          TokenKind::Return => self.parse_break_like(token, NodeKind::Return),
 
-         _ => Err(Self::error(&token, ErrorKind::InvalidPrefixToken)),
+         _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
       }
    }
 
@@ -346,7 +349,7 @@ impl Parser {
 
          TokenKind::LeftParen => self.function_call(left, token),
 
-         _ => Err(Self::error(&token, ErrorKind::InvalidInfixToken)),
+         _ => Err(self.error(&token, ErrorKind::InvalidInfixToken)),
       }
    }
 

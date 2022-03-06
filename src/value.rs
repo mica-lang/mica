@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::rc::Rc;
 
 use crate::ast::NodeId;
+use crate::bytecode::{Function, Opr24};
 use crate::common::ErrorKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +27,7 @@ pub enum Value {
    True,
    Number(f64),
    String(Rc<str>),
-   Function(Rc<Function>),
+   Function(Rc<Closure>),
 }
 
 impl Value {
@@ -68,6 +69,17 @@ impl Value {
       } else {
          Err(ErrorKind::TypeError {
             expected: Type::String,
+            got: self.typ(),
+         })
+      }
+   }
+
+   pub fn function(&self) -> Result<&Rc<Closure>, ErrorKind> {
+      if let Value::Function(c) = self {
+         Ok(c)
+      } else {
+         Err(ErrorKind::TypeError {
+            expected: Type::Function,
             got: self.typ(),
          })
       }
@@ -129,6 +141,19 @@ impl std::fmt::Debug for Value {
    }
 }
 
+impl std::fmt::Display for Value {
+   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      match self {
+         Value::Nil => f.write_str("nil"),
+         Value::False => f.write_str("false"),
+         Value::True => f.write_str("true"),
+         Value::Number(x) => write!(f, "{x}"),
+         Value::String(s) => write!(f, "{s}"),
+         Value::Function(_) => write!(f, "<func>"),
+      }
+   }
+}
+
 impl PartialEq for Value {
    fn eq(&self, other: &Self) -> bool {
       match (self, other) {
@@ -140,8 +165,6 @@ impl PartialEq for Value {
    }
 }
 
-#[derive(Debug, Clone)]
-pub struct Function {
-   pub parameters: Vec<String>,
-   pub body: Vec<NodeId>,
+pub struct Closure {
+   pub function_id: Opr24,
 }

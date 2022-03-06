@@ -1,8 +1,10 @@
 //! The virtual machine.
 
-use crate::bytecode::{Chunk, Opcode, Opr24};
-use crate::common::{Error, ErrorKind};
-use crate::value::Value;
+use std::rc::Rc;
+
+use crate::bytecode::{Chunk, Environment, FunctionKind, Opcode, Opr24};
+use crate::common::{Error, ErrorKind, StackTraceEntry};
+use crate::value::{Closure, Value};
 
 /// Storage for global variables.
 pub struct Globals {
@@ -37,29 +39,38 @@ impl Globals {
 }
 
 /// The virtual machine state.
-pub struct Vm {
+pub struct Fiber<'c> {
+   pc: usize,
+   chunk: &'c Chunk,
+
    stack: Vec<Value>,
    breakable_block_stack: Vec<usize>,
 }
 
-impl Vm {
+impl<'c> Fiber<'c> {
    /// Creates a new VM.
-   pub fn new() -> Self {
+   pub fn new(chunk: &'c Chunk) -> Self {
       Self {
+         pc: 0,
+         chunk,
          stack: Vec::new(),
          breakable_block_stack: Vec::new(),
       }
    }
 
-   fn error(chunk: &Chunk, pc: usize, kind: ErrorKind) -> Error {
-      Error {
+   fn error(&self, kind: ErrorKind) -> Error {
+      Error::Runtime {
          kind,
-         location: chunk.location(pc),
+         call_stack: vec![StackTraceEntry {
+            function_name: Rc::from("<main>"),
+            module_name: Rc::clone(&self.chunk.module_name),
+            location: self.chunk.location(self.pc),
+         }],
       }
    }
 
-   fn wrap_error<T>(chunk: &Chunk, pc: usize, result: Result<T, ErrorKind>) -> Result<T, Error> {
-      result.map_err(|kind| Self::error(chunk, pc, kind))
+   fn wrap_error<T>(&self, result: Result<T, ErrorKind>) -> Result<T, Error> {
+      result.map_err(|kind| self.error(kind))
    }
 
    #[inline(always)]
@@ -104,21 +115,36 @@ impl Vm {
       }
    }
 
-   /// Interprets bytecode in the chunk, with the provided global storage.
-   pub fn interpret(&mut self, chunk: &Chunk, globals: &mut Globals) -> Result<Value, Error> {
-      let mut pc = 0;
+   fn nth_from_top(&self, n: usize) -> &Value {
+      #[cfg(debug_assertions)]
+      {
+         &self.stack[self.stack.len() - n]
+      }
+      #[cfg(not(debug_assertions))]
+      unsafe {
+         let i = self.stack.len() - n;
+         self.stack.get_unchecked(i)
+      }
+   }
 
+   /// Interprets bytecode in the chunk, with the provided global storage.
+   pub fn interpret(
+      &mut self,
+      env: &mut Environment,
+      globals: &mut Globals,
+   ) -> Result<Value, Error> {
       self.stack.extend(
-         std::iter::repeat_with(|| Value::Nil).take(chunk.preallocate_stack_slots as usize),
+         std::iter::repeat_with(|| Value::Nil).take(self.chunk.preallocate_stack_slots as usize),
       );
 
       loop {
-         let instruction_pc = pc;
-         let opcode = unsafe { chunk.read_opcode(&mut pc) };
+         let instruction_pc = self.pc;
+         let opcode = unsafe { self.chunk.read_opcode(&mut self.pc) };
 
          macro_rules! wrap_error {
             ($exp:expr) => {{
-               Self::wrap_error(chunk, instruction_pc, $exp)
+               let result = $exp;
+               self.wrap_error(result)
             }};
          }
 
@@ -137,13 +163,17 @@ impl Vm {
             Opcode::PushTrue => self.push(Value::True),
             Opcode::PushFalse => self.push(Value::False),
             Opcode::PushNumber => {
-               let number = unsafe { chunk.read_number(&mut pc) };
+               let number = unsafe { self.chunk.read_number(&mut self.pc) };
                self.push(Value::Number(number));
             }
             Opcode::PushString => {
-               let string = unsafe { chunk.read_string(&mut pc) };
+               let string = unsafe { self.chunk.read_string(&mut self.pc) };
                self.push(Value::String(string.into()));
             }
+            Opcode::CreateClosure(function_id) => {
+               self.push(Value::Function(Rc::new(Closure { function_id })));
+            }
+
             Opcode::AssignGlobal(slot) => {
                let value = self.stack_top().clone();
                globals.set(slot, value);
@@ -162,6 +192,7 @@ impl Vm {
                let value = self.stack[slot].clone();
                self.push(value);
             }
+
             Opcode::Swap => {
                let len = self.stack.len();
                self.stack.swap(len - 2, len - 1);
@@ -172,23 +203,23 @@ impl Vm {
 
             Opcode::JumpForward(amount) => {
                let amount = u32::from(amount) as usize;
-               pc += amount;
+               self.pc += amount;
             }
             Opcode::JumpForwardIfFalsy(amount) => {
                let amount = u32::from(amount) as usize;
                if self.stack_top().is_falsy() {
-                  pc += amount;
+                  self.pc += amount;
                }
             }
             Opcode::JumpForwardIfTruthy(amount) => {
                let amount = u32::from(amount) as usize;
                if self.stack_top().is_truthy() {
-                  pc += amount;
+                  self.pc += amount;
                }
             }
             Opcode::JumpBackward(amount) => {
                let amount = u32::from(amount) as usize;
-               pc -= amount;
+               self.pc -= amount;
             }
 
             Opcode::EnterBreakableBlock => {
@@ -203,6 +234,22 @@ impl Vm {
                   }
                }
                self.push(result);
+            }
+
+            Opcode::Call(argument_count) => {
+               let argument_count = argument_count as usize;
+               let function_value = self.nth_from_top(argument_count + 1);
+               let closure = wrap_error!(function_value.function())?;
+               let function = unsafe { &env.get_function_unchecked(closure.function_id) };
+               match &function.kind {
+                  FunctionKind::Bytecode(_chunk) => todo!(),
+                  FunctionKind::Foreign(f) => {
+                     let arguments =
+                        unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
+                     let result = f(arguments);
+                     self.push(result);
+                  }
+               }
             }
 
             Opcode::Negate => {
@@ -254,7 +301,7 @@ impl Vm {
       let result = self.stack.pop().expect("no result found on the top of the stack");
 
       self.stack.resize(
-         self.stack.len() - chunk.preallocate_stack_slots as usize,
+         self.stack.len() - self.chunk.preallocate_stack_slots as usize,
          Value::Nil,
       );
 

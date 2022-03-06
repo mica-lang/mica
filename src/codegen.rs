@@ -1,9 +1,10 @@
 //! Bytecode generation.
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
-use crate::bytecode::{Chunk, GlobalInfo, Opcode, Opr24};
+use crate::bytecode::{Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
 use crate::common::{Error, ErrorKind};
 
 #[derive(Debug, Default)]
@@ -25,21 +26,21 @@ struct BreakableBlock {
    start: usize,
 }
 
-pub struct CodeGenerator<'gi> {
+pub struct CodeGenerator<'e> {
    chunk: Chunk,
-   globals: &'gi mut GlobalInfo,
+   env: &'e mut Environment,
    scopes: Vec<Scope>,
    /// The next stack slot to be occupied by a variable.
    local_count: u32,
    breakable_blocks: Vec<BreakableBlock>,
 }
 
-impl<'gi> CodeGenerator<'gi> {
+impl<'e> CodeGenerator<'e> {
    /// Constructs a new code generator with an empty chunk.
-   pub fn new(globals: &'gi mut GlobalInfo) -> Self {
+   pub fn new(module_name: Rc<str>, env: &'e mut Environment) -> Self {
       Self {
-         chunk: Chunk::new(),
-         globals,
+         chunk: Chunk::new(module_name),
+         env,
          scopes: Vec::new(),
          local_count: 0,
          breakable_blocks: Vec::new(),
@@ -58,7 +59,7 @@ impl<'gi> CodeGenerator<'gi> {
             self.chunk.preallocate_stack_slots.max(self.local_count);
          Ok(Variable::Local(slot))
       } else {
-         let slot = self.globals.create(name)?;
+         let slot = self.env.create_global(name)?;
          Ok(Variable::Global(slot))
       }
    }
@@ -71,7 +72,7 @@ impl<'gi> CodeGenerator<'gi> {
             return scope.variables.get(name).copied().map(Variable::Local);
          }
       }
-      self.globals.get(name).map(Variable::Global)
+      self.env.get_global(name).map(Variable::Global)
    }
 
    /// Pushes a new scope onto the scope stack.
@@ -389,6 +390,55 @@ impl<'gi> CodeGenerator<'gi> {
       Ok(())
    }
 
+   /// Generates code for a function call.
+   fn generate_call(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (function, _) = ast.node_pair(node);
+      self.generate_node(ast, function)?;
+      let arguments = ast.children(node).unwrap();
+      for &argument in arguments {
+         self.generate_node(ast, argument)?;
+      }
+      self.chunk.push(Opcode::Call(
+         arguments.len().try_into().map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
+      ));
+      Ok(())
+   }
+
+   /// Generates code for a function declaration.
+   fn generate_function(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name_node, parameters) = ast.node_pair(node);
+      let parameter_list = ast.children(parameters).unwrap();
+      let body = ast.children(node).unwrap();
+      let name = ast.string(name_node).unwrap();
+
+      // Create the variable before compiling the function, to allow for recursion.
+      let variable = self.create_variable(name).map_err(|kind| ast.error(name_node, kind))?;
+
+      let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
+      // Push a scope to enforce creating local variables.
+      generator.push_scope();
+      // Create local variables for all the parameters.
+      for &parameter in parameter_list {
+         let parameter_name = ast.string(parameter).unwrap();
+         generator.create_variable(parameter_name).map_err(|kind| ast.error(parameter, kind))?;
+      }
+      // Generate the body.
+      generator.generate_node_list(ast, body)?;
+      generator.pop_scope();
+
+      let function = Function {
+         name: Rc::from(name),
+         parameter_count: u16::try_from(parameter_list.len())
+            .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
+         kind: FunctionKind::Bytecode(generator.chunk),
+      };
+      let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
+      self.chunk.push(Opcode::CreateClosure(function_id));
+      self.generate_variable_assign(variable);
+
+      Ok(())
+   }
+
    /// Generates code for a single node.
    fn generate_node(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let previous_codegen_location = self.chunk.codegen_location;
@@ -428,8 +478,8 @@ impl<'gi> CodeGenerator<'gi> {
          NodeKind::While => self.generate_while(ast, node)?,
          NodeKind::Break => self.generate_break(ast, node)?,
 
-         NodeKind::Func => todo!("functions are NYI"),
-         NodeKind::Call => todo!("calls are NYI"),
+         NodeKind::Func => self.generate_function(ast, node)?,
+         NodeKind::Call => self.generate_call(ast, node)?,
          NodeKind::Return => todo!("return is NYI"),
 
          NodeKind::IfBranch | NodeKind::ElseBranch | NodeKind::Parameters => {

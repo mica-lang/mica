@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::common::{Error, ErrorKind, Location};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +54,7 @@ pub struct Token {
 }
 
 pub struct Lexer {
+   pub module_name: Rc<str>,
    input: String,
    location: Location,
    token_start: Location,
@@ -60,8 +63,9 @@ pub struct Lexer {
 impl Lexer {
    const EOF: char = '\0';
 
-   pub fn new(input: String) -> Self {
+   pub fn new(module_name: Rc<str>, input: String) -> Self {
       Self {
+         module_name,
          input,
          location: Default::default(),
          token_start: Default::default(),
@@ -69,7 +73,8 @@ impl Lexer {
    }
 
    fn error(&self, kind: ErrorKind) -> Error {
-      Error {
+      Error::Compile {
+         module_name: Rc::clone(&self.module_name),
          kind,
          location: self.location,
       }

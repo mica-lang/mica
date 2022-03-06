@@ -60,6 +60,8 @@ pub struct Fiber {
    stack_bottom: usize,
    call_stack: Vec<ReturnPoint>,
    breakable_block_stack: Vec<usize>,
+
+   halted: bool,
 }
 
 impl Fiber {
@@ -72,7 +74,13 @@ impl Fiber {
          stack_bottom: 0,
          call_stack: Vec::new(),
          breakable_block_stack: Vec::new(),
+         halted: false,
       }
+   }
+
+   /// Returns whether the fiber has halted execution.
+   pub fn halted(&self) -> bool {
+      self.halted
    }
 
    fn error(&self, kind: ErrorKind) -> Error {
@@ -348,7 +356,10 @@ impl Fiber {
                self.push(Value::from(is_less));
             }
 
-            Opcode::Halt => break,
+            Opcode::Halt => {
+               self.halted = true;
+               break;
+            }
 
             Opcode::__Padding(_) => unreachable!(),
          }

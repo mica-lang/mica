@@ -96,6 +96,11 @@ impl Lexer {
       self.location.column += 1;
    }
 
+   fn advance_line(&mut self) {
+      self.location.line += 1;
+      self.location.column = 1;
+   }
+
    fn skip_whitespace(&mut self) {
       loop {
          match self.get() {
@@ -104,8 +109,7 @@ impl Lexer {
             }
             '\n' => {
                self.advance();
-               self.location.line += 1;
-               self.location.column = 1;
+               self.advance_line();
             }
             _ => break,
          }
@@ -136,6 +140,9 @@ impl Lexer {
       while self.get() != '"' {
          if self.get() == Self::EOF {
             return Err(self.error(ErrorKind::MissingClosingQuote));
+         }
+         if self.get() == '\n' {
+            self.advance_line();
          }
          result.push(match self.get() {
             '\\' => {

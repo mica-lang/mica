@@ -1,0 +1,8 @@
+f = do
+   x = 1
+   (func ()
+      print(x)
+   end)
+end
+
+print(f())

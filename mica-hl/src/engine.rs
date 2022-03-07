@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use mica_language::ast::DumpAst;
 use mica_language::bytecode::{Chunk, Environment, Function, FunctionKind, Opr24};
 use mica_language::codegen::CodeGenerator;
 use mica_language::lexer::Lexer;

@@ -10,7 +10,7 @@ use structopt::StructOpt;
 
 #[derive(StructOpt)]
 #[structopt(name = "mica")]
-struct Opts {
+struct Options {
    file: Option<PathBuf>,
 }
 
@@ -92,11 +92,11 @@ fn repl() -> Result<(), mica::Error> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-   let opts = Opts::from_args();
+   let opts = Options::from_args();
    if let Some(path) = &opts.file {
       let file = std::fs::read_to_string(path)?;
       let engine = engine()?;
-      let _ = interpret(&engine, path.to_str().unwrap(), file);
+      for _ in interpret(&engine, path.to_str().unwrap(), file) {}
    } else {
       repl()?;
    }

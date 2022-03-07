@@ -1,3 +1,4 @@
+use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use crate::common::{Error, ErrorKind, Location};
@@ -165,9 +166,11 @@ impl ToNodePair for () {
    }
 }
 
+/// The kind of an AST node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum NodeKind {
+   /// An empty node. Use `NodeId::EMPTY` to refer to an AST's empty node.
    Empty,
 
    Nil,
@@ -208,4 +211,62 @@ pub enum NodeKind {
    Parameters,
    Call,
    Return,
+}
+
+/// A `Debug` formatter that pretty-prints ASTs.
+pub struct DumpAst<'a>(pub &'a Ast, pub NodeId);
+
+impl fmt::Debug for DumpAst<'_> {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      let DumpAst(ast, root_node) = self;
+
+      fn write_indent(f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+         for _ in 0..level {
+            f.write_str("  ")?;
+         }
+         Ok(())
+      }
+
+      fn dump_tree_rec(
+         f: &mut fmt::Formatter<'_>,
+         ast: &Ast,
+         node: NodeId,
+         indent: usize,
+         prefix: &str,
+      ) -> fmt::Result {
+         write_indent(f, indent)?;
+         f.write_str(prefix)?;
+         write!(f, "{:?} ", ast.kind(node))?;
+         if let Some(n) = ast.number(node) {
+            write!(f, "{}", n)?;
+         }
+         if let Some(s) = ast.string(node) {
+            write!(f, "{:?}", s)?;
+         }
+         if ast.children(node).map(|children| children.is_empty()).unwrap_or(false) {
+            write!(f, " (children empty)")?;
+         }
+         writeln!(f)?;
+
+         let (left, right) = ast.node_pair(node);
+         if left != NodeId::EMPTY {
+            dump_tree_rec(f, ast, left, indent + 1, "L: ")?;
+         }
+         if right != NodeId::EMPTY {
+            dump_tree_rec(f, ast, right, indent + 1, "R: ")?;
+         }
+
+         if let Some(children) = ast.children(node) {
+            if !children.is_empty() {
+               for &child in children {
+                  dump_tree_rec(f, ast, child, indent + 1, "")?;
+               }
+            }
+         }
+
+         Ok(())
+      }
+
+      dump_tree_rec(f, ast, *root_node, 0, "")
+   }
 }

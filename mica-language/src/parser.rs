@@ -138,6 +138,7 @@ impl Parser {
          match &token.kind {
             TokenKind::Eof => return Err(self.error(&token, ErrorKind::UnexpectedEof)),
             kind if *kind == end => {
+               self.lexer.next_token()?;
                return Ok(());
             }
             _ => (),
@@ -230,11 +231,13 @@ impl Parser {
          .done())
    }
 
-   fn parse_function_declaration(&mut self) -> Result<NodeId, Error> {
-      let func = self.lexer.next_token()?;
-
-      let name = self.lexer.next_token()?;
-      let name = self.parse_identifier(name)?;
+   fn parse_function(&mut self, func_token: Token, anonymous: bool) -> Result<NodeId, Error> {
+      let name = if !anonymous {
+         let name = self.lexer.next_token()?;
+         self.parse_identifier(name)?
+      } else {
+         NodeId::EMPTY
+      };
 
       let left_paren = self.expect(TokenKind::LeftParen, |_| ErrorKind::LeftParenExpected)?;
       let mut parameters = Vec::new();
@@ -250,13 +253,13 @@ impl Parser {
          .done();
 
       let mut body = Vec::new();
-      self.parse_terminated_block(&func, &mut body, |k| *k == TokenKind::End)?;
+      self.parse_terminated_block(&func_token, &mut body, |k| *k == TokenKind::End)?;
       let _end = self.lexer.next_token();
 
       Ok(self
          .ast
          .build_node(NodeKind::Func, (name, parameters))
-         .with_location(func.location)
+         .with_location(func_token.location)
          .with_children(body)
          .done())
    }
@@ -299,6 +302,8 @@ impl Parser {
 
          TokenKind::Break => self.parse_break_like(token, NodeKind::Break),
          TokenKind::Return => self.parse_break_like(token, NodeKind::Return),
+
+         TokenKind::Func => self.parse_function(token, true),
 
          _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
       }
@@ -353,11 +358,22 @@ impl Parser {
       }
    }
 
+   /// Returns whether an infix token is not allowed to be carried over to the next line.
+   fn is_invalid_continuation_token(token: &TokenKind) -> bool {
+      matches!(token, TokenKind::LeftParen)
+   }
+
    fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, Error> {
       let mut token = self.lexer.next_token()?;
       let mut left = self.parse_prefix(token)?;
 
       while precedence < Self::precedence(&self.lexer.peek_token()?) {
+         let next_token = self.lexer.peek_token()?;
+         if Self::is_invalid_continuation_token(&next_token.kind)
+            && next_token.location.line > self.ast.location(left).line
+         {
+            break;
+         }
          token = self.lexer.next_token()?;
          left = self.parse_infix(left, token)?;
       }
@@ -368,7 +384,10 @@ impl Parser {
    fn parse_item(&mut self) -> Result<NodeId, Error> {
       let token = self.lexer.peek_token()?;
       match &token.kind {
-         TokenKind::Func => self.parse_function_declaration(),
+         TokenKind::Func => {
+            let func_token = self.lexer.next_token()?;
+            self.parse_function(func_token, false)
+         }
          _ => self.parse_expression(0),
       }
    }

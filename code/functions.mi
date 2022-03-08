@@ -1,3 +1,6 @@
+func empty() end
+empty()
+
 func factorial(n)
    i = 1
    x = 1

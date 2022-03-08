@@ -11,19 +11,38 @@ use mica_language::vm::{self, Globals};
 
 use crate::{Error, Fiber, ToValue, TryFromValue};
 
+/// Options for debugging the language implementation.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DebugOptions {
+   /// Set to `true` to print the AST to stdout after parsing.
+   pub dump_ast: bool,
+   /// Set to `true` to print the bytecode to stdout after successful compilation.
+   pub dump_bytecode: bool,
+}
+
 /// An execution engine. Contains information about things like globals, registered types, etc.
 pub struct Engine {
    runtime_env: Rc<RefCell<RuntimeEnvironment>>,
+   debug_options: DebugOptions,
 }
 
 impl Engine {
    /// Creates a new engine.
    pub fn new() -> Self {
+      Self::with_debug_options(Default::default())
+   }
+
+   /// Creates a new engine with specific debug options.
+   ///
+   /// [`Engine::new`] creates an engine with [`Default`] debug options, and should generally be
+   /// preferred unless you're debugging the language's internals.
+   pub fn with_debug_options(debug_options: DebugOptions) -> Self {
       Self {
          runtime_env: Rc::new(RefCell::new(RuntimeEnvironment {
             env: Environment::new(),
             globals: Globals::new(),
          })),
+         debug_options,
       }
    }
 
@@ -40,9 +59,20 @@ impl Engine {
       let module_name = Rc::from(filename.as_ref());
       let lexer = Lexer::new(Rc::clone(&module_name), source.into());
       let (ast, root_node) = Parser::new(lexer).parse()?;
+      if self.debug_options.dump_ast {
+         eprintln!("Mica - AST dump:");
+         eprintln!("{:?}", DumpAst(&ast, root_node));
+      }
+
       let mut shared_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
       let main_chunk =
          CodeGenerator::new(module_name, &mut shared_env.env).generate(&ast, root_node)?;
+      if self.debug_options.dump_bytecode {
+         eprintln!("Mica - global environment:");
+         eprintln!("{:?}", shared_env.env);
+         eprintln!("Mica - main chunk disassembly:");
+         eprintln!("{:?}", main_chunk);
+      }
 
       Ok(Script {
          runtime_env: Rc::clone(&self.runtime_env),

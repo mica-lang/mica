@@ -12,6 +12,17 @@ use structopt::StructOpt;
 #[structopt(name = "mica")]
 struct Options {
    file: Option<PathBuf>,
+
+   #[structopt(flatten)]
+   engine_options: EngineOptions,
+}
+
+#[derive(StructOpt)]
+struct EngineOptions {
+   #[structopt(long)]
+   dump_ast: bool,
+   #[structopt(long)]
+   dump_bytecode: bool,
 }
 
 struct MicaValidator;
@@ -65,13 +76,16 @@ fn interpret(engine: &Engine, filename: &str, input: String) -> impl Iterator<It
    .flatten()
 }
 
-fn engine() -> Result<Engine, mica::Error> {
-   let engine = Engine::new();
+fn engine(options: &EngineOptions) -> Result<Engine, mica::Error> {
+   let engine = Engine::with_debug_options(mica::DebugOptions {
+      dump_ast: options.dump_ast,
+      dump_bytecode: options.dump_bytecode,
+   });
    mica::std::load(&engine)?;
    Ok(engine)
 }
 
-fn repl() -> Result<(), mica::Error> {
+fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
    println!("Mica {} REPL", env!("CARGO_PKG_VERSION"));
    println!("Press Ctrl-C to exit.");
    println!();
@@ -80,7 +94,7 @@ fn repl() -> Result<(), mica::Error> {
       Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
    editor.set_helper(Some(MicaValidator));
 
-   let engine = engine()?;
+   let engine = engine(engine_options)?;
    while let Ok(line) = editor.readline("> ") {
       for result in interpret(&engine, "(repl)", line) {
          println!("< {result:?}");
@@ -95,10 +109,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
    let opts = Options::from_args();
    if let Some(path) = &opts.file {
       let file = std::fs::read_to_string(path)?;
-      let engine = engine()?;
+      let engine = engine(&opts.engine_options)?;
       for _ in interpret(&engine, path.to_str().unwrap(), file) {}
    } else {
-      repl()?;
+      repl(&opts.engine_options)?;
    }
 
    Ok(())

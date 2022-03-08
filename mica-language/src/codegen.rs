@@ -150,10 +150,14 @@ impl<'e> CodeGenerator<'e> {
 
    /// Generates code for a list of nodes. The last node's value is the one left on the stack.
    fn generate_node_list(&mut self, ast: &Ast, nodes: &[NodeId]) -> Result<(), Error> {
-      for (i, &node) in nodes.iter().enumerate() {
-         self.generate_node(ast, node)?;
-         if i != nodes.len() - 1 {
-            self.chunk.push(Opcode::Discard);
+      if nodes.is_empty() {
+         self.generate_nil();
+      } else {
+         for (i, &node) in nodes.iter().enumerate() {
+            self.generate_node(ast, node)?;
+            if i != nodes.len() - 1 {
+               self.chunk.push(Opcode::Discard);
+            }
          }
       }
       Ok(())

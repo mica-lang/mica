@@ -255,10 +255,10 @@ impl Chunk {
    ///
    /// The string is padded with zeroes such that opcodes are aligned to four bytes.
    pub fn push_string(&mut self, string: &str) {
-      // I don't know of any 128-bit targets so this cast should be OK. Also, it isn't physically
-      // possible to store a string as large as 2^64 bytes.
       let start = self.len();
 
+      // I don't know of any 128-bit targets so this cast should be OK. Also, it isn't physically
+      // possible to store a string as large as 2^64 bytes.
       let len = string.len() as u64;
       let len_bytes: [u8; 8] = len.to_le_bytes();
       self.bytes.extend_from_slice(&len_bytes);

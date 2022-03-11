@@ -1,1 +1,2 @@
-print("Hello!")
+# A simple hello world program in Mica.
+print("Hello world!")

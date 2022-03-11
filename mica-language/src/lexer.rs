@@ -107,6 +107,11 @@ impl Lexer {
             ' ' | '\t' => {
                self.advance();
             }
+            '#' => {
+               while self.get() != '\n' {
+                  self.advance();
+               }
+            }
             '\n' => {
                self.advance();
                self.advance_line();

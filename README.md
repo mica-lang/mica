@@ -1,11 +1,15 @@
 # Mica
 
-An actually good embeddable scripting language, with ambitions.
+A simple, human-friendly scripting language, developed one feature at a time.
 
-Intended to sit somewhere in between Lua and Ruby in terms of syntax, and be at least as convenient
-as Rust (if not more).
+- **Human-friendly** syntax inspired by Ruby and Lua
+- **Simple** yet **extensible** by providing a small amount of flexible language features
+- **Easily embeddable** into existing programs
+- Still highly work in progress!
 
-Still highly work in progress! You can try out the REPL with `cargo run -p mica-cli --release`.
+You can try out the REPL with `cargo run -p mica-cli --release`.
+
+A language reference is available [here](language.md).
 
 ## Performance
 

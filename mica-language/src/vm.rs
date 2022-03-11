@@ -240,6 +240,9 @@ impl Fiber {
                let value = self.stack[self.stack_bottom + slot].clone();
                self.push(value);
             }
+            Opcode::AssignUpvalue(slot) => todo!(),
+            Opcode::GetUpvalue(slot) => todo!(),
+            Opcode::CloseLocal(slot) => todo!(),
 
             Opcode::Swap => {
                let len = self.stack.len();
@@ -292,7 +295,7 @@ impl Fiber {
                let closure = wrap_error!(function_value.function());
                let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
                match &mut function.kind {
-                  FunctionKind::Bytecode(chunk) => {
+                  FunctionKind::Bytecode { chunk, .. } => {
                      self.save_return_point();
                      self.chunk = Rc::clone(chunk);
                      self.pc = 0;

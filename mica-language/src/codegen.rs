@@ -1,23 +1,31 @@
 //! Bytecode generation.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
 use crate::bytecode::{Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
 use crate::common::{Error, ErrorKind};
 
+#[derive(Debug)]
+struct Variable {
+   stack_slot: Opr24,
+   allocation: VariableAllocation,
+}
+
 #[derive(Debug, Default)]
 struct Scope {
    /// Mapping from variable names to stack slots.
-   variables: HashMap<String, (Opr24, VariableAllocation)>,
+   variables: HashMap<String, Variable>,
    allocated_variable_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Variable {
+enum VariablePlace {
    Global(Opr24),
    Local(Opr24),
+   Upvalue(Opr24),
 }
 
 /// The kind of a variable allocation.
@@ -36,14 +44,108 @@ struct BreakableBlock {
    start: usize,
 }
 
-pub struct CodeGenerator<'e> {
-   chunk: Chunk,
-   env: &'e mut Environment,
+/// Local variables, including upvalues.
+#[derive(Default)]
+struct Locals {
+   /// If there is a parent code generator with its own scopes (the current instance is in the
+   /// middle of compiling a closure), this is populated with its Locals.
+   parent: Option<Box<Self>>,
+
    scopes: Vec<Scope>,
    /// The next stack slot to be occupied by a variable.
    local_count: u32,
-   /// The total amount of locals allocated at a time.
+   /// The total amount of locals currently allocated. This is used to populate the
+   /// `preallocate_stack_slots` field in chunks, to provide more efficient allocations
    allocated_local_count: u32,
+
+   /// Locals captured from parent scopes.
+   captured_locals: HashSet<u32>,
+   /// Upvalues captured from parent locals.
+   captured_upvalues: HashSet<u32>,
+   /// Mapping from local slots to upvalue indices.
+   upvalue_indices: HashMap<Opr24, Opr24>,
+}
+
+impl Locals {
+   /// Creates a new local.
+   fn create_local(
+      &mut self,
+      name: &str,
+      allocation: VariableAllocation,
+   ) -> Result<VariablePlace, ErrorKind> {
+      let slot = self.local_count;
+      let slot = Opr24::new(slot).map_err(|_| ErrorKind::TooManyLocals)?;
+      let scope = self.scopes.last_mut().unwrap();
+      scope.variables.insert(
+         name.to_owned(),
+         Variable {
+            stack_slot: slot,
+            allocation,
+         },
+      );
+      self.local_count += 1;
+      if allocation == VariableAllocation::Allocate {
+         self.allocated_local_count += 1;
+         scope.allocated_variable_count += 1;
+      }
+      Ok(VariablePlace::Local(slot))
+   }
+
+   /// Performs a local variable lookup. This may modify parent Locals and capture upvalues.
+   fn lookup(&mut self, name: &str) -> Result<Option<VariablePlace>, ErrorKind> {
+      // Work inside out: try innermost scopes (own locals) first.
+      for scope in self.scopes.iter().rev() {
+         if scope.variables.contains_key(name) {
+            return Ok(scope.variables.get(name).map(|var| VariablePlace::Local(var.stack_slot)));
+         }
+      }
+      // If there isn't a local with the given name, go up a level and look for locals to close
+      // or existing upvalues.
+      if let Some(parent) = self.parent.as_mut() {
+         if let Some(place) = parent.lookup(name)? {
+            match place {
+               VariablePlace::Local(local_slot) => {
+                  let upvalue_slot = parent.close_over(local_slot)?;
+                  self.captured_locals.insert(u32::from(upvalue_slot));
+                  return Ok(Some(VariablePlace::Upvalue(upvalue_slot)));
+               }
+               VariablePlace::Upvalue(_) => todo!(),
+               VariablePlace::Global(_) => unreachable!(),
+            }
+         }
+      }
+      Ok(None)
+   }
+
+   /// Marks a local in the given slot as closed over by a closure.
+   fn close_over(&mut self, slot: Opr24) -> Result<Opr24, ErrorKind> {
+      let index =
+         u32::try_from(self.upvalue_indices.len()).map_err(|_| ErrorKind::TooManyCaptures)?;
+      let index = Opr24::new(index).map_err(|_| ErrorKind::TooManyCaptures)?;
+      self.upvalue_indices.insert(slot, index);
+      Ok(index)
+   }
+
+   /// Pushes a new scope onto the scope stack.
+   fn push_scope(&mut self) {
+      self.scopes.push(Default::default());
+   }
+
+   /// Pops the topmost scope off the scope stack and frees storage of any variables.
+   fn pop_scope(&mut self) -> Scope {
+      let scope = self.scopes.pop().expect("no scopes left on the stack");
+      self.local_count -= scope.variables.len() as u32;
+      self.allocated_local_count -= scope.allocated_variable_count;
+      scope
+   }
+}
+
+pub struct CodeGenerator<'e> {
+   env: &'e mut Environment,
+
+   chunk: Chunk,
+
+   locals: Box<Locals>,
    breakable_blocks: Vec<BreakableBlock>,
 }
 
@@ -51,11 +153,10 @@ impl<'e> CodeGenerator<'e> {
    /// Constructs a new code generator with an empty chunk.
    pub fn new(module_name: Rc<str>, env: &'e mut Environment) -> Self {
       Self {
-         chunk: Chunk::new(module_name),
          env,
-         scopes: Vec::new(),
-         local_count: 0,
-         allocated_local_count: 0,
+         chunk: Chunk::new(module_name),
+
+         locals: Default::default(),
          breakable_blocks: Vec::new(),
       }
    }
@@ -66,62 +167,54 @@ impl<'e> CodeGenerator<'e> {
       &mut self,
       name: &str,
       allocation: VariableAllocation,
-   ) -> Result<Variable, ErrorKind> {
-      if !self.scopes.is_empty() {
-         let slot = self.local_count;
-         let slot = Opr24::new(slot).map_err(|_| ErrorKind::TooManyLocals)?;
-         let scope = self.scopes.last_mut().unwrap();
-         scope.variables.insert(name.to_owned(), (slot, allocation));
-         self.local_count += 1;
-         if allocation == VariableAllocation::Allocate {
-            self.allocated_local_count += 1;
-            scope.allocated_variable_count += 1;
-            self.chunk.preallocate_stack_slots =
-               self.chunk.preallocate_stack_slots.max(self.allocated_local_count);
-         }
-         Ok(Variable::Local(slot))
+   ) -> Result<VariablePlace, ErrorKind> {
+      if !self.locals.scopes.is_empty() {
+         let place = self.locals.create_local(name, allocation)?;
+         self.chunk.preallocate_stack_slots =
+            self.chunk.preallocate_stack_slots.max(self.locals.allocated_local_count);
+         Ok(place)
       } else {
          let slot = self.env.create_global(name)?;
-         Ok(Variable::Global(slot))
+         Ok(VariablePlace::Global(slot))
       }
    }
 
    /// Performs a variable lookup. Returns the stack slot of the variable if it exists.
    /// Otherwise returns `None`.
-   fn lookup_variable(&mut self, name: &str) -> Option<Variable> {
-      for scope in self.scopes.iter().rev() {
-         if scope.variables.contains_key(name) {
-            return scope.variables.get(name).copied().map(|(slot, _)| Variable::Local(slot));
-         }
+   fn lookup_variable(&mut self, name: &str) -> Result<Option<VariablePlace>, ErrorKind> {
+      // Work from the inside out: check innermost local scopes first.
+      if let Some(place) = self.locals.lookup(name)? {
+         return Ok(Some(place));
       }
-      self.env.get_global(name).map(Variable::Global)
+      // Lastly check globals.
+      Ok(self.env.get_global(name).map(VariablePlace::Global))
    }
 
    /// Pushes a new scope onto the scope stack.
    fn push_scope(&mut self) {
-      self.scopes.push(Default::default());
+      self.locals.push_scope();
    }
 
    /// Pops the topmost scope off the scope stack and frees storage of any variables.
    fn pop_scope(&mut self) {
-      let scope = self.scopes.pop().expect("no scopes left on the stack");
-      self.local_count -= scope.variables.len() as u32;
-      self.allocated_local_count -= scope.allocated_variable_count;
+      let _scope = self.locals.pop_scope();
    }
 
    /// Generates a variable load instruction (GetLocal or GetGlobal).
-   fn generate_variable_load(&mut self, variable: Variable) {
+   fn generate_variable_load(&mut self, variable: VariablePlace) {
       self.chunk.push(match variable {
-         Variable::Global(slot) => Opcode::GetGlobal(slot),
-         Variable::Local(slot) => Opcode::GetLocal(slot),
+         VariablePlace::Global(slot) => Opcode::GetGlobal(slot),
+         VariablePlace::Local(slot) => Opcode::GetLocal(slot),
+         VariablePlace::Upvalue(slot) => Opcode::GetUpvalue(slot),
       });
    }
 
    /// Generates a variable assign instruction (AssignLocal or AssignGlobal).
-   fn generate_variable_assign(&mut self, variable: Variable) {
+   fn generate_variable_assign(&mut self, variable: VariablePlace) {
       self.chunk.push(match variable {
-         Variable::Global(slot) => Opcode::AssignGlobal(slot),
-         Variable::Local(slot) => Opcode::AssignLocal(slot),
+         VariablePlace::Global(slot) => Opcode::AssignGlobal(slot),
+         VariablePlace::Local(slot) => Opcode::AssignLocal(slot),
+         VariablePlace::Upvalue(slot) => Opcode::AssignUpvalue(slot),
       });
    }
 
@@ -149,6 +242,8 @@ impl<'e> CodeGenerator<'e> {
    }
 
    /// Generates code for a list of nodes. The last node's value is the one left on the stack.
+   ///
+   /// If there are no nodes in the list, this is equivalent to a `nil` literal.
    fn generate_node_list(&mut self, ast: &Ast, nodes: &[NodeId]) -> Result<(), Error> {
       if nodes.is_empty() {
          self.generate_nil();
@@ -239,7 +334,7 @@ impl<'e> CodeGenerator<'e> {
    /// Generates code for a variable lookup.
    fn generate_variable(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let name = ast.string(node).unwrap();
-      if let Some(variable) = self.lookup_variable(name) {
+      if let Some(variable) = self.lookup_variable(name).map_err(|kind| ast.error(node, kind))? {
          self.generate_variable_load(variable);
          Ok(())
       } else {
@@ -255,7 +350,9 @@ impl<'e> CodeGenerator<'e> {
       match ast.kind(target) {
          NodeKind::Identifier => {
             let name = ast.string(target).unwrap();
-            let variable = if let Some(slot) = self.lookup_variable(name) {
+            let variable = if let Some(slot) =
+               self.lookup_variable(name).map_err(|kind| ast.error(target, kind))?
+            {
                slot
             } else {
                self
@@ -438,14 +535,22 @@ impl<'e> CodeGenerator<'e> {
       let (name_node, parameters) = ast.node_pair(node);
       let parameter_list = ast.children(parameters).unwrap();
       let body = ast.children(node).unwrap();
-      let name = ast.string(name_node).unwrap();
+      let name = ast.string(name_node);
 
       // Create the variable before compiling the function, to allow for recursion.
-      let variable = self
-         .create_variable(name, VariableAllocation::Allocate)
-         .map_err(|kind| ast.error(name_node, kind))?;
+      let variable = if let Some(name) = name {
+         Some(
+            self
+               .create_variable(name, VariableAllocation::Allocate)
+               .map_err(|kind| ast.error(name_node, kind))?,
+         )
+      } else {
+         None
+      };
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
+      // NOTE(liquidev): Hopefully the allocation from this mem::take gets optimized out.
+      generator.locals.parent = Some(mem::take(&mut self.locals));
       // Push a scope to enforce creating local variables.
       generator.push_scope();
       // Create local variables for all the parameters.
@@ -459,18 +564,26 @@ impl<'e> CodeGenerator<'e> {
       generator.generate_node_list(ast, body)?;
       generator.pop_scope();
       generator.chunk.push(Opcode::Return);
+      self.locals = generator.locals.parent.take().unwrap();
 
       let function = Function {
-         name: Rc::from(name),
+         name: Rc::from(name.unwrap_or("<anonymous>")),
          parameter_count: Some(
             u16::try_from(parameter_list.len())
                .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
          ),
-         kind: FunctionKind::Bytecode(Rc::new(generator.chunk)),
+         kind: FunctionKind::Bytecode {
+            chunk: Rc::new(generator.chunk),
+            captured_locals: generator.locals.captured_locals.iter().copied().collect(),
+         },
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
       self.chunk.push(Opcode::CreateClosure(function_id));
-      self.generate_variable_assign(variable);
+      if let Some(variable) = variable {
+         self.generate_variable_assign(variable);
+         self.chunk.push(Opcode::Discard);
+         self.generate_nil();
+      }
 
       Ok(())
    }

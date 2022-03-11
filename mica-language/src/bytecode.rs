@@ -78,6 +78,7 @@ pub enum Opcode {
    PushString,
    /// Creates a closure from the function with the given ID and pushes it onto the stack.
    CreateClosure(Opr24),
+
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal(Opr24),
    /// Loads a value from a global.
@@ -86,6 +87,13 @@ pub enum Opcode {
    AssignLocal(Opr24),
    /// Loads a value from a local.
    GetLocal(Opr24),
+   /// Assigns the value at the top of the stack to an upvalue. The value stays on the stack.
+   AssignUpvalue(Opr24),
+   /// Loads a value from an upvalue.
+   GetUpvalue(Opr24),
+   /// Closes a local in its upvalue.
+   CloseLocal(Opr24),
+
    /// Swaps the two values at the top of the stack.
    Swap,
    /// Removes the value at the top of the stack.
@@ -332,12 +340,11 @@ impl Chunk {
 
 impl Debug for Chunk {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-      writeln!(f, "module_name = {:?}", self.module_name)?;
-      writeln!(
-         f,
-         "preallocate_stack_slots = {:?}",
-         self.preallocate_stack_slots
-      )?;
+      f.debug_struct("Chunk")
+         .field("module_name", &self.module_name)
+         .field("preallocate_stack_slots", &self.preallocate_stack_slots)
+         .finish()?;
+      writeln!(f)?;
 
       let mut pc = 0;
       while !self.at_end(pc) {
@@ -367,14 +374,24 @@ impl Debug for Chunk {
 
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
-   Bytecode(Rc<Chunk>),
+   Bytecode {
+      chunk: Rc<Chunk>,
+      captured_locals: Vec<u32>,
+   },
    Foreign(Box<dyn FnMut(&[Value]) -> Value>),
 }
 
 impl std::fmt::Debug for FunctionKind {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       match self {
-         Self::Bytecode(chunk) => f.debug_tuple("Bytecode").field(chunk).finish(),
+         Self::Bytecode {
+            chunk,
+            captured_locals,
+         } => f
+            .debug_struct("Bytecode")
+            .field("chunk", chunk)
+            .field("captured_locals", captured_locals)
+            .finish(),
          Self::Foreign(..) => f.debug_struct("Foreign").finish_non_exhaustive(),
       }
    }

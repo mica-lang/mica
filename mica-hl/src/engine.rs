@@ -69,9 +69,9 @@ impl Engine {
          CodeGenerator::new(module_name, &mut shared_env.env).generate(&ast, root_node)?;
       if self.debug_options.dump_bytecode {
          eprintln!("Mica - global environment:");
-         eprintln!("{:?}", shared_env.env);
+         eprintln!("{:#?}", shared_env.env);
          eprintln!("Mica - main chunk disassembly:");
-         eprintln!("{:?}", main_chunk);
+         eprintln!("{:#?}", main_chunk);
       }
 
       Ok(Script {

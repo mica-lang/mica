@@ -171,11 +171,15 @@ where
 }
 
 macro_rules! impl_non_varargs {
+   // This macro is ultra-flexible, in that it could support any calling convention.
+   // Not that it needs to.
+   // See the other arm for usage.
    (
-      @for $variant:tt, $ret:ty;
+      @for $variant:tt;
+      $ret:ty;
       $($genericdef:tt : $bound:path),+;
       |$result:tt| $map:expr;
-      $($types:tt),*; $($var:tt),*
+      $($types:tt),*
    ) => {
       /// Implementation for a static number of arguments.
       impl<
@@ -184,13 +188,9 @@ macro_rules! impl_non_varargs {
          $($types),+
       > $crate::ForeignFunction<$crate::ffvariants::$variant<($($types,)+)>> for Fun
       where
-         $(
-            $genericdef: $bound + 'static,
-         )+
+         $($genericdef: $bound + 'static,)+
          Fun: FnMut($($types),+) -> $ret + 'static,
-         $(
-            $types: TryFromValue + 'static,
-         )+
+         $($types: TryFromValue + 'static,)+
       {
          fn parameter_count(&self) -> Option<u16> {
             const N: u16 = {
@@ -199,8 +199,8 @@ macro_rules! impl_non_varargs {
                   // To force Rust into expanding $var into a sequence of additions, we create an
                   // unused variable to drive the expansion. Constant evaluation will ensure this is
                   // a constant integer by the time compilation is finished.
-                  #[allow(unused)]
-                  let $var = ();
+                  #[allow(unused, non_snake_case)]
+                  let $types = ();
                   let n = n + 1;
                )+
                n
@@ -213,13 +213,16 @@ macro_rules! impl_non_varargs {
             create_rawff(move |args| {
                let arguments = Arguments::new(args);
                let n = 0;
+               // Similar to `parameter_count`, we use $types as a driver for a sequential counter.
+               // This time though we actually use the variables.
                $(
-                  let $var = arguments.get(n).mica_language()?;
+                  #[allow(non_snake_case)]
+                  let $types = arguments.get(n).mica_language()?;
                   #[allow(unused)]
                   let n = n + 1;
                )+
                {
-                  let $result = self($($var,)+);
+                  let $result = self($($types,)+);
                   $map
                }
             })
@@ -227,33 +230,44 @@ macro_rules! impl_non_varargs {
       }
    };
 
-   ($($types:tt),*; $($var:tt),*) => {
+   ($($types:tt),*) => {
       impl_non_varargs!(
-         @for Fallible, Result<Ret, Err>;
+         // First we define the trait that is to be implemented.
+         @for Fallible;
+         // Then the return type of this calling convention.
+         Result<Ret, Err>;
+         // Then the generic bounds of the `impl`.
          Ret: $crate::ToValue,
          Err: std::error::Error;
+         // Then the "mapper" "function" that maps the function's result into the raw
+         // calling convention.
          |result| result
             .map(|value| value.to_value())
             .map_err(|error| LanguageErrorKind::User(Box::new(error)));
-         $($types),+; $($var),+
+         // Lastly we pass on the generic parameters entered into the macro.
+         $($types),+
       );
       impl_non_varargs!(
-         @for Infallible, Ret;
+         @for Infallible;
+         Ret;
          Ret: $crate::ToValue;
          |value| Ok(value.to_value());
-         $($types),+; $($var),+
+         $($types),+
       );
    };
 }
 
-impl_non_varargs!(A; a);
-impl_non_varargs!(A, B; a, b);
-impl_non_varargs!(A, B, C; a, b, c);
-impl_non_varargs!(A, B, C, D; a, b, c, d);
-impl_non_varargs!(A, B, C, D, E; a, b, c, d, e);
-impl_non_varargs!(A, B, C, D, E, F; a, b, c, d, e, f);
-impl_non_varargs!(A, B, C, D, E, F, G; a, b, c, d, e, f, g);
-impl_non_varargs!(A, B, C, D, E, F, G, H; a, b, c, d, e, f, g, h);
+// Rust-analyzer isn't too happy about this macro declaring variables with non-snake_case names.
+// In reality it doesn't hurt anything and actually makes code _more_ readable and maintainable
+// by reducing the amount of arguments we have to pass to the macro.
+impl_non_varargs!(A);
+impl_non_varargs!(A, B);
+impl_non_varargs!(A, B, C);
+impl_non_varargs!(A, B, C, D);
+impl_non_varargs!(A, B, C, D, E);
+impl_non_varargs!(A, B, C, D, E, F);
+impl_non_varargs!(A, B, C, D, E, F, G);
+impl_non_varargs!(A, B, C, D, E, F, G, H);
 
 /// Implementation for a variable number of arguments.
 impl<Ret, Err, F> ForeignFunction<ffvariants::VarargsFallible> for F

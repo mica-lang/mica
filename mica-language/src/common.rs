@@ -156,17 +156,19 @@ impl std::fmt::Display for Error {
             write!(f, "{}:{}: error: {}", module_name, location, kind)
          }
          Error::Runtime { kind, call_stack } => {
-            write!(f, "error: {}", kind)?;
+            writeln!(f, "error: {}", kind)?;
+            write!(f, "stack traceback (most recent call first):")?;
             let file_location_width = call_stack
                .iter()
                .map(|entry| format!("{}", FileLocation(&entry.module_name, entry.location)).len())
                .max()
                .unwrap_or(20);
-            for entry in call_stack {
+            for entry in call_stack.iter().rev() {
                write!(
                   f,
                   "\n    {:width$}  {}",
-                  FileLocation(&entry.module_name, entry.location),
+                  // Well this is a bit horrible.
+                  FileLocation(&entry.module_name, entry.location).to_string(),
                   entry.function_name,
                   width = file_location_width,
                )?;

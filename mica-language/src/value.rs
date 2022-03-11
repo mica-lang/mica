@@ -1,5 +1,10 @@
 use std::borrow::Cow;
+use std::cell::UnsafeCell;
 use std::cmp::Ordering;
+use std::marker::PhantomPinned;
+use std::mem::{self, MaybeUninit};
+use std::pin::Pin;
+use std::ptr;
 use std::rc::Rc;
 
 use crate::bytecode::Opr24;
@@ -141,6 +146,12 @@ impl Value {
    }
 }
 
+impl Default for Value {
+   fn default() -> Self {
+      Self::Nil
+   }
+}
+
 impl From<bool> for Value {
    fn from(b: bool) -> Self {
       match b {
@@ -187,7 +198,62 @@ impl PartialEq for Value {
    }
 }
 
+/// An upvalue captured by a closure.
+#[derive(Debug)]
+pub struct Upvalue {
+   /// A writable pointer to the variable captured by this upvalue.
+   pub(crate) ptr: UnsafeCell<ptr::NonNull<Value>>,
+   /// Storage for a closed upvalue.
+   closed: UnsafeCell<MaybeUninit<Value>>,
+
+   _pinned: PhantomPinned,
+}
+
+impl Upvalue {
+   /// Creates a new upvalue pointing to a live variable.
+   pub(crate) fn new(var: ptr::NonNull<Value>) -> Pin<Rc<Upvalue>> {
+      Rc::pin(Upvalue {
+         ptr: UnsafeCell::new(var),
+         closed: UnsafeCell::new(MaybeUninit::uninit()),
+         _pinned: PhantomPinned,
+      })
+   }
+
+   /// Closes an upvalue by `mem::take`ing the value behind the `ptr` into the `closed` field, and
+   /// updating the `ptr` field to point to the `closed` field's contents.
+   ///
+   /// # Safety
+   /// The caller must ensure there are no mutable references to the variable at the time of
+   /// calling this.
+   pub(crate) unsafe fn close(&self) {
+      let ptr = &mut *self.ptr.get();
+      let closed = &mut *self.closed.get();
+      let value = mem::take(ptr.as_mut());
+      *ptr = ptr::NonNull::new(closed.write(value) as *mut _).unwrap();
+   }
+
+   /// Returns the value pointed to by this upvalue.
+   ///
+   /// # Safety
+   /// The caller must ensure there are no mutable references to the source variable at the time
+   /// of calling this.
+   pub(crate) unsafe fn get(&self) -> &Value {
+      (*self.ptr.get()).as_ref()
+   }
+
+   /// Writes to the variable pointed to by this upvalue.
+   ///
+   /// # Safety
+   /// The caller must ensure there are no mutable references to the source variable at the time
+   /// of calling this.
+   pub(crate) unsafe fn set(&self, value: Value) {
+      *(*self.ptr.get()).as_ptr() = value;
+   }
+}
+
 /// The runtime representation of a function.
+#[derive(Debug)]
 pub struct Closure {
    pub function_id: Opr24,
+   pub captures: Vec<Pin<Rc<Upvalue>>>,
 }

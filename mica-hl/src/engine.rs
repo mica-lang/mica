@@ -180,7 +180,10 @@ impl Engine {
             kind: FunctionKind::Foreign(f),
          })
          .map_err(|_| Error::TooManyFunctions)?;
-      let function = Value::Function(Rc::new(Closure { function_id }));
+      let function = Value::Function(Rc::new(Closure {
+         function_id,
+         captures: Vec::new(),
+      }));
       runtime_env.globals.set(global_id.0, function);
       Ok(())
    }

@@ -372,11 +372,20 @@ impl Debug for Chunk {
    }
 }
 
+/// The kind of an upvalue capture.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CaptureKind {
+   /// Capture a local from the current scope.
+   Local(Opr24),
+   /// Capture an existing upvalue from the current closure.
+   Upvalue(Opr24),
+}
+
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
    Bytecode {
       chunk: Rc<Chunk>,
-      captured_locals: Vec<u32>,
+      captured_locals: Vec<CaptureKind>,
    },
    Foreign(Box<dyn FnMut(&[Value]) -> Value>),
 }
@@ -444,6 +453,13 @@ impl Environment {
             .map_err(|_| ErrorKind::TooManyFunctions)?;
       self.functions.push(function);
       Ok(slot)
+   }
+
+   /// Returns the function with the given ID, as returned by `create_function`.
+   /// This function is for internal use in the VM and does not perform any checks, thus is marked
+   /// `unsafe`.
+   pub(crate) unsafe fn get_function_unchecked(&self, id: Opr24) -> &Function {
+      self.functions.get_unchecked(u32::from(id) as usize)
    }
 
    /// Returns the function with the given ID, as returned by `create_function`.

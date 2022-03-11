@@ -5,7 +5,7 @@ use std::mem;
 use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
-use crate::bytecode::{Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
+use crate::bytecode::{CaptureKind, Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
 use crate::common::{Error, ErrorKind};
 
 #[derive(Debug)]
@@ -37,13 +37,6 @@ enum VariableAllocation {
    Allocate,
 }
 
-#[derive(Debug, Default)]
-struct BreakableBlock {
-   /// A list of offsets where `breaks` should be backpatched.
-   breaks: Vec<usize>,
-   start: usize,
-}
-
 /// Local variables, including upvalues.
 #[derive(Default)]
 struct Locals {
@@ -59,9 +52,7 @@ struct Locals {
    allocated_local_count: u32,
 
    /// Locals captured from parent scopes.
-   captured_locals: HashSet<u32>,
-   /// Upvalues captured from parent locals.
-   captured_upvalues: HashSet<u32>,
+   captures: HashSet<CaptureKind>,
    /// Mapping from local slots to upvalue indices.
    upvalue_indices: HashMap<Opr24, Opr24>,
 }
@@ -106,7 +97,7 @@ impl Locals {
             match place {
                VariablePlace::Local(local_slot) => {
                   let upvalue_slot = parent.close_over(local_slot)?;
-                  self.captured_locals.insert(u32::from(upvalue_slot));
+                  self.captures.insert(CaptureKind::Local(upvalue_slot));
                   return Ok(Some(VariablePlace::Upvalue(upvalue_slot)));
                }
                VariablePlace::Upvalue(_) => todo!(),
@@ -117,13 +108,18 @@ impl Locals {
       Ok(None)
    }
 
-   /// Marks a local in the given slot as closed over by a closure.
+   /// Marks a local in the given slot as closed over by a closure and returns its newly assigned
+   /// upvalue index, or if already closed over, returns the existing upvalue index.
    fn close_over(&mut self, slot: Opr24) -> Result<Opr24, ErrorKind> {
-      let index =
-         u32::try_from(self.upvalue_indices.len()).map_err(|_| ErrorKind::TooManyCaptures)?;
-      let index = Opr24::new(index).map_err(|_| ErrorKind::TooManyCaptures)?;
-      self.upvalue_indices.insert(slot, index);
-      Ok(index)
+      if let Some(&index) = self.upvalue_indices.get(&slot) {
+         Ok(index)
+      } else {
+         let index =
+            u32::try_from(self.upvalue_indices.len()).map_err(|_| ErrorKind::TooManyCaptures)?;
+         let index = Opr24::new(index).map_err(|_| ErrorKind::TooManyCaptures)?;
+         self.upvalue_indices.insert(slot, index);
+         Ok(index)
+      }
    }
 
    /// Pushes a new scope onto the scope stack.
@@ -138,6 +134,13 @@ impl Locals {
       self.allocated_local_count -= scope.allocated_variable_count;
       scope
    }
+}
+
+#[derive(Debug, Default)]
+struct BreakableBlock {
+   /// A list of offsets where `breaks` should be backpatched.
+   breaks: Vec<usize>,
+   start: usize,
 }
 
 pub struct CodeGenerator<'e> {
@@ -197,7 +200,12 @@ impl<'e> CodeGenerator<'e> {
 
    /// Pops the topmost scope off the scope stack and frees storage of any variables.
    fn pop_scope(&mut self) {
-      let _scope = self.locals.pop_scope();
+      let scope = self.locals.pop_scope();
+      for variable in scope.variables.into_values() {
+         if let Some(..) = self.locals.upvalue_indices.remove(&variable.stack_slot) {
+            self.chunk.push(Opcode::CloseLocal(variable.stack_slot));
+         }
+      }
    }
 
    /// Generates a variable load instruction (GetLocal or GetGlobal).
@@ -574,7 +582,7 @@ impl<'e> CodeGenerator<'e> {
          ),
          kind: FunctionKind::Bytecode {
             chunk: Rc::new(generator.chunk),
-            captured_locals: generator.locals.captured_locals.iter().copied().collect(),
+            captured_locals: generator.locals.captures.iter().copied().collect(),
          },
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;

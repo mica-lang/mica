@@ -1,8 +1,28 @@
-f = do
+"f = do
    x = 1
    (func ()
       print(x)
+      x + 1
    end)
 end
 
-print(f())
+print(f())"
+
+func counter()
+   i = 1
+   (func ()
+      value = i
+      i = i + 1
+      value
+   end)
+end
+
+c = counter()
+print(c())
+print(c())
+print(c())
+print(c())
+print(c())
+print(c())
+print(c())
+print(c())

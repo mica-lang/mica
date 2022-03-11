@@ -1,10 +1,12 @@
 //! The virtual machine.
 
+use std::pin::Pin;
+use std::ptr;
 use std::rc::Rc;
 
-use crate::bytecode::{Chunk, Environment, FunctionKind, Opcode, Opr24};
+use crate::bytecode::{CaptureKind, Chunk, Environment, FunctionKind, Opcode, Opr24};
 use crate::common::{Error, ErrorKind, StackTraceEntry};
-use crate::value::{Closure, Value};
+use crate::value::{Closure, Upvalue, Value};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -47,6 +49,7 @@ impl Default for Globals {
 
 struct ReturnPoint {
    chunk: Rc<Chunk>,
+   closure: Option<Rc<Closure>>,
    pc: usize,
    stack_bottom: usize,
 }
@@ -55,9 +58,11 @@ struct ReturnPoint {
 pub struct Fiber {
    pc: usize,
    chunk: Rc<Chunk>,
+   closure: Option<Rc<Closure>>,
 
    stack: Vec<Value>,
    stack_bottom: usize,
+   open_upvalues: Vec<(u32, Pin<Rc<Upvalue>>)>,
    call_stack: Vec<ReturnPoint>,
    breakable_block_stack: Vec<usize>,
 
@@ -70,8 +75,10 @@ impl Fiber {
       Self {
          pc: 0,
          chunk,
+         closure: None,
          stack: Vec::new(),
          stack_bottom: 0,
+         open_upvalues: Vec::new(),
          call_stack: Vec::new(),
          breakable_block_stack: Vec::new(),
          halted: false,
@@ -83,14 +90,19 @@ impl Fiber {
       self.halted
    }
 
-   fn error(&self, kind: ErrorKind) -> Error {
+   fn error(&self, env: &Environment, kind: ErrorKind) -> Error {
       Error::Runtime {
          kind,
          call_stack: self
             .call_stack
             .iter()
             .map(|return_point| StackTraceEntry {
-               function_name: Rc::from("<function names TODO>"),
+               function_name: if let Some(closure) = &return_point.closure {
+                  let function = unsafe { env.get_function_unchecked(closure.function_id) };
+                  Rc::clone(&function.name)
+               } else {
+                  Rc::from("<main>")
+               },
                module_name: Rc::clone(&return_point.chunk.module_name),
                location: return_point.chunk.location(return_point.pc - Opcode::SIZE),
             })
@@ -148,14 +160,17 @@ impl Fiber {
       }
    }
 
+   /// Saves the current program counter and other execution state before entering a function.
    fn save_return_point(&mut self) {
       self.call_stack.push(ReturnPoint {
          chunk: Rc::clone(&self.chunk),
+         closure: self.closure.clone(),
          pc: self.pc,
          stack_bottom: self.stack_bottom,
       });
    }
 
+   /// Restores previous VM state from the return point stack.
    fn restore_return_point(&mut self) {
       let return_point = self.call_stack.pop().unwrap();
       // Remove unnecessary values from the stack (eg. arguments).
@@ -164,8 +179,25 @@ impl Fiber {
       }
       // Restore state.
       self.chunk = return_point.chunk;
+      self.closure = return_point.closure;
       self.pc = return_point.pc;
       self.stack_bottom = return_point.stack_bottom;
+   }
+
+   /// Returns an upvalue for the local at the given stack slot.
+   fn get_upvalue_for_local(&mut self, stack_slot: u32) -> Pin<Rc<Upvalue>> {
+      if let Some((_, upvalue)) =
+         self.open_upvalues.iter().rev().find(|(slot, _)| *slot == stack_slot)
+      {
+         Pin::clone(upvalue)
+      } else {
+         let stack_ptr = &mut self.stack[stack_slot as usize] as *mut _;
+         // SAFETY: Vec storage is never null.
+         let stack_ptr = unsafe { ptr::NonNull::new_unchecked(stack_ptr) };
+         let upvalue = Upvalue::new(stack_ptr);
+         self.open_upvalues.push((stack_slot, Pin::clone(&upvalue)));
+         upvalue
+      }
    }
 
    fn allocate_chunk_storage_slots(&mut self, n: usize) {
@@ -190,7 +222,7 @@ impl Fiber {
                   Ok(value) => value,
                   Err(kind) => {
                      self.save_return_point();
-                     return Err(self.error(kind));
+                     return Err(self.error(env, kind));
                   }
                }
             }};
@@ -219,7 +251,25 @@ impl Fiber {
                self.push(Value::String(string));
             }
             Opcode::CreateClosure(function_id) => {
-               self.push(Value::Function(Rc::new(Closure { function_id })));
+               let function = unsafe { env.get_function_unchecked_mut(function_id) };
+               let mut captures = Vec::new();
+               if let FunctionKind::Bytecode {
+                  captured_locals, ..
+               } = &function.kind
+               {
+                  for capture in captured_locals {
+                     match capture {
+                        CaptureKind::Local(slot) => captures.push(
+                           self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot)),
+                        ),
+                        CaptureKind::Upvalue(_) => todo!(),
+                     }
+                  }
+               }
+               self.push(Value::Function(Rc::new(Closure {
+                  function_id,
+                  captures,
+               })));
             }
 
             Opcode::AssignGlobal(slot) => {
@@ -240,9 +290,29 @@ impl Fiber {
                let value = self.stack[self.stack_bottom + slot].clone();
                self.push(value);
             }
-            Opcode::AssignUpvalue(slot) => todo!(),
-            Opcode::GetUpvalue(slot) => todo!(),
-            Opcode::CloseLocal(slot) => todo!(),
+            Opcode::AssignUpvalue(index) => {
+               let index = u32::from(index) as usize;
+               let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
+               let value = self.stack_top().clone();
+               unsafe { Upvalue::set(&closure.captures[index], value) }
+            }
+            Opcode::GetUpvalue(index) => {
+               let index = u32::from(index) as usize;
+               let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
+               let value = unsafe { closure.captures[index].get() }.clone();
+               self.push(value);
+            }
+            Opcode::CloseLocal(stack_slot) => {
+               let stack_slot = self.stack_bottom as u32 + u32::from(stack_slot);
+               let index = self
+                  .open_upvalues
+                  .iter()
+                  .rev()
+                  .position(|(slot, _)| *slot == stack_slot)
+                  .unwrap();
+               let (_, upvalue) = self.open_upvalues.remove(index);
+               unsafe { upvalue.close() };
+            }
 
             Opcode::Swap => {
                let len = self.stack.len();
@@ -292,12 +362,13 @@ impl Fiber {
             Opcode::Call(argument_count) => {
                let argument_count = argument_count as usize;
                let function_value = self.nth_from_top(argument_count + 1);
-               let closure = wrap_error!(function_value.function());
+               let closure = Rc::clone(wrap_error!(function_value.function()));
                let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
                match &mut function.kind {
                   FunctionKind::Bytecode { chunk, .. } => {
                      self.save_return_point();
                      self.chunk = Rc::clone(chunk);
+                     self.closure = Some(Rc::clone(&closure));
                      self.pc = 0;
                      self.stack_bottom = self.stack.len() - argument_count;
                      self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);

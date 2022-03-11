@@ -3,14 +3,13 @@
 use std::fmt;
 use std::fmt::Write;
 
-use mica_hl::{Engine, LanguageErrorKind, Value};
+use mica_hl::{Arguments, Engine, Value};
 
-fn print(arguments: &[Value]) -> Result<Value, LanguageErrorKind> {
-   for value in arguments {
+fn print(arguments: Arguments) {
+   for value in arguments.raw() {
       print!("{}", value);
    }
    println!();
-   Ok(Value::Nil)
 }
 
 #[derive(Debug)]
@@ -24,18 +23,18 @@ impl fmt::Display for UserError {
 
 impl std::error::Error for UserError {}
 
-fn error(arguments: &[Value]) -> Result<Value, LanguageErrorKind> {
+fn error(arguments: Arguments) -> Result<Value, UserError> {
    let mut message = String::new();
-   for value in arguments {
+   for value in arguments.raw() {
       write!(message, "{}", value).unwrap();
    }
-   Err(LanguageErrorKind::User(Box::new(UserError(message))))
+   Err(UserError(message))
 }
 
 /// Loads the core library into the engine.
 pub fn load_core(engine: &Engine) -> Result<(), mica_hl::Error> {
-   engine.raw_function("print", None, Box::new(print))?;
-   engine.raw_function("error", None, Box::new(error))?;
+   engine.function("print", print)?;
+   engine.function("error", error)?;
 
    Ok(())
 }

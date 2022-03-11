@@ -5,11 +5,13 @@
 mod engine;
 mod error;
 mod fiber;
+mod function;
 mod value;
 
 pub use engine::*;
 pub use error::*;
 pub use fiber::*;
+pub use function::*;
 pub use value::*;
 
 pub use mica_language as language;

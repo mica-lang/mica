@@ -9,7 +9,7 @@ use mica_language::parser::Parser;
 use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
-use crate::{Error, Fiber, ToValue, TryFromValue};
+use crate::{Error, Fiber, ForeignFunction, ToValue, TryFromValue};
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
 
@@ -156,6 +156,8 @@ impl Engine {
    /// Declares a "raw" function in the global scope. Raw functions do not perform any type checks
    /// by default and accept a variable number of arguments.
    ///
+   /// You should generally prefer [`function`][`Self::function`] instead of this.
+   ///
    /// Note that this cannot accept [`GlobalId`]s, because a name is required to create the function
    /// and global IDs have their name erased.
    ///
@@ -188,6 +190,18 @@ impl Engine {
       }));
       runtime_env.globals.set(global_id.0, function);
       Ok(())
+   }
+
+   /// Declares a function in the global scope.
+   ///
+   /// # Errors
+   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
+   ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
+   pub fn function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
+   where
+      F: ForeignFunction<V>,
+   {
+      self.raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
    }
 }
 

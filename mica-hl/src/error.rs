@@ -23,6 +23,14 @@ pub enum Error {
       expected: Cow<'static, str>,
       got: Cow<'static, str>,
    },
+   /// Incorrect amount of arguments passed to a function.
+   ArgumentCount { expected: usize, got: usize },
+   /// A type mismatch occured in function arguments.
+   ArgumentTypeMismatch {
+      index: usize,
+      expected: Cow<'static, str>,
+      got: Cow<'static, str>,
+   },
 }
 
 impl From<LanguageError> for Error {
@@ -43,6 +51,19 @@ impl std::fmt::Display for Error {
          Self::TooManyFunctions => f.write_str("too many functions"),
          Self::TypeMismatch { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
+         }
+         Self::ArgumentCount { expected, got } => {
+            write!(f, "{expected} arguments expected but got {got}")
+         }
+         Self::ArgumentTypeMismatch {
+            index,
+            expected,
+            got,
+         } => {
+            write!(
+               f,
+               "type mismatch at argument {index}, expected {expected} but got {got}"
+            )
          }
       }
    }

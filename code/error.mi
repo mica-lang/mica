@@ -1,0 +1,13 @@
+func fallible_function()
+   error("____ this! My system crashed! I lost all my data! But fortunately I have an antivirus!!")
+end
+
+func go_deeper()
+   fallible_function()
+end
+
+func even_deeper_to_test_stacktraces()
+   go_deeper()
+end
+
+even_deeper_to_test_stacktraces()

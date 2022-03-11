@@ -255,7 +255,7 @@ impl Chunk {
    ///
    /// The string is padded with zeroes such that opcodes are aligned to four bytes.
    pub fn push_string(&mut self, string: &str) {
-      // I don't know of any 128-bit targets so this should be OK. Also, it isn't physically
+      // I don't know of any 128-bit targets so this cast should be OK. Also, it isn't physically
       // possible to store a string as large as 2^64 bytes.
       let len = string.len() as u64;
       let len_bytes: [u8; 8] = len.to_le_bytes();
@@ -266,7 +266,7 @@ impl Chunk {
       for _ in 0..padding {
          self.bytes.push(0);
       }
-      for _ in (0..padded_len).step_by(4) {
+      for _ in 0..(padded_len / 4 + size_of::<u64>()) {
          self.locations.push(self.codegen_location);
       }
    }
@@ -348,8 +348,9 @@ impl Debug for Chunk {
 
       let mut pc = 0;
       while !self.at_end(pc) {
+         let location = self.location(pc);
          let opcode = unsafe { self.read_opcode(&mut pc) };
-         write!(f, "{pc:08x} {opcode:?} ")?;
+         write!(f, "{pc:06x} {} {opcode:?} ", location)?;
 
          #[allow(clippy::single_match)]
          match opcode {
@@ -381,13 +382,16 @@ pub enum CaptureKind {
    Upvalue(Opr24),
 }
 
+/// The ABI of a raw foreign function.
+pub type ForeignFunction = Box<dyn FnMut(&[Value]) -> Result<Value, ErrorKind>>;
+
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
    Bytecode {
       chunk: Rc<Chunk>,
       captured_locals: Vec<CaptureKind>,
    },
-   Foreign(Box<dyn FnMut(&[Value]) -> Value>),
+   Foreign(ForeignFunction),
 }
 
 impl std::fmt::Debug for FunctionKind {

@@ -14,6 +14,10 @@ impl Location {
       line: 0,
       column: 0,
    };
+
+   pub fn is_uninit(&self) -> bool {
+      self.line == 0 && self.column == 0
+   }
 }
 
 impl Default for Location {
@@ -73,6 +77,7 @@ pub enum ErrorKind {
       got: Cow<'static, str>,
    },
    InvalidAssignment,
+   User(Box<dyn std::error::Error>),
 }
 
 impl std::fmt::Display for ErrorKind {
@@ -112,6 +117,7 @@ impl std::fmt::Display for ErrorKind {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
+         Self::User(error) => write!(f, "{}", error),
       }
    }
 }
@@ -143,7 +149,11 @@ impl std::fmt::Display for Error {
       impl std::fmt::Display for FileLocation<'_> {
          fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let Self(file, location) = self;
-            write!(f, "{}:{}", file, location)
+            if location.is_uninit() {
+               write!(f, "{}", file)
+            } else {
+               write!(f, "{}:{}", file, location)
+            }
          }
       }
 
@@ -160,7 +170,7 @@ impl std::fmt::Display for Error {
             write!(f, "stack traceback (most recent call first):")?;
             let file_location_width = call_stack
                .iter()
-               .map(|entry| format!("{}", FileLocation(&entry.module_name, entry.location)).len())
+               .map(|entry| FileLocation(&entry.module_name, entry.location).to_string().len())
                .max()
                .unwrap_or(20);
             for entry in call_stack.iter().rev() {

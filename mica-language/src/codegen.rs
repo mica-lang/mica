@@ -11,7 +11,6 @@ use crate::common::{Error, ErrorKind};
 #[derive(Debug)]
 struct Variable {
    stack_slot: Opr24,
-   allocation: VariableAllocation,
 }
 
 #[derive(Debug, Default)]
@@ -67,13 +66,7 @@ impl Locals {
       let slot = self.local_count;
       let slot = Opr24::new(slot).map_err(|_| ErrorKind::TooManyLocals)?;
       let scope = self.scopes.last_mut().unwrap();
-      scope.variables.insert(
-         name.to_owned(),
-         Variable {
-            stack_slot: slot,
-            allocation,
-         },
-      );
+      scope.variables.insert(name.to_owned(), Variable { stack_slot: slot });
       self.local_count += 1;
       if allocation == VariableAllocation::Allocate {
          self.allocated_local_count += 1;

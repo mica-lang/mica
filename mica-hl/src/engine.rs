@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
-use mica_language::bytecode::{Chunk, Environment, Function, FunctionKind, Opr24};
+use mica_language::bytecode::{Chunk, Environment, ForeignFunction, Function, FunctionKind, Opr24};
 use mica_language::codegen::CodeGenerator;
 use mica_language::lexer::Lexer;
 use mica_language::parser::Parser;
@@ -10,6 +10,8 @@ use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
 use crate::{Error, Fiber, ToValue, TryFromValue};
+
+pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
 
 /// Options for debugging the language implementation.
 #[derive(Debug, Clone, Copy, Default)]
@@ -168,7 +170,7 @@ impl Engine {
       &self,
       name: &str,
       parameter_count: impl Into<Option<u16>>,
-      f: Box<dyn FnMut(&[Value]) -> Value>,
+      f: RawForeignFunction,
    ) -> Result<(), Error> {
       let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
       let global_id = name.to_global_id(&mut runtime_env.env)?;

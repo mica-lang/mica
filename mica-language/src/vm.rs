@@ -5,7 +5,7 @@ use std::ptr;
 use std::rc::Rc;
 
 use crate::bytecode::{CaptureKind, Chunk, Environment, FunctionKind, Opcode, Opr24};
-use crate::common::{Error, ErrorKind, StackTraceEntry};
+use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::value::{Closure, Upvalue, Value};
 
 /// Storage for global variables.
@@ -48,7 +48,7 @@ impl Default for Globals {
 }
 
 struct ReturnPoint {
-   chunk: Rc<Chunk>,
+   chunk: Option<Rc<Chunk>>,
    closure: Option<Rc<Closure>>,
    pc: usize,
    stack_bottom: usize,
@@ -103,8 +103,16 @@ impl Fiber {
                } else {
                   Rc::from("<main>")
                },
-               module_name: Rc::clone(&return_point.chunk.module_name),
-               location: return_point.chunk.location(return_point.pc - Opcode::SIZE),
+               module_name: if let Some(chunk) = &return_point.chunk {
+                  Rc::clone(&chunk.module_name)
+               } else {
+                  Rc::from("<FFI>")
+               },
+               location: if let Some(chunk) = &return_point.chunk {
+                  chunk.location(return_point.pc - Opcode::SIZE)
+               } else {
+                  Location::UNINIT
+               },
             })
             .collect(),
       }
@@ -163,7 +171,7 @@ impl Fiber {
    /// Saves the current program counter and other execution state before entering a function.
    fn save_return_point(&mut self) {
       self.call_stack.push(ReturnPoint {
-         chunk: Rc::clone(&self.chunk),
+         chunk: Some(Rc::clone(&self.chunk)),
          closure: self.closure.clone(),
          pc: self.pc,
          stack_bottom: self.stack_bottom,
@@ -178,7 +186,8 @@ impl Fiber {
          self.stack.pop().unwrap();
       }
       // Restore state.
-      self.chunk = return_point.chunk;
+      // SAFETY: Assume the matching chunk is a bytecode chunk.
+      self.chunk = unsafe { return_point.chunk.unwrap_unchecked() };
       self.closure = return_point.closure;
       self.pc = return_point.pc;
       self.stack_bottom = return_point.stack_bottom;
@@ -374,9 +383,23 @@ impl Fiber {
                      self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
                   }
                   FunctionKind::Foreign(f) => {
+                     self.save_return_point();
+                     self.call_stack.push(ReturnPoint {
+                        chunk: None,
+                        closure: Some(closure),
+                        pc: 0,
+                        stack_bottom: 0,
+                     });
                      let arguments =
                         unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
-                     let result = f(arguments);
+                     let result = match f(arguments) {
+                        Ok(value) => value,
+                        Err(kind) => {
+                           return Err(self.error(env, kind));
+                        }
+                     };
+                     self.call_stack.pop();
+                     self.call_stack.pop();
                      self.push(result);
                   }
                }

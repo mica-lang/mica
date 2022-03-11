@@ -26,3 +26,21 @@ print(c())
 print(c())
 print(c())
 print(c())
+print("-----")
+
+inc1 = nil
+inc2 = nil
+do
+   x = 1
+   inc1 = func ()
+      x = x + 1
+   end
+   inc2 = func ()
+      x = x + 2
+   end
+end
+
+print(inc1())
+print(inc2())
+print(inc1())
+print(inc2())

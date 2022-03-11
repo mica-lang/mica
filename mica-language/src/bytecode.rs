@@ -257,6 +257,8 @@ impl Chunk {
    pub fn push_string(&mut self, string: &str) {
       // I don't know of any 128-bit targets so this cast should be OK. Also, it isn't physically
       // possible to store a string as large as 2^64 bytes.
+      let start = self.len();
+
       let len = string.len() as u64;
       let len_bytes: [u8; 8] = len.to_le_bytes();
       self.bytes.extend_from_slice(&len_bytes);
@@ -266,7 +268,9 @@ impl Chunk {
       for _ in 0..padding {
          self.bytes.push(0);
       }
-      for _ in 0..(padded_len / 4 + size_of::<u64>()) {
+
+      let end = self.len();
+      for _ in (0..end - start).step_by(4) {
          self.locations.push(self.codegen_location);
       }
    }

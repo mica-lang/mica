@@ -198,6 +198,28 @@ impl Lexer {
       &self.input[start..end]
    }
 
+   fn keyword(identifier: &str) -> Option<TokenKind> {
+      Some(match identifier {
+         "nil" => TokenKind::Nil,
+         "true" => TokenKind::True,
+         "false" => TokenKind::False,
+
+         "and" => TokenKind::And,
+         "or" => TokenKind::Or,
+
+         "do" => TokenKind::Do,
+         "if" => TokenKind::If,
+         "elif" => TokenKind::Elif,
+         "else" => TokenKind::Else,
+         "while" => TokenKind::While,
+         "func" => TokenKind::Func,
+         "end" => TokenKind::End,
+         "break" => TokenKind::Break,
+         "return" => TokenKind::Return,
+         _ => return None,
+      })
+   }
+
    pub fn next_token(&mut self) -> Result<Token, Error> {
       self.skip_whitespace();
       self.token_start = self.location;
@@ -214,8 +236,8 @@ impl Lexer {
 
          c if Self::is_identifier_start_char(c) => {
             let identifier = self.identifier();
-            Ok(if let Some(keyword) = KEYWORDS.get(identifier) {
-               self.token(keyword.clone())
+            Ok(if let Some(keyword) = Self::keyword(identifier) {
+               self.token(keyword)
             } else {
                let identifier = identifier.to_owned();
                self.token(TokenKind::Identifier(identifier))
@@ -249,22 +271,3 @@ impl Lexer {
       Ok(token)
    }
 }
-
-const KEYWORDS: phf::Map<&'static str, TokenKind> = phf::phf_map! {
-   "nil" => TokenKind::Nil,
-   "true" => TokenKind::True,
-   "false" => TokenKind::False,
-
-   "and" => TokenKind::And,
-   "or" => TokenKind::Or,
-
-   "do" => TokenKind::Do,
-   "if" => TokenKind::If,
-   "elif" => TokenKind::Elif,
-   "else" => TokenKind::Else,
-   "while" => TokenKind::While,
-   "func" => TokenKind::Func,
-   "end" => TokenKind::End,
-   "break" => TokenKind::Break,
-   "return" => TokenKind::Return,
-};

@@ -1,6 +1,7 @@
 //! Error reporting.
 
 use std::borrow::Cow;
+use std::fmt;
 
 pub type LanguageError = mica_language::common::Error;
 pub type LanguageErrorKind = mica_language::common::ErrorKind;
@@ -31,6 +32,8 @@ pub enum Error {
       expected: Cow<'static, str>,
       got: Cow<'static, str>,
    },
+   /// A user-defined error.
+   User(Box<dyn std::error::Error>),
 }
 
 impl From<LanguageError> for Error {
@@ -42,8 +45,8 @@ impl From<LanguageError> for Error {
    }
 }
 
-impl std::fmt::Display for Error {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Error {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       match self {
          Self::Compile(error) | Self::Runtime(error) => error.fmt(f),
          Self::EngineInUse => f.write_str("execution engine is in use by another fiber"),
@@ -65,8 +68,58 @@ impl std::fmt::Display for Error {
                "type mismatch at argument {index}, expected {expected} but got {got}"
             )
          }
+         Self::User(error) => write!(f, "{error}"),
       }
    }
 }
 
 impl std::error::Error for Error {}
+
+/// Extensions for converting [`Result`]s into a Mica FFI-friendly structure.
+pub trait MicaResultExt<T, E> {
+   /// Maps the error in the result to an [`Error`].
+   fn mica(self) -> Result<T, Error>;
+}
+
+/// Transparent wrapper that implements [`std::error::Error`] for a user-defined error.
+#[repr(transparent)]
+struct UserError<T>(T);
+
+impl<T> fmt::Debug for UserError<T>
+where
+   T: fmt::Debug,
+{
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      fmt::Debug::fmt(&self.0, f)
+   }
+}
+
+impl<T> fmt::Display for UserError<T>
+where
+   T: fmt::Display,
+{
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      fmt::Display::fmt(&self.0, f)
+   }
+}
+
+impl<T> std::error::Error for UserError<T> where T: fmt::Debug + fmt::Display {}
+
+impl<T, E> MicaResultExt<T, E> for Result<T, E>
+where
+   E: fmt::Debug + fmt::Display + 'static,
+{
+   fn mica(self) -> Result<T, Error> {
+      self.map_err(|error| Error::User(Box::new(UserError(error))))
+   }
+}
+
+pub trait MicaLanguageResultExt<T> {
+   fn mica_language(self) -> Result<T, LanguageErrorKind>;
+}
+
+impl<T> MicaLanguageResultExt<T> for Result<T, Error> {
+   fn mica_language(self) -> Result<T, LanguageErrorKind> {
+      self.map_err(|error| LanguageErrorKind::User(Box::new(error)))
+   }
+}

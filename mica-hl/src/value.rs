@@ -63,6 +63,15 @@ impl ToValue for String {
    }
 }
 
+impl<T> ToValue for Option<T>
+where
+   T: ToValue,
+{
+   fn to_value(&self) -> Value {
+      self.as_ref().map(|x| x.to_value()).unwrap_or(Value::Nil)
+   }
+}
+
 /// Used for converting dynamically typed values into statically typed ones.
 pub trait TryFromValue
 where
@@ -124,5 +133,18 @@ try_from_value_numeric!(f64);
 impl TryFromValue for String {
    fn try_from_value(value: Value) -> Result<Self, Error> {
       value.string().map(|s| s.to_owned()).map_err(convert_type_mismatch)
+   }
+}
+
+impl<T> TryFromValue for Option<T>
+where
+   T: TryFromValue,
+{
+   fn try_from_value(value: Value) -> Result<Self, Error> {
+      if let Value::Nil = value {
+         Ok(None)
+      } else {
+         Ok(Some(T::try_from_value(value)?))
+      }
    }
 }

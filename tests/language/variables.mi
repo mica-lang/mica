@@ -22,3 +22,7 @@ do
    end
    assert(i == 0)
 end
+
+# An empty do..end block evaluates to nil.
+empty = do end
+assert(empty == nil)

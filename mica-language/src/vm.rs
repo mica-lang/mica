@@ -316,7 +316,7 @@ impl Fiber {
                // This is O(n) and I can't say I'm a fan of that, but I haven't benchmarked the
                // performance impact this makes yet.
                let index =
-                  self.open_upvalues.iter().position(|(slot, _)| *slot == stack_slot).unwrap();
+                  self.open_upvalues.iter().rposition(|(slot, _)| *slot == stack_slot).unwrap();
                let (_, upvalue) = self.open_upvalues.remove(index);
                unsafe { upvalue.close() };
             }

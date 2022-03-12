@@ -94,7 +94,7 @@ impl Locals {
       // Iterating over captures maybe isn't most efficient here but it's not like we have
       // thousands of them anyways. Unless somebody absolutely crazy starts writing Mica code.
       // Then all I can say is: I hate you.
-      let index = self.captures.iter().position(|c| c.eq(&capture)).unwrap_or_else(|| {
+      let index = self.captures.iter().rposition(|c| c.eq(&capture)).unwrap_or_else(|| {
          let index = self.captures.len();
          self.captures.push(capture);
          index

@@ -45,3 +45,14 @@ end
 assert(get() == 1)
 assert(inc() == 2)
 assert(get() == 2)
+
+# A closure may capture a variable that's captured in another closure.
+func double_indirection(x)
+   (func (y)
+      (func (z)
+         x + y + z
+      end)
+   end)
+end
+w = double_indirection(1)(2)(3)
+assert(w == 6)

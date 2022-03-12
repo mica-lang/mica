@@ -1,0 +1,44 @@
+# Check whether `while` and `break` work.
+
+# Test a really basic `while` loop that counts upwards.
+i = 1
+while i < 10 do
+   i = i + 1
+end
+assert(i == 10)
+
+# Test a `while` loop that counts downwards.
+i = 10
+while i > 0 do
+   i = i - 1
+end
+assert(i == 0)
+
+# Test a `while` loop with two conditions.
+x = 1
+y = 2
+while x < 100 and y >= -1000 do
+   x = x + 1
+   y = y - y * 2
+end
+assert(x == 100)
+assert(y == -2)
+
+# Test a `while` loop with `break` with implicit nil.
+z = 1
+while true do
+   z = z + 1
+   if z > 100 do
+      break
+   end
+end
+
+# Test a `while` loop with `break value`.
+x = 1
+first_power_of_two_greater_than_1000 = while true do
+   x = x * 2
+   if x > 1000 do
+      break x
+   end
+end
+assert(first_power_of_two_greater_than_1000 == 1024)

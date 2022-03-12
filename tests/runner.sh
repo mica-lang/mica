@@ -8,12 +8,16 @@ if [ -z "${MICAFLAGS}" ]; then
    MICAFLAGS=""
 fi
 
+failed=0
+
 run-suite() {
    local suite="$1"
    for test in "$suite"/*.mi; do
       printf "* $test... "
       if "$mica" "$test" $MICAFLAGS; then
          echo "PASS"
+      else
+         failed=1
       fi
    done
 }
@@ -24,3 +28,8 @@ for suite in tests/*; do
       run-suite "$suite"
    fi
 done
+
+if [ "$failed" -eq 1 ]; then
+   echo "One or more tests failed. Check output above for details"
+   exit 1
+fi

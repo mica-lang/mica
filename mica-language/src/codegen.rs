@@ -419,6 +419,12 @@ impl<'e> CodeGenerator<'e> {
          }
       }
 
+      // If there was no `else` branch, we need to patch in an implicit one that returns `nil`.
+      if ast.kind(*branches.last().unwrap()) != NodeKind::ElseBranch {
+         self.chunk.push(Opcode::Discard);
+         self.chunk.push(Opcode::PushNil);
+      }
+
       // Backpatch all jumps to end with an unconditional jump forward.
       for jump in jumps_to_end {
          self.chunk.patch(

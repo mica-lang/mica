@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::PathBuf;
 
 use mica::{Engine, Error, LanguageError, LanguageErrorKind, Value};
@@ -57,23 +58,28 @@ impl Validator for MicaValidator {
    }
 }
 
-fn interpret(engine: &Engine, filename: &str, input: String) -> impl Iterator<Item = Value> {
+fn interpret(
+   engine: &Engine,
+   filename: &str,
+   input: String,
+) -> Result<impl Iterator<Item = Result<Value, mica::Error>>, mica::Error> {
    let mut fiber = match engine.start(filename, input) {
       Ok(fiber) => fiber,
       Err(error) => {
          eprintln!("{error}");
-         return None.into_iter().flatten();
+         return Ok(None.into_iter().flatten());
       }
    };
-   Some(std::iter::from_fn(move || match fiber.resume() {
-      Ok(value) => value,
+   Ok(Some(std::iter::from_fn(move || match fiber.resume() {
+      Ok(Some(value)) => Some(Ok(value)),
+      Ok(None) => None,
       Err(error) => {
          eprintln!("{error}");
-         None
+         Some(Err(error))
       }
    }))
    .into_iter()
-   .flatten()
+   .flatten())
 }
 
 fn engine(options: &EngineOptions) -> Result<Engine, mica::Error> {
@@ -96,7 +102,11 @@ fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
 
    let engine = engine(engine_options)?;
    while let Ok(line) = editor.readline("> ") {
-      for result in interpret(&engine, "(repl)", line) {
+      let iterator = match interpret(&engine, "(repl)", line) {
+         Ok(iterator) => iterator,
+         Err(_) => break,
+      };
+      for result in iterator.flatten() {
          println!("< {result:?}");
          println!();
       }
@@ -108,9 +118,30 @@ fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
    let opts = Options::from_args();
    if let Some(path) = &opts.file {
+      #[derive(Debug)]
+      struct CompileError;
+      #[derive(Debug)]
+      struct RuntimeError;
+
+      impl fmt::Display for CompileError {
+         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Debug::fmt(self, f)
+         }
+      }
+      impl fmt::Display for RuntimeError {
+         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Debug::fmt(self, f)
+         }
+      }
+
+      impl std::error::Error for CompileError {}
+      impl std::error::Error for RuntimeError {}
+
       let file = std::fs::read_to_string(path)?;
       let engine = engine(&opts.engine_options)?;
-      for _ in interpret(&engine, path.to_str().unwrap(), file) {}
+      for result in interpret(&engine, path.to_str().unwrap(), file).map_err(|_| CompileError)? {
+         result.map_err(|_| RuntimeError)?;
+      }
    } else {
       repl(&opts.engine_options)?;
    }

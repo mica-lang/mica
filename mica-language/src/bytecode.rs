@@ -363,10 +363,18 @@ impl Debug for Chunk {
             | Opcode::JumpForward(amount)
             | Opcode::JumpForwardIfFalsy(amount)
             | Opcode::JumpForwardIfTruthy(amount) => {
-               write!(f, "-> {:08x}", pc + u32::from(amount) as usize)?;
+               write!(
+                  f,
+                  "-> {:08x}",
+                  pc + u32::from(amount) as usize + Opcode::SIZE
+               )?;
             }
             Opcode::JumpBackward(amount) => {
-               write!(f, "-> {:08x}", pc - u32::from(amount) as usize)?;
+               write!(
+                  f,
+                  "-> {:08x}",
+                  pc - u32::from(amount) as usize + Opcode::SIZE
+               )?;
             }
             _ => (),
          }

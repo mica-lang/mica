@@ -1,0 +1,3 @@
+# Check if assert works. There's no point in running the rest of the suite if assertions are broken.
+assert(true)
+assert(0 == 0)

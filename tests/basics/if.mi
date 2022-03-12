@@ -1,0 +1,75 @@
+# Check that if expressions work.
+
+x = 123
+
+# An if expression evaluates to the last expression evaluated in a branch.
+r =
+   if x == 123 do
+      "Good"
+   end
+# If all branches fall through to the end, it evaluates to nil.
+s =
+   if x != 123 do
+      "Bad"
+   end
+assert(r == "Good")
+assert(s == nil)
+# x should stay intact after all this stack beating.
+assert(x == 123)
+
+# Now we can check else.
+t =
+   if x == 123 do
+      "Good"
+   else
+      "Bad"
+   end
+u =
+   if x != 123 do
+      "Bad"
+   else
+      "Good"
+   end
+assert(t == "Good")
+assert(u == "Good")
+
+# Lastly we check elif.
+i = 1
+v =  # Only the second branch should be evaluated.
+   if i == 2 do
+      error("Branch accidentally evaluated")
+      "Bad 1"
+   elif i == 1 do
+      "Good"
+   end
+assert(v == "Good")
+w =  # Only the first branch should be evaluated.
+   if i == 1 do
+      "Good"
+   elif i == 1 do
+      error("Branch accidentally evaluated")
+      "Bad"
+   end
+assert(w == "Good")
+x =  # If no branches are evaluated, it's nil.
+   if i == 2 do
+      error("Branch accidentally evaluated")
+      "Bad 1"
+   elif i == 3 do
+      error("Branch accidentally evaluated")
+      "Bad 2"
+   end
+assert(x == nil)
+y =  # Check that elif branches fall through to the else branch.
+   if i == 2 do
+      error("Branch accidentally evaluated")
+      "Bad 1"
+   elif i == 3 do
+      error("Branch accidentally evaluated")
+      "Bad 2"
+   else
+      "Good"
+   end
+assert(y == "Good")
+# Of course, i should have survived the stack operations.
+assert(i == 1)

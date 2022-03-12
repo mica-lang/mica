@@ -1,0 +1,24 @@
+# Check that operations on variables make sense.
+
+# Declare a global variable.
+x = 0
+assert(x == 0)
+# Copy it to another variable.
+y = x
+assert(x == y)
+assert(y == 0)
+# Increment the original variable.
+x = x + 1
+assert(x == 1)
+assert(y == 0)
+
+do
+   i = 0
+   do
+      # Declaring this variable shouldn't result in 'i' being changed, nor should the value of
+      # i and j be swapped.
+      j = 1
+      assert(j == 1)
+   end
+   assert(i == 0)
+end

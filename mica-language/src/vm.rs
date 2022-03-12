@@ -313,12 +313,10 @@ impl Fiber {
             }
             Opcode::CloseLocal(stack_slot) => {
                let stack_slot = self.stack_bottom as u32 + u32::from(stack_slot);
-               let index = self
-                  .open_upvalues
-                  .iter()
-                  .rev()
-                  .position(|(slot, _)| *slot == stack_slot)
-                  .unwrap();
+               // This is O(n) and I can't say I'm a fan of that, but I haven't benchmarked the
+               // performance impact this makes yet.
+               let index =
+                  self.open_upvalues.iter().position(|(slot, _)| *slot == stack_slot).unwrap();
                let (_, upvalue) = self.open_upvalues.remove(index);
                unsafe { upvalue.close() };
             }

@@ -37,6 +37,14 @@ impl Opr24 {
    }
 }
 
+impl TryFrom<usize> for Opr24 {
+   type Error = U32TooBig;
+
+   fn try_from(value: usize) -> Result<Self, Self::Error> {
+      Self::new(u32::try_from(value).map_err(|_| U32TooBig(()))?)
+   }
+}
+
 impl From<Opr24> for u32 {
    fn from(opr: Opr24) -> u32 {
       (opr.bytes[0] as u32) | ((opr.bytes[1] as u32) << 8) | ((opr.bytes[2] as u32) << 16)

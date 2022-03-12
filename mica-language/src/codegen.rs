@@ -1,6 +1,6 @@
 //! Bytecode generation.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::mem;
 use std::rc::Rc;
 
@@ -8,15 +8,17 @@ use crate::ast::{Ast, NodeId, NodeKind};
 use crate::bytecode::{CaptureKind, Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
 use crate::common::{Error, ErrorKind};
 
+/// Info about a local variable on the stack.
 #[derive(Debug)]
 struct Variable {
    stack_slot: Opr24,
+   is_captured: bool,
 }
 
 #[derive(Debug, Default)]
 struct Scope {
    /// Mapping from variable names to stack slots.
-   variables: HashMap<String, Variable>,
+   variables_by_name: HashMap<String, Variable>,
    allocated_variable_count: u32,
 }
 
@@ -50,10 +52,8 @@ struct Locals {
    /// `preallocate_stack_slots` field in chunks, to provide more efficient allocations
    allocated_local_count: u32,
 
-   /// Locals captured from parent scopes.
-   captures: HashSet<CaptureKind>,
-   /// Mapping from local slots to upvalue indices.
-   upvalue_indices: HashMap<Opr24, Opr24>,
+   /// Variables captured from parent scopes.
+   captures: Vec<CaptureKind>,
 }
 
 impl Locals {
@@ -66,7 +66,13 @@ impl Locals {
       let slot = self.local_count;
       let slot = Opr24::new(slot).map_err(|_| ErrorKind::TooManyLocals)?;
       let scope = self.scopes.last_mut().unwrap();
-      scope.variables.insert(name.to_owned(), Variable { stack_slot: slot });
+      scope.variables_by_name.insert(
+         name.to_owned(),
+         Variable {
+            stack_slot: slot,
+            is_captured: false,
+         },
+      );
       self.local_count += 1;
       if allocation == VariableAllocation::Allocate {
          self.allocated_local_count += 1;
@@ -75,23 +81,49 @@ impl Locals {
       Ok(VariablePlace::Local(slot))
    }
 
+   fn variables_in_scope_mut(&mut self) -> impl Iterator<Item = (&str, &'_ mut Variable)> {
+      self
+         .scopes
+         .iter_mut()
+         .rev()
+         .flat_map(|scope| scope.variables_by_name.iter_mut().map(|(s, v)| (s.as_str(), v)))
+   }
+
+   /// Returns the index of the given capture.
+   fn capture_index(&mut self, capture: CaptureKind) -> Result<Opr24, ErrorKind> {
+      // Iterating over captures maybe isn't most efficient here but it's not like we have
+      // thousands of them anyways. Unless somebody absolutely crazy starts writing Mica code.
+      // Then all I can say is: I hate you.
+      let index = self.captures.iter().position(|c| c.eq(&capture)).unwrap_or_else(|| {
+         let index = self.captures.len();
+         self.captures.push(capture);
+         index
+      });
+      Opr24::try_from(index).map_err(|_| ErrorKind::TooManyCaptures)
+   }
+
    /// Performs a local variable lookup. This may modify parent Locals and capture upvalues.
    fn lookup(&mut self, name: &str) -> Result<Option<VariablePlace>, ErrorKind> {
       // Work inside out: try innermost scopes (own locals) first.
       for scope in self.scopes.iter().rev() {
-         if scope.variables.contains_key(name) {
-            return Ok(scope.variables.get(name).map(|var| VariablePlace::Local(var.stack_slot)));
+         if let Some(var) = scope.variables_by_name.get(name) {
+            return Ok(Some(VariablePlace::Local(var.stack_slot)));
          }
       }
-      // If there isn't a local with the given name, go up a level and look for locals to close
+      // If there isn't a local with the given name, go up a level and look for locals to capture
       // or existing upvalues.
       if let Some(parent) = self.parent.as_mut() {
          if let Some(place) = parent.lookup(name)? {
             match place {
                VariablePlace::Local(local_slot) => {
-                  let upvalue_slot = parent.close_over(local_slot)?;
-                  self.captures.insert(CaptureKind::Local(upvalue_slot));
-                  return Ok(Some(VariablePlace::Upvalue(upvalue_slot)));
+                  let (_, variable) = parent
+                     .variables_in_scope_mut()
+                     .find(|(_, var)| var.stack_slot == local_slot)
+                     .unwrap();
+                  variable.is_captured = true;
+                  let stack_slot = variable.stack_slot;
+                  let upvalue_index = self.capture_index(CaptureKind::Local(stack_slot))?;
+                  return Ok(Some(VariablePlace::Upvalue(upvalue_index)));
                }
                VariablePlace::Upvalue(_) => todo!(),
                VariablePlace::Global(_) => unreachable!(),
@@ -99,20 +131,6 @@ impl Locals {
          }
       }
       Ok(None)
-   }
-
-   /// Marks a local in the given slot as closed over by a closure and returns its newly assigned
-   /// upvalue index, or if already closed over, returns the existing upvalue index.
-   fn close_over(&mut self, slot: Opr24) -> Result<Opr24, ErrorKind> {
-      if let Some(&index) = self.upvalue_indices.get(&slot) {
-         Ok(index)
-      } else {
-         let index =
-            u32::try_from(self.upvalue_indices.len()).map_err(|_| ErrorKind::TooManyCaptures)?;
-         let index = Opr24::new(index).map_err(|_| ErrorKind::TooManyCaptures)?;
-         self.upvalue_indices.insert(slot, index);
-         Ok(index)
-      }
    }
 
    /// Pushes a new scope onto the scope stack.
@@ -123,7 +141,7 @@ impl Locals {
    /// Pops the topmost scope off the scope stack and frees storage of any variables.
    fn pop_scope(&mut self) -> Scope {
       let scope = self.scopes.pop().expect("no scopes left on the stack");
-      self.local_count -= scope.variables.len() as u32;
+      self.local_count -= scope.variables_by_name.len() as u32;
       self.allocated_local_count -= scope.allocated_variable_count;
       scope
    }
@@ -194,8 +212,8 @@ impl<'e> CodeGenerator<'e> {
    /// Pops the topmost scope off the scope stack and frees storage of any variables.
    fn pop_scope(&mut self) {
       let scope = self.locals.pop_scope();
-      for variable in scope.variables.into_values() {
-         if let Some(..) = self.locals.upvalue_indices.remove(&variable.stack_slot) {
+      for variable in scope.variables_by_name.into_values() {
+         if variable.is_captured {
             self.chunk.push(Opcode::CloseLocal(variable.stack_slot));
          }
       }
@@ -585,7 +603,7 @@ impl<'e> CodeGenerator<'e> {
          ),
          kind: FunctionKind::Bytecode {
             chunk: Rc::new(generator.chunk),
-            captured_locals: generator.locals.captures.iter().copied().collect(),
+            captured_locals: generator.locals.captures,
          },
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;

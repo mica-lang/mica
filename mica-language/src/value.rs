@@ -2,10 +2,9 @@ use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::cmp::Ordering;
 use std::marker::PhantomPinned;
-use std::mem::{self, MaybeUninit};
 use std::pin::Pin;
-use std::ptr;
 use std::rc::Rc;
+use std::{mem, ptr};
 
 use crate::bytecode::Opr24;
 use crate::common::ErrorKind;
@@ -199,14 +198,23 @@ impl PartialEq for Value {
 }
 
 /// An upvalue captured by a closure.
-#[derive(Debug)]
 pub struct Upvalue {
    /// A writable pointer to the variable captured by this upvalue.
    pub(crate) ptr: UnsafeCell<ptr::NonNull<Value>>,
    /// Storage for a closed upvalue.
-   closed: UnsafeCell<MaybeUninit<Value>>,
+   closed: UnsafeCell<Value>,
 
    _pinned: PhantomPinned,
+}
+
+impl std::fmt::Debug for Upvalue {
+   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      f.debug_struct("Upvalue")
+         .field("ptr", unsafe { self.ptr.get().as_ref() }.unwrap())
+         .field("closed", unsafe { self.closed.get().as_ref() }.unwrap())
+         .field("_pinned", &self._pinned)
+         .finish()
+   }
 }
 
 impl Upvalue {
@@ -214,7 +222,7 @@ impl Upvalue {
    pub(crate) fn new(var: ptr::NonNull<Value>) -> Pin<Rc<Upvalue>> {
       Rc::pin(Upvalue {
          ptr: UnsafeCell::new(var),
-         closed: UnsafeCell::new(MaybeUninit::uninit()),
+         closed: UnsafeCell::new(Value::Nil),
          _pinned: PhantomPinned,
       })
    }
@@ -229,7 +237,8 @@ impl Upvalue {
       let ptr = &mut *self.ptr.get();
       let closed = &mut *self.closed.get();
       let value = mem::take(ptr.as_mut());
-      *ptr = ptr::NonNull::new(closed.write(value) as *mut _).unwrap();
+      *closed = value;
+      *ptr = ptr::NonNull::new(closed).unwrap();
    }
 
    /// Returns the value pointed to by this upvalue.

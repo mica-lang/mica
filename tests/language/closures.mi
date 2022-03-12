@@ -1,0 +1,47 @@
+# Checks if closures work.
+
+# Closures without captures act like normal functions.
+f = func (x)
+   x + 1
+end
+assert(f(1) == 2)
+
+# Closures can have constant captures.
+func adder(x)
+   (func (y)
+      x + y
+   end)
+end
+add_two = adder(2)
+assert(add_two(2) == 4)
+
+# Closures may modify captured variables.
+func counter(start, increment)
+   i = start
+   (func ()
+      value = i
+      i = i + increment
+      value
+   end)
+end
+c = counter(10, 1)
+assert(c() == 10)
+assert(c() == 11)
+assert(c() == 12)
+assert(c() == 13)
+
+# Two closures may refer to and modify the same variable.
+get = nil
+inc = nil
+do
+   count = 1
+   get = func ()
+      count
+   end
+   inc = func ()
+      count = count + 1
+   end
+end
+assert(get() == 1)
+assert(inc() == 2)
+assert(get() == 2)

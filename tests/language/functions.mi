@@ -1,0 +1,38 @@
+# Checks that functions work.
+# See closures.mi for the test cases regarding closures.
+
+# An empty function is legal and should return nil.
+func nop() end
+assert(nop() == nil)
+
+# Arguments should not affect the function's result.
+func discard(x) end
+assert(discard(1) == nil)
+
+# A function is equal to itself, but never to other functions.
+assert(nop == nop)
+assert(nop != discard)
+
+# The last expression in a function is its return value.
+func add_one(x)
+   x + 1
+end
+assert(add_one(1) == 2)
+
+# New locals can be declared in functions.
+func declare_some_locals(x)
+   y = x + 1
+   assert(y == x + 1)
+   x + y
+end
+assert(declare_some_locals(2) == 5)
+
+# Functions can be called recursively.
+func fib(n)
+   if n == 0 or n == 1 do n
+   else fib(n - 1) + fib(n - 2)
+   end
+end
+assert(fib(20) == 6765)
+# Deep recursion may take a while but should never crash the program (unless we run out of memory).
+assert(fib(30) == 832040)

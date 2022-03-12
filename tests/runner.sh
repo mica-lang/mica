@@ -13,7 +13,8 @@ failed=0
 run-suite() {
    local suite="$1"
    for test in "$suite"/*.mi; do
-      printf "* $test... "
+      local testname="$(basename "$test")"
+      printf "* $testname... "
       if "$mica" "$test" $MICAFLAGS; then
          echo "PASS"
       else
@@ -24,12 +25,13 @@ run-suite() {
 
 for suite in tests/*; do
    if [ -d "$suite" ]; then
-      echo "== SUITE $suite"
+      suitename="$(basename "$suite")"
+      echo "== SUITE $suitename"
       run-suite "$suite"
    fi
 done
 
-if [ "$failed" -eq 1 ]; then
+if [ "$failed" -ne 0 ]; then
    echo "One or more tests failed. Check output above for details"
    exit 1
 fi

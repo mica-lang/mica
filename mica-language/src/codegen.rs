@@ -513,7 +513,11 @@ impl<'e> CodeGenerator<'e> {
    /// Generates a `break` expression.
    fn generate_break(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (right, _) = ast.node_pair(node);
-      self.generate_node(ast, right)?;
+      if right != NodeId::EMPTY {
+         self.generate_node(ast, right)?;
+      } else {
+         self.generate_nil();
+      }
       let jump = self.chunk.push(Opcode::Nop);
       if let Some(block) = self.breakable_blocks.last_mut() {
          block.breaks.push(jump);

@@ -396,8 +396,6 @@ impl Parser {
       let first_token = self.lexer.peek_token()?;
       let mut main = Vec::new();
       Ok(loop {
-         let item = self.parse_item()?;
-         main.push(item);
          if self.lexer.peek_token()?.kind == TokenKind::Eof {
             let main = self
                .ast
@@ -407,6 +405,8 @@ impl Parser {
                .done();
             break (self.ast, main);
          }
+         let item = self.parse_item()?;
+         main.push(item);
       })
    }
 }

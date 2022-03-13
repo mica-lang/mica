@@ -23,6 +23,8 @@ pub enum TokenKind {
    Break,
    Return,
 
+   Struct,
+
    Plus,  // +
    Minus, // -
    Star,  // *
@@ -221,6 +223,9 @@ impl Lexer {
          "end" => TokenKind::End,
          "break" => TokenKind::Break,
          "return" => TokenKind::Return,
+
+         "struct" => TokenKind::Struct,
+
          _ => return None,
       })
    }

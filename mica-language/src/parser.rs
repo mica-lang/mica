@@ -363,6 +363,7 @@ impl Parser {
       matches!(token, TokenKind::LeftParen)
    }
 
+   /// Parses an expression.
    fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, Error> {
       let mut token = self.lexer.next_token()?;
       let mut left = self.parse_prefix(token)?;
@@ -381,6 +382,15 @@ impl Parser {
       Ok(left)
    }
 
+   /// Parses a struct declaration.
+   fn parse_struct(&mut self) -> Result<NodeId, Error> {
+      let struct_token = self.lexer.next_token()?;
+      let name = self.lexer.next_token()?;
+      let name = self.parse_identifier(name)?;
+      Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
+   }
+
+   /// Parses a single item.
    fn parse_item(&mut self) -> Result<NodeId, Error> {
       let token = self.lexer.peek_token()?;
       match &token.kind {
@@ -388,10 +398,12 @@ impl Parser {
             let func_token = self.lexer.next_token()?;
             self.parse_function(func_token, false)
          }
+         TokenKind::Struct => self.parse_struct(),
          _ => self.parse_expression(0),
       }
    }
 
+   /// Parses a Mica program.
    pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
       let first_token = self.lexer.peek_token()?;
       let mut main = Vec::new();

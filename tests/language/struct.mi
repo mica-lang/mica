@@ -1,0 +1,8 @@
+# Tests the ability to create and implement structs.
+
+# Two defined struct types are never equal to each other.
+struct Test
+struct Other
+assert(Test == Test)
+assert(Other == Other)
+assert(Test != Other)

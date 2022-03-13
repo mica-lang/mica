@@ -663,6 +663,8 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Call => self.generate_call(ast, node)?,
          NodeKind::Return => todo!("return is NYI"),
 
+         NodeKind::Struct => todo!("structs are NYI"),
+
          NodeKind::IfBranch | NodeKind::ElseBranch | NodeKind::Parameters => {
             unreachable!("AST implementation detail")
          }

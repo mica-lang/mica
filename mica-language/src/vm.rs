@@ -283,6 +283,7 @@ impl Fiber {
                   captures,
                })));
             }
+            Opcode::CreateType => todo!(),
 
             Opcode::AssignGlobal(slot) => {
                let value = self.stack_top().clone();

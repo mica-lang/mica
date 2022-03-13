@@ -86,6 +86,9 @@ pub enum Opcode {
    PushString,
    /// Creates a closure from the function with the given ID and pushes it onto the stack.
    CreateClosure(Opr24),
+   /// Creates a unique type that can be later implemented. Must be followed by a string indicating
+   /// the type's name.
+   CreateType,
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal(Opr24),
@@ -367,7 +370,9 @@ impl Debug for Chunk {
          #[allow(clippy::single_match)]
          match opcode {
             Opcode::PushNumber => write!(f, "{}", unsafe { self.read_number(&mut pc) })?,
-            Opcode::PushString => write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?,
+            Opcode::PushString | Opcode::CreateType => {
+               write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?
+            }
             | Opcode::JumpForward(amount)
             | Opcode::JumpForwardIfFalsy(amount)
             | Opcode::JumpForwardIfTruthy(amount) => {

@@ -620,6 +620,21 @@ impl<'e> CodeGenerator<'e> {
       Ok(())
    }
 
+   /// Generates code for a struct declaration.
+   fn generate_struct(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name, _) = ast.node_pair(node);
+      let name = ast.string(name).unwrap();
+
+      self.chunk.push(Opcode::CreateType);
+      self.chunk.push_string(name);
+      let variable = self
+         .create_variable(name, VariableAllocation::Allocate)
+         .map_err(|kind| ast.error(node, kind))?;
+      self.generate_variable_assign(variable);
+
+      Ok(())
+   }
+
    /// Generates code for a single node.
    fn generate_node(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let previous_codegen_location = self.chunk.codegen_location;
@@ -663,7 +678,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Call => self.generate_call(ast, node)?,
          NodeKind::Return => todo!("return is NYI"),
 
-         NodeKind::Struct => todo!("structs are NYI"),
+         NodeKind::Struct => self.generate_struct(ast, node)?,
 
          NodeKind::IfBranch | NodeKind::ElseBranch | NodeKind::Parameters => {
             unreachable!("AST implementation detail")

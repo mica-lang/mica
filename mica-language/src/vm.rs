@@ -267,12 +267,15 @@ impl Fiber {
                } = &function.kind
                {
                   for capture in captured_locals {
-                     match capture {
-                        CaptureKind::Local(slot) => captures.push(
-                           self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot)),
-                        ),
-                        CaptureKind::Upvalue(_) => todo!(),
-                     }
+                     captures.push(match capture {
+                        CaptureKind::Local(slot) => {
+                           self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot))
+                        }
+                        CaptureKind::Upvalue(index) => {
+                           let closure = self.closure.as_ref().unwrap();
+                           Pin::clone(&closure.captures[u32::from(*index) as usize])
+                        }
+                     });
                   }
                }
                self.push(Value::Function(Rc::new(Closure {

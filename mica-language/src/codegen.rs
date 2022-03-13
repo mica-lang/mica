@@ -125,7 +125,10 @@ impl Locals {
                   let upvalue_index = self.capture_index(CaptureKind::Local(stack_slot))?;
                   return Ok(Some(VariablePlace::Upvalue(upvalue_index)));
                }
-               VariablePlace::Upvalue(_) => todo!(),
+               VariablePlace::Upvalue(upvalue_index) => {
+                  let own_index = self.capture_index(CaptureKind::Upvalue(upvalue_index))?;
+                  return Ok(Some(VariablePlace::Upvalue(own_index)));
+               }
                VariablePlace::Global(_) => unreachable!(),
             }
          }

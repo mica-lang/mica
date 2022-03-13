@@ -15,6 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Build
-      run: cargo build --release -p mica-cli --verbose
+      run: cargo build --release -p mica-cli
     - name: Run tests
       run: ./tests/runner.sh

@@ -12,4 +12,4 @@ local result = 0
 for _ = 1, 100000 do
    result = factorial(15)
 end
-return result
+print(result)

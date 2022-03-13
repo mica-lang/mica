@@ -56,3 +56,22 @@ func double_indirection(x)
 end
 w = double_indirection(1)(2)(3)
 assert(w == 6)
+
+# A doubly-indirected variable (like above) can still be modified like usual.
+set = nil
+get = nil
+func double_indirection_mut()
+   val = 1
+   (func ()
+      set = func (x)
+         val = x
+      end
+      get = func ()
+         val
+      end
+   end)
+end
+setup = double_indirection_mut()
+setup()
+set(100)
+assert(get() == 100)

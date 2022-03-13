@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mica-language = { path = "../mica-language" }
+mica-language = { version = "0.1.0", path = "../mica-language" }

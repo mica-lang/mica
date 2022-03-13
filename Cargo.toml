@@ -17,8 +17,8 @@ members = [
 ]
 
 [dependencies]
-mica-hl = { path = "mica-hl" }
-mica-std = { path = "mica-std" }
+mica-hl = { version = "0.1.0", path = "mica-hl" }
+mica-std = { version = "0.1.0", path = "mica-std" }
 
 [profile.release]
 debug = 1

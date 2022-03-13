@@ -1,8 +1,12 @@
 [package]
 name = "mica"
-description = "A user-friendly embeddable scripting language"
+description = "A simple, user-friendly, embeddable scripting language"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/liquidev/mica"
+keywords = ["language", "scripting", "embeddable"]
+categories = ["compilers"]
 
 [workspace]
 members = [

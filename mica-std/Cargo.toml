@@ -1,7 +1,10 @@
 [package]
 name = "mica-std"
+description = "The standard library of Mica, a simple, user-friendly, embeddable scripting language"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/liquidev/mica"
 
 [dependencies]
 mica-hl = { version = "0.1.0", path = "../mica-hl" }

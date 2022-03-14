@@ -6,3 +6,8 @@ struct Other
 assert(Test == Test)
 assert(Other == Other)
 assert(Test != Other)
+
+# A struct item returns nil.
+assert(do
+   struct Test2
+end == nil)

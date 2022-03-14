@@ -198,6 +198,7 @@ impl PartialEq for Value {
          (Self::Number(l), Self::Number(r)) => l == r,
          (Self::String(l), Self::String(r)) => l == r,
          (Self::Function(l), Self::Function(r)) => Rc::ptr_eq(l, r),
+         (Self::Struct(l), Self::Struct(r)) => Rc::ptr_eq(l, r),
          _ => mem::discriminant(self) == mem::discriminant(other),
       }
    }

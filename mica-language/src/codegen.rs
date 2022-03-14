@@ -631,6 +631,8 @@ impl<'e> CodeGenerator<'e> {
          .create_variable(name, VariableAllocation::Allocate)
          .map_err(|kind| ast.error(node, kind))?;
       self.generate_variable_assign(variable);
+      self.chunk.push(Opcode::Discard);
+      self.generate_nil();
 
       Ok(())
    }

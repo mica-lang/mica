@@ -450,14 +450,17 @@ pub struct Environment {
    globals: HashMap<String, Opr24>,
    /// Functions in the environment.
    functions: Vec<Function>,
+   /// Dispatch tables for builtin types.
+   builtin_dtables: BuiltinDispatchTables,
 }
 
 impl Environment {
    /// Creates a new, empty environment.
-   pub fn new() -> Self {
+   pub fn new(builtin_dtables: BuiltinDispatchTables) -> Self {
       Self {
          globals: HashMap::new(),
          functions: Vec::new(),
+         builtin_dtables,
       }
    }
 
@@ -499,13 +502,8 @@ impl Environment {
    }
 }
 
-impl Default for Environment {
-   fn default() -> Self {
-      Self::new()
-   }
-}
-
 /// A dispatch table containing functions bound to an instance of a value.
+#[derive(Debug)]
 pub struct DispatchTable {
    /// The name of the type this dispatch table contains functions for.
    pub type_name: Rc<str>,
@@ -524,9 +522,22 @@ impl DispatchTable {
 }
 
 /// Dispatch tables for builtin types. These should be constructed by the standard library.
+#[derive(Debug)]
 pub struct BuiltinDispatchTables {
    pub nil: Rc<DispatchTable>,
    pub boolean: Rc<DispatchTable>,
    pub number: Rc<DispatchTable>,
    pub string: Rc<DispatchTable>,
+}
+
+/// Default dispatch tables for built-in types are empty and do not implement any methods.
+impl Default for BuiltinDispatchTables {
+   fn default() -> Self {
+      Self {
+         nil: Rc::new(DispatchTable::new("Nil")),
+         boolean: Rc::new(DispatchTable::new("Boolean")),
+         number: Rc::new(DispatchTable::new("Number")),
+         string: Rc::new(DispatchTable::new("String")),
+      }
+   }
 }

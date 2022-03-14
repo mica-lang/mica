@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
-use mica_language::bytecode::{Chunk, Environment, Function, FunctionKind, Opr24};
+use mica_language::bytecode::{
+   BuiltinDispatchTables, Chunk, Environment, Function, FunctionKind, Opr24,
+};
 use mica_language::codegen::CodeGenerator;
 use mica_language::lexer::Lexer;
 use mica_language::parser::Parser;
@@ -41,7 +43,7 @@ impl Engine {
    pub fn with_debug_options(debug_options: DebugOptions) -> Self {
       Self {
          runtime_env: Rc::new(RefCell::new(RuntimeEnvironment {
-            env: Environment::new(),
+            env: Environment::new(BuiltinDispatchTables::default()),
             globals: Globals::new(),
          })),
          debug_options,

@@ -198,6 +198,7 @@ pub enum NodeKind {
    GreaterEqual,
 
    Assign,
+   Dot,
 
    Main,
    Do,

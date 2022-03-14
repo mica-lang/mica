@@ -668,6 +668,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Or => self.generate_or(ast, node)?,
 
          NodeKind::Assign => self.generate_assignment(ast, node)?,
+         NodeKind::Dot => todo!("dot operators are NYI"),
 
          NodeKind::Main => self.generate_node_list(ast, ast.children(node).unwrap())?,
 

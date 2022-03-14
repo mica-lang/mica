@@ -41,6 +41,7 @@ pub enum TokenKind {
    GreaterEqual, // >=
 
    Assign, // =
+   Dot,    // .
 
    LeftParen,  // (
    RightParen, // )
@@ -265,6 +266,8 @@ impl Lexer {
          '>' => {
             Ok(self.single_or_double_char_token(TokenKind::Greater, '=', TokenKind::GreaterEqual))
          }
+
+         '.' => Ok(self.single_char_token(TokenKind::Dot)),
 
          '(' => Ok(self.single_char_token(TokenKind::LeftParen)),
          ')' => Ok(self.single_char_token(TokenKind::RightParen)),

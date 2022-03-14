@@ -51,7 +51,7 @@ impl Parser {
          | TokenKind::GreaterEqual => 4,
          TokenKind::Plus | TokenKind::Minus => 5,
          TokenKind::Star | TokenKind::Slash => 6,
-         TokenKind::LeftParen => 7,
+         TokenKind::LeftParen | TokenKind::Dot => 7,
          _ => 0,
       }
    }
@@ -351,6 +351,7 @@ impl Parser {
          TokenKind::GreaterEqual => self.binary_operator(left, token, NodeKind::GreaterEqual),
 
          TokenKind::Assign => self.binary_operator(left, token, NodeKind::Assign),
+         TokenKind::Dot => self.binary_operator(left, token, NodeKind::Dot),
 
          TokenKind::LeftParen => self.function_call(left, token),
 

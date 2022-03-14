@@ -4,9 +4,9 @@ use std::cmp::Ordering;
 use std::marker::PhantomPinned;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::{mem, ptr};
+use std::{fmt, mem, ptr};
 
-use crate::bytecode::Opr24;
+use crate::bytecode::{DispatchTable, Opr24};
 use crate::common::ErrorKind;
 
 /// The type of a value.
@@ -17,10 +17,11 @@ pub enum Type {
    Number,
    String,
    Function,
+   Struct,
 }
 
-impl std::fmt::Display for Type {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Type {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       write!(f, "{self:?}")
    }
 }
@@ -40,6 +41,8 @@ pub enum Value {
    String(Rc<str>),
    /// A function.
    Function(Rc<Closure>),
+   /// A struct.
+   Struct(Rc<Struct>),
 }
 
 impl Value {
@@ -51,6 +54,7 @@ impl Value {
          Value::Number(_) => Type::Number,
          Value::String(_) => Type::String,
          Value::Function(_) => Type::Function,
+         Value::Struct(_) => Type::Struct,
       }
    }
 
@@ -140,6 +144,7 @@ impl Value {
                }
             }
             Self::Function(_) => Ok(None),
+            Self::Struct(_) => Ok(None),
          }
       }
    }
@@ -160,8 +165,8 @@ impl From<bool> for Value {
    }
 }
 
-impl std::fmt::Debug for Value {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Value {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       match self {
          Value::Nil => f.write_str("nil"),
          Value::False => f.write_str("false"),
@@ -169,19 +174,20 @@ impl std::fmt::Debug for Value {
          Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s:?}"),
          Value::Function(_) => write!(f, "<func>"),
+         Value::Struct(s) => {
+            let dispatch_table = &s.dispatch_table;
+            let type_name = &dispatch_table.type_name;
+            write!(f, "<[{type_name}]>")
+         }
       }
    }
 }
 
-impl std::fmt::Display for Value {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Value {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       match self {
-         Value::Nil => f.write_str("nil"),
-         Value::False => f.write_str("false"),
-         Value::True => f.write_str("true"),
-         Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s}"),
-         Value::Function(_) => write!(f, "<func>"),
+         _ => fmt::Debug::fmt(&self, f),
       }
    }
 }
@@ -192,8 +198,24 @@ impl PartialEq for Value {
          (Self::Number(l), Self::Number(r)) => l == r,
          (Self::String(l), Self::String(r)) => l == r,
          (Self::Function(l), Self::Function(r)) => Rc::ptr_eq(l, r),
-         _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+         _ => mem::discriminant(self) == mem::discriminant(other),
       }
+   }
+}
+
+/// The innards of a struct.
+///
+/// Note that both types and actual constructed structs use the same representation. The difference
+/// is that types do not contain associated fields (Mica does not have static fields.)
+pub struct Struct {
+   /// The disptach table of the struct. This may only be set once, and setting it seals the struct.
+   dispatch_table: Rc<DispatchTable>,
+}
+
+impl Struct {
+   /// Creates a new `Struct` representing a type.
+   pub fn new_type(dispatch_table: Rc<DispatchTable>) -> Self {
+      Self { dispatch_table }
    }
 }
 
@@ -207,13 +229,12 @@ pub struct Upvalue {
    _pinned: PhantomPinned,
 }
 
-impl std::fmt::Debug for Upvalue {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Upvalue {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       f.debug_struct("Upvalue")
          .field("ptr", unsafe { self.ptr.get().as_ref() }.unwrap())
          .field("closed", unsafe { self.closed.get().as_ref() }.unwrap())
-         .field("_pinned", &self._pinned)
-         .finish()
+         .finish_non_exhaustive()
    }
 }
 

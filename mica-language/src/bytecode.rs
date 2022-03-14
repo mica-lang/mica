@@ -6,7 +6,7 @@ use std::rc::Rc;
 use bytemuck::{Pod, Zeroable};
 
 use crate::common::{ErrorKind, Location};
-use crate::value::Value;
+use crate::value::{Closure, Value};
 
 /// A 24-bit integer encoding an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -503,4 +503,33 @@ impl Default for Environment {
    fn default() -> Self {
       Self::new()
    }
+}
+
+/// A dispatch table containing functions bound to an instance of a value.
+pub struct DispatchTable {
+   /// The name of the type this dispatch table contains functions for.
+   pub type_name: Rc<str>,
+   /// The functions in this dispatch table.
+   pub(crate) functions: Vec<Option<Closure>>,
+}
+
+impl DispatchTable {
+   /// Creates a new, empty dispatch table for a type with the given name.
+   pub fn new(type_name: &str) -> Self {
+      Self {
+         type_name: Rc::from(type_name),
+         functions: Vec::new(),
+      }
+   }
+}
+
+/// Dispatch tables for builtin types.
+pub(crate) struct BuiltinDispatchTables {
+   /// The dispatch table of newly created types.
+   pub(crate) newtype: Rc<DispatchTable>,
+
+   pub(crate) nil: Rc<DispatchTable>,
+   pub(crate) boolean: Rc<DispatchTable>,
+   pub(crate) number: Rc<DispatchTable>,
+   pub(crate) string: Rc<DispatchTable>,
 }

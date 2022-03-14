@@ -4,9 +4,11 @@ use std::pin::Pin;
 use std::ptr;
 use std::rc::Rc;
 
-use crate::bytecode::{CaptureKind, Chunk, Environment, FunctionKind, Opcode, Opr24};
+use crate::bytecode::{
+   CaptureKind, Chunk, DispatchTable, Environment, FunctionKind, Opcode, Opr24,
+};
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
-use crate::value::{Closure, Upvalue, Value};
+use crate::value::{Closure, Struct, Upvalue, Value};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -283,7 +285,12 @@ impl Fiber {
                   captures,
                })));
             }
-            Opcode::CreateType => todo!(),
+            Opcode::CreateType => {
+               let name = unsafe { self.chunk.read_string(&mut self.pc) };
+               let dispatch_table = DispatchTable::new(&format!("type {name}"));
+               let struct_v = Struct::new_type(Rc::new(dispatch_table));
+               self.stack.push(Value::Struct(Rc::new(struct_v)));
+            }
 
             Opcode::AssignGlobal(slot) => {
                let value = self.stack_top().clone();

@@ -523,13 +523,10 @@ impl DispatchTable {
    }
 }
 
-/// Dispatch tables for builtin types.
-pub(crate) struct BuiltinDispatchTables {
-   /// The dispatch table of newly created types.
-   pub(crate) newtype: Rc<DispatchTable>,
-
-   pub(crate) nil: Rc<DispatchTable>,
-   pub(crate) boolean: Rc<DispatchTable>,
-   pub(crate) number: Rc<DispatchTable>,
-   pub(crate) string: Rc<DispatchTable>,
+/// Dispatch tables for builtin types. These should be constructed by the standard library.
+pub struct BuiltinDispatchTables {
+   pub nil: Rc<DispatchTable>,
+   pub boolean: Rc<DispatchTable>,
+   pub number: Rc<DispatchTable>,
+   pub string: Rc<DispatchTable>,
 }

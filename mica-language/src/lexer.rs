@@ -5,9 +5,9 @@ use crate::common::{Error, ErrorKind, Location};
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
    Number(f64),
-   String(String),
+   String(Rc<str>),
 
-   Identifier(String),
+   Identifier(Rc<str>),
 
    Nil,
    True,
@@ -242,7 +242,7 @@ impl Lexer {
          }
          '"' => {
             let string = self.string()?;
-            Ok(self.token(TokenKind::String(string)))
+            Ok(self.token(TokenKind::String(Rc::from(string))))
          }
 
          c if Self::is_identifier_start_char(c) => {
@@ -250,7 +250,7 @@ impl Lexer {
             Ok(if let Some(keyword) = Self::keyword(identifier) {
                self.token(keyword)
             } else {
-               let identifier = identifier.to_owned();
+               let identifier = Rc::from(identifier);
                self.token(TokenKind::Identifier(identifier))
             })
          }

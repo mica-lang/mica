@@ -22,7 +22,7 @@ pub struct Ast {
 
 enum NodeData {
    Number(f64),
-   String(String),
+   String(Rc<str>),
    Children(Vec<NodeId>),
 }
 
@@ -118,7 +118,7 @@ impl<'a> NodeBuilder<'a> {
       self
    }
 
-   pub fn with_string(self, string: String) -> Self {
+   pub fn with_string(self, string: Rc<str>) -> Self {
       unsafe {
          *self.ast.data.get_unchecked_mut(self.node.0 as usize) = Some(NodeData::String(string));
       }

@@ -443,6 +443,13 @@ pub struct Function {
    pub kind: FunctionKind,
 }
 
+/// The signature of a function (its name and argument count).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionSignature {
+   pub name: Rc<str>,
+   pub arity: Option<u16>,
+}
+
 /// An environment containing information about declared globals, functions, vtables.
 #[derive(Debug)]
 pub struct Environment {
@@ -450,8 +457,10 @@ pub struct Environment {
    globals: HashMap<String, Opr24>,
    /// Functions in the environment.
    functions: Vec<Function>,
+   /// Mapping from named function signatures to method indices.
+   function_signatures: HashMap<FunctionSignature, Opr24>,
    /// Dispatch tables for builtin types.
-   builtin_dtables: BuiltinDispatchTables,
+   pub(crate) builtin_dtables: BuiltinDispatchTables,
 }
 
 impl Environment {
@@ -460,6 +469,7 @@ impl Environment {
       Self {
          globals: HashMap::new(),
          functions: Vec::new(),
+         function_signatures: HashMap::new(),
          builtin_dtables,
       }
    }
@@ -480,9 +490,7 @@ impl Environment {
 
    /// Creates a function and returns its ID.
    pub fn create_function(&mut self, function: Function) -> Result<Opr24, ErrorKind> {
-      let slot =
-         Opr24::new(self.functions.len().try_into().map_err(|_| ErrorKind::TooManyFunctions)?)
-            .map_err(|_| ErrorKind::TooManyFunctions)?;
+      let slot = Opr24::try_from(self.functions.len()).map_err(|_| ErrorKind::TooManyFunctions)?;
       self.functions.push(function);
       Ok(slot)
    }
@@ -499,6 +507,20 @@ impl Environment {
    /// `unsafe`.
    pub(crate) unsafe fn get_function_unchecked_mut(&mut self, id: Opr24) -> &mut Function {
       self.functions.get_unchecked_mut(u32::from(id) as usize)
+   }
+
+   /// Tries to look up the index of a method, based on a function signature. Returns `None` if
+   /// there are too many function signatures in this environment.
+   pub fn get_method_index(&mut self, signature: &FunctionSignature) -> Result<Opr24, ErrorKind> {
+      // Don't use `entry` here to avoid cloning the signature.
+      if let Some(&index) = self.function_signatures.get(signature) {
+         Ok(index)
+      } else {
+         let index = Opr24::try_from(self.function_signatures.len())
+            .map_err(|_| ErrorKind::TooManyMethods)?;
+         self.function_signatures.insert(signature.clone(), index);
+         Ok(index)
+      }
    }
 }
 

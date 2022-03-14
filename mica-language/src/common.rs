@@ -70,6 +70,7 @@ pub enum ErrorKind {
    TooManyFunctions,
    TooManyArguments,
    TooManyParameters,
+   TooManyMethods,
 
    // Runtime
    TypeError {
@@ -112,6 +113,7 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyFunctions => write!(f, "too many unique functions"),
          Self::TooManyArguments => write!(f, "too many arguments"),
          Self::TooManyParameters => write!(f, "too many parameters"),
+         Self::TooManyMethods => write!(f, "too many instance functions with different signatures"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

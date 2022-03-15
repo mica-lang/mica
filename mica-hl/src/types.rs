@@ -97,7 +97,7 @@ where
    /// Adds an instance function to the struct.
    pub fn add_function<F, V>(&mut self, name: &str, f: F) -> &mut Self
    where
-      V: ffvariants::Method,
+      V: ffvariants::Method<T>,
       F: ForeignFunction<V>,
    {
       self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())

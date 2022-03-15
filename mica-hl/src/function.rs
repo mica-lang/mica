@@ -171,9 +171,6 @@ pub mod ffvariants {
    pub enum VarargsFallible {}
    pub enum VarargsInfallible {}
 
-   pub enum ImmutableSelf {}
-   pub enum MutableSelf {}
-
    // S is the self type (`ImmutableSelf` or `MutableSelf`).
    pub struct FallibleRawSelf<Args>(PhantomData<Args>);
    pub struct InfallibleRawSelf<Args>(PhantomData<Args>);
@@ -189,13 +186,32 @@ pub mod ffvariants {
       impl<S, Args> Sealed for super::InfallibleSelf<S, Args> {}
    }
 
-   /// Marker trait for all functions that accept a `self` (reference) as the first parameter.
-   pub trait Method: sealed::Sealed {}
+   pub trait Receiver {
+      type Receiver;
+   }
 
-   impl<Args> Method for FallibleRawSelf<Args> {}
-   impl<Args> Method for InfallibleRawSelf<Args> {}
-   impl<S, Args> Method for FallibleSelf<S, Args> {}
-   impl<S, Args> Method for InfallibleSelf<S, Args> {}
+   pub struct ImmutableSelf<S>(PhantomData<S>);
+   pub struct MutableSelf<S>(PhantomData<S>);
+
+   impl<S> Receiver for ImmutableSelf<S> {
+      type Receiver = S;
+   }
+
+   impl<S> Receiver for MutableSelf<S> {
+      type Receiver = S;
+   }
+
+   /// Marker trait for all functions that accept a `self` (reference) as the first parameter.
+   pub trait Method<S>: sealed::Sealed
+   where
+      S: ?Sized,
+   {
+   }
+
+   impl<'s, Args> Method<super::RawSelf<'s>> for FallibleRawSelf<Args> {}
+   impl<'s, Args> Method<super::RawSelf<'s>> for InfallibleRawSelf<Args> {}
+   impl<'a, S, Args> Method<S::Receiver> for FallibleSelf<S, Args> where S: Receiver {}
+   impl<'a, S, Args> Method<S::Receiver> for InfallibleSelf<S, Args> where S: Receiver {}
 }
 
 macro_rules! impl_non_varargs {
@@ -277,6 +293,9 @@ macro_rules! impl_non_varargs {
 
       // Behold, ye who enter here.
       // For this land is an absolute fucking mess and thou shall not add more calling conventions.
+      // Well at this point it's more about how much of a repetitive mess this has become.
+      // LOOK AT IT.
+      // It makes me wanna puke.
 
       impl_non_varargs!(
          // First we define the trait that is to be implemented.
@@ -341,7 +360,7 @@ macro_rules! impl_non_varargs {
       );
 
       impl_non_varargs!(
-         @for FallibleSelf, $crate::ffvariants::ImmutableSelf, (&S, $($types,)*);
+         @for FallibleSelf, $crate::ffvariants::ImmutableSelf<S>, (&S, $($types,)*);
          S, Ret, Err;
          where
             Ret: $crate::ToValue,
@@ -360,7 +379,7 @@ macro_rules! impl_non_varargs {
          $($types),*
       );
       impl_non_varargs!(
-         @for FallibleSelf, $crate::ffvariants::MutableSelf, (&mut S, $($types,)*);
+         @for FallibleSelf, $crate::ffvariants::MutableSelf<S>, (&mut S, $($types,)*);
          S, Ret, Err;
          where
             Ret: $crate::ToValue,
@@ -380,7 +399,7 @@ macro_rules! impl_non_varargs {
       );
 
       impl_non_varargs!(
-         @for InfallibleSelf, $crate::ffvariants::ImmutableSelf, (&S, $($types,)*);
+         @for InfallibleSelf, $crate::ffvariants::ImmutableSelf<S>, (&S, $($types,)*);
          S, Ret;
          where
             Ret: $crate::ToValue,
@@ -396,7 +415,7 @@ macro_rules! impl_non_varargs {
          $($types),*
       );
       impl_non_varargs!(
-         @for InfallibleSelf, $crate::ffvariants::MutableSelf, (&mut S, $($types,)*);
+         @for InfallibleSelf, $crate::ffvariants::MutableSelf<S>, (&mut S, $($types,)*);
          S, Ret;
          where
             Ret: $crate::ToValue,

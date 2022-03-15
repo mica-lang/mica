@@ -3,7 +3,9 @@
 use std::borrow::Cow;
 use std::fmt;
 
+/// A raw [`mica-language`][`crate::language`] error, with metadata such as stack traces.
 pub type LanguageError = mica_language::common::Error;
+/// A raw [`mica-language`][`crate::language`] error kind.
 pub type LanguageErrorKind = mica_language::common::ErrorKind;
 
 /// An error.
@@ -121,7 +123,9 @@ where
    }
 }
 
+/// Extensions for converting [`Result`]s into a `mica-language` FFI-friendly structure.
 pub trait MicaLanguageResultExt<T> {
+   /// Maps the error in the result to a [`LanguageErrorKind`].
    fn mica_language(self) -> Result<T, LanguageErrorKind>;
 }
 

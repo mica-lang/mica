@@ -59,7 +59,7 @@ impl<T> TypeBuilder<T>
 where
    T: ?Sized,
 {
-   /// Creates a new `StructBuilder`.
+   /// Creates a new `TypeBuilder`.
    pub fn new(type_name: impl Into<Rc<str>>) -> Self {
       let type_name = type_name.into();
       Self {

@@ -151,7 +151,7 @@ where
    }
 }
 
-/// Implemented by all types that can come from a `self` parameter.
+/// Implemented by all types that can be a `&self` parameter in an instance function.
 ///
 /// This should never be implemented manually unless you know what you're doing.
 pub trait FromValueSelf
@@ -194,6 +194,7 @@ impl FromValueSelf for f64 {
    }
 }
 
+/// Implemented by all types that can be a `&mut self` parameter in an instance function.
 pub trait FromValueSelfMut
 where
    Self: Sized,

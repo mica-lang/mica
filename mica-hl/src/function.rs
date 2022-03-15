@@ -122,11 +122,11 @@ impl<'a> From<&'a Value> for RawSelf<'a> {
 ///     - Each argument: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - `fn (Self, A, B, C, ...) -> R` where
-///     - `Self`: [`FromValueSelf`] or [`FromValueSelfMut`]
+///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or [`FromValueSelfMut`][`crate::FromValueSelfMut`]
 ///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - `fn (Self, A, B, C, ...) -> Result<R, E>`
-///     - `Self`: [`FromValueSelf`] or [`FromValueSelfMut`]
+///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or [`FromValueSelfMut`][`crate::FromValueSelfMut`]
 ///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - Due to a limitation in Rust's type system, a maximum of 8 arguments is supported now.
@@ -138,7 +138,7 @@ impl<'a> From<&'a Value> for RawSelf<'a> {
 ///     - `E`: [`std::error::Error`]
 ///
 /// The generic parameter `V` is not used inside the trait. Its only purpose is to allow for
-/// multiple overlapping implementations of a trait for the same type. See [`fn_variants`] for more
+/// multiple overlapping implementations of a trait for the same type. See [`ffvariants`] for more
 /// information.
 pub trait ForeignFunction<V> {
    /// Returns the number of parameters this function has, or `None` if the function accepts a

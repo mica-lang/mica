@@ -166,15 +166,24 @@ pub mod ffvariants {
    // so we put them into a generic parameter here.
    // The PhantomData inside suppresses an "unused generic parameter" error and prevents
    // construction of the two structs (because it's a private field).
+
+   /// A bare fallible function.
    pub struct Fallible<Args>(PhantomData<Args>);
+   /// A bare infallible function.
    pub struct Infallible<Args>(PhantomData<Args>);
+   /// A bare varargs fallible function.
    pub enum VarargsFallible {}
+   /// A bare varargs infallible function.
    pub enum VarargsInfallible {}
 
    // S is the self type (`ImmutableSelf` or `MutableSelf`).
+   /// A fallible function with `RawSelf`.
    pub struct FallibleRawSelf<Args>(PhantomData<Args>);
+   /// An infallible function with `RawSelf`.
    pub struct InfallibleRawSelf<Args>(PhantomData<Args>);
+   /// A fallible function with typed `self`.
    pub struct FallibleSelf<S, Args>(PhantomData<(S, Args)>);
+   /// An infallible function with typed `self`.
    pub struct InfallibleSelf<S, Args>(PhantomData<(S, Args)>);
 
    mod sealed {
@@ -186,11 +195,16 @@ pub mod ffvariants {
       impl<S, Args> Sealed for super::InfallibleSelf<S, Args> {}
    }
 
+   /// Defines the common [`Receiver`][`Self::Receiver`] type of [`ImmutableSelf`]
+   /// and [`MutableSelf`].
    pub trait Receiver {
+      /// The type that receives the method call.
       type Receiver;
    }
 
+   /// Marker for a method that has an immutable `self` (`&self`).
    pub struct ImmutableSelf<S>(PhantomData<S>);
+   /// Marker for a method that has a mutable `self` (`&mut self`).
    pub struct MutableSelf<S>(PhantomData<S>);
 
    impl<S> Receiver for ImmutableSelf<S> {
@@ -201,7 +215,7 @@ pub mod ffvariants {
       type Receiver = S;
    }
 
-   /// Marker trait for all functions that accept a `self` (reference) as the first parameter.
+   /// Marker trait for all functions that accept a `self` reference as the first parameter.
    pub trait Method<S>: sealed::Sealed
    where
       S: ?Sized,

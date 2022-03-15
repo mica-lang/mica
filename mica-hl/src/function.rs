@@ -122,11 +122,11 @@ impl<'a> From<&'a Value> for RawSelf<'a> {
 ///     - Each argument: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - `fn (Self, A, B, C, ...) -> R` where
-///     - `Self`: [`TryFromValueSelf`]
+///     - `Self`: [`FromValueSelf`] or [`FromValueSelfMut`]
 ///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - `fn (Self, A, B, C, ...) -> Result<R, E>`
-///     - `Self`: [`TryFromValueSelf`]
+///     - `Self`: [`FromValueSelf`] or [`FromValueSelfMut`]
 ///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - Due to a limitation in Rust's type system, a maximum of 8 arguments is supported now.

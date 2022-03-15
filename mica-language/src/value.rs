@@ -210,7 +210,7 @@ impl PartialEq for Value {
 /// is that types do not contain associated fields (Mica does not have static fields.)
 pub struct Struct {
    /// The disptach table of the struct. This may only be set once, and setting it seals the struct.
-   dispatch_table: Rc<DispatchTable>,
+   pub(crate) dispatch_table: Rc<DispatchTable>,
 }
 
 impl Struct {

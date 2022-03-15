@@ -70,7 +70,7 @@ impl Ast {
       None
    }
 
-   pub fn string(&self, node: NodeId) -> Option<&str> {
+   pub fn string(&self, node: NodeId) -> Option<&Rc<str>> {
       if let Some(NodeData::String(s)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
          return Some(s);
       }

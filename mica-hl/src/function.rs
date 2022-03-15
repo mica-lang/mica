@@ -18,7 +18,10 @@ pub struct Arguments<'a> {
 
 impl<'a> Arguments<'a> {
    fn new(arguments: &'a [Value]) -> Self {
-      Self { inner: arguments }
+      // Skip the first argument, which is `self` (or the currently called function).
+      Self {
+         inner: &arguments[1..],
+      }
    }
 
    /// Returns the number of arguments passed to the function.

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::mem::size_of;
 use std::rc::Rc;
 
@@ -35,6 +35,20 @@ impl Opr24 {
          Err(U32TooBig(()))
       }
    }
+
+   pub fn pack<T>(x: T) -> Self
+   where
+      T: PackableToOpr24,
+   {
+      x.pack_to_opr24()
+   }
+
+   pub fn unpack<T>(self) -> T
+   where
+      T: PackableToOpr24,
+   {
+      T::unpack_from_opr24(self)
+   }
 }
 
 impl TryFrom<usize> for Opr24 {
@@ -65,6 +79,26 @@ impl std::fmt::Display for Opr24 {
 
 unsafe impl Zeroable for Opr24 {}
 unsafe impl Pod for Opr24 {}
+
+pub trait PackableToOpr24 {
+   fn pack_to_opr24(self) -> Opr24;
+   fn unpack_from_opr24(opr: Opr24) -> Self;
+}
+
+impl PackableToOpr24 for (u16, u8) {
+   fn pack_to_opr24(self) -> Opr24 {
+      // SAFETY: This packs the two numbers into 24 bits and will never exceed the range of an
+      // Opr24.
+      unsafe { Opr24::new((self.0 as u32) << 8 | self.1 as u32).unwrap_unchecked() }
+   }
+
+   fn unpack_from_opr24(opr: Opr24) -> Self {
+      let x = u32::from(opr);
+      let big = ((x & 0xFFFF00) >> 8) as u16;
+      let small = (x & 0x0000FF) as u8;
+      (big, small)
+   }
+}
 
 /// A VM opcode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,6 +166,9 @@ pub enum Opcode {
 
    /// Calls a function with `.0` arguments.
    Call(u16),
+   /// Calls the `n`th method with `a` arguments, where `a` is encoded in the lower 8 bits, and
+   /// `n` is encoded in the upper 16 bits of `.0`.
+   CallMethod(Opr24),
    /// Returns to the calling function.
    Return,
 
@@ -389,6 +426,11 @@ impl Debug for Chunk {
                   pc - u32::from(amount) as usize + Opcode::SIZE
                )?;
             }
+            Opcode::CallMethod(arg) => {
+               let (method_index, argument_count) = arg.unpack();
+               let arg = u32::from(arg);
+               write!(f, "{arg:06x}:[mi={method_index}, ac={argument_count}]")?;
+            }
             _ => (),
          }
 
@@ -447,7 +489,18 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
    pub name: Rc<str>,
+   /// This arity number does not include the implicit `self` argument.
    pub arity: Option<u16>,
+}
+
+impl fmt::Display for FunctionSignature {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      if let Some(arity) = self.arity {
+         write!(f, "{}/{}", self.name, arity)
+      } else {
+         write!(f, "{}/...", self.name)
+      }
+   }
 }
 
 /// An environment containing information about declared globals, functions, vtables.
@@ -458,7 +511,9 @@ pub struct Environment {
    /// Functions in the environment.
    functions: Vec<Function>,
    /// Mapping from named function signatures to method indices.
-   function_signatures: HashMap<FunctionSignature, Opr24>,
+   method_indices: HashMap<FunctionSignature, u16>,
+   /// Mapping from method indices to function signatures.
+   function_signatures: Vec<FunctionSignature>,
    /// Dispatch tables for builtin types.
    pub(crate) builtin_dtables: BuiltinDispatchTables,
 }
@@ -469,7 +524,8 @@ impl Environment {
       Self {
          globals: HashMap::new(),
          functions: Vec::new(),
-         function_signatures: HashMap::new(),
+         method_indices: HashMap::new(),
+         function_signatures: Vec::new(),
          builtin_dtables,
       }
    }
@@ -511,16 +567,24 @@ impl Environment {
 
    /// Tries to look up the index of a method, based on a function signature. Returns `None` if
    /// there are too many function signatures in this environment.
-   pub fn get_method_index(&mut self, signature: &FunctionSignature) -> Result<Opr24, ErrorKind> {
+   pub fn get_method_index(&mut self, signature: &FunctionSignature) -> Result<u16, ErrorKind> {
       // Don't use `entry` here to avoid cloning the signature.
-      if let Some(&index) = self.function_signatures.get(signature) {
+      if let Some(&index) = self.method_indices.get(signature) {
          Ok(index)
       } else {
-         let index = Opr24::try_from(self.function_signatures.len())
-            .map_err(|_| ErrorKind::TooManyMethods)?;
-         self.function_signatures.insert(signature.clone(), index);
+         // The number of entries in self.method_indices and self.function_signatures is always
+         // equal, so we can use their `len`s interchangably.
+         let index =
+            u16::try_from(self.method_indices.len()).map_err(|_| ErrorKind::TooManyMethods)?;
+         self.method_indices.insert(signature.clone(), index);
+         self.function_signatures.push(signature.clone());
          Ok(index)
       }
+   }
+
+   /// Returns the function with the given signature, or `None` if the method index is invalid.
+   pub fn get_function_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
+      self.function_signatures.get(method_index as usize)
    }
 }
 
@@ -530,7 +594,7 @@ pub struct DispatchTable {
    /// The name of the type this dispatch table contains functions for.
    pub type_name: Rc<str>,
    /// The functions in this dispatch table.
-   pub(crate) functions: Vec<Option<Closure>>,
+   methods: Vec<Option<Rc<Closure>>>,
 }
 
 impl DispatchTable {
@@ -538,8 +602,13 @@ impl DispatchTable {
    pub fn new(type_name: &str) -> Self {
       Self {
          type_name: Rc::from(type_name),
-         functions: Vec::new(),
+         methods: Vec::new(),
       }
+   }
+
+   /// Returns a reference to the method at the given index.
+   pub fn get_method(&self, index: u16) -> Option<&Rc<Closure>> {
+      self.methods.get(index as usize).into_iter().flatten().next()
    }
 }
 
@@ -550,6 +619,7 @@ pub struct BuiltinDispatchTables {
    pub boolean: Rc<DispatchTable>,
    pub number: Rc<DispatchTable>,
    pub string: Rc<DispatchTable>,
+   pub function: Rc<DispatchTable>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
@@ -560,6 +630,7 @@ impl Default for BuiltinDispatchTables {
          boolean: Rc::new(DispatchTable::new("Boolean")),
          number: Rc::new(DispatchTable::new("Number")),
          string: Rc::new(DispatchTable::new("String")),
+         function: Rc::new(DispatchTable::new("Function")),
       }
    }
 }

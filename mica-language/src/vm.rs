@@ -5,7 +5,7 @@ use std::ptr;
 use std::rc::Rc;
 
 use crate::bytecode::{
-   CaptureKind, Chunk, DispatchTable, Environment, FunctionKind, Opcode, Opr24,
+   CaptureKind, Chunk, DispatchTable, Environment, FunctionKind, FunctionSignature, Opcode, Opr24,
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::value::{Closure, Struct, Upvalue, Value};
@@ -215,6 +215,58 @@ impl Fiber {
       self.stack.extend(std::iter::repeat_with(|| Value::Nil).take(n));
    }
 
+   fn enter_function(
+      &mut self,
+      env: &mut Environment,
+      closure: Rc<Closure>,
+      argument_count: usize,
+   ) -> Result<(), Error> {
+      let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
+      match &mut function.kind {
+         FunctionKind::Bytecode { chunk, .. } => {
+            self.save_return_point();
+            self.chunk = Rc::clone(chunk);
+            self.closure = Some(closure);
+            self.pc = 0;
+            self.stack_bottom = self.stack.len() - argument_count;
+            self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
+         }
+         FunctionKind::Foreign(f) => {
+            self.save_return_point();
+            self.call_stack.push(ReturnPoint {
+               chunk: None,
+               closure: Some(closure),
+               pc: 0,
+               stack_bottom: 0,
+            });
+            let arguments =
+               unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
+            let result = match f(arguments) {
+               Ok(value) => value,
+               Err(kind) => {
+                  return Err(self.error(env, kind));
+               }
+            };
+            self.call_stack.pop();
+            self.call_stack.pop();
+            self.push(result);
+         }
+      }
+      Ok(())
+   }
+
+   /// Returns the dispatch table of the given value.
+   fn get_dispatch_table<'v>(value: &'v Value, env: &'v Environment) -> &'v DispatchTable {
+      match value {
+         Value::Nil => &env.builtin_dtables.nil,
+         Value::False | Value::True => &env.builtin_dtables.boolean,
+         Value::Number(_) => &env.builtin_dtables.number,
+         Value::String(_) => &env.builtin_dtables.string,
+         Value::Function(_) => &env.builtin_dtables.function,
+         Value::Struct(st) => &st.dispatch_table,
+      }
+   }
+
    /// Interprets bytecode in the chunk, with the provided global storage.
    pub fn interpret(
       &mut self,
@@ -378,47 +430,39 @@ impl Fiber {
             }
 
             Opcode::Call(argument_count) => {
-               let argument_count = argument_count as usize;
-               let function_value = self.nth_from_top(argument_count + 1);
-               let closure = Rc::clone(wrap_error!(function_value.function()));
-               let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
-               match &mut function.kind {
-                  FunctionKind::Bytecode { chunk, .. } => {
-                     self.save_return_point();
-                     self.chunk = Rc::clone(chunk);
-                     self.closure = Some(Rc::clone(&closure));
-                     self.pc = 0;
-                     self.stack_bottom = self.stack.len() - argument_count;
-                     self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
-                  }
-                  FunctionKind::Foreign(f) => {
-                     self.save_return_point();
-                     self.call_stack.push(ReturnPoint {
-                        chunk: None,
-                        closure: Some(closure),
-                        pc: 0,
-                        stack_bottom: 0,
-                     });
-                     let arguments =
-                        unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
-                     let result = match f(arguments) {
-                        Ok(value) => value,
-                        Err(kind) => {
-                           return Err(self.error(env, kind));
+               // Add 1 to count in the called function itself, which is treated like an argument.
+               let argument_count = argument_count as usize + 1;
+               let function = self.nth_from_top(argument_count);
+               let closure = Rc::clone(wrap_error!(function.function()));
+               self.enter_function(env, closure, argument_count)?;
+            }
+            Opcode::CallMethod(arg) => {
+               let (method_index, argument_count) = arg.unpack();
+               let receiver = self.nth_from_top(argument_count as usize);
+               let dtable = Self::get_dispatch_table(receiver, env);
+               if let Some(closure) = dtable.get_method(method_index) {
+                  let closure = Rc::clone(closure);
+                  self.enter_function(env, closure, argument_count as usize)?;
+               } else {
+                  let signature =
+                     env.get_function_signature(method_index).cloned().unwrap_or_else(|| {
+                        FunctionSignature {
+                           name: Rc::from("(invalid method index)"),
+                           arity: None,
                         }
-                     };
-                     self.call_stack.pop();
-                     self.call_stack.pop();
-                     self.push(result);
-                  }
+                     });
+                  return Err(self.error(
+                     env,
+                     ErrorKind::MethodDoesNotExist {
+                        type_name: Rc::clone(&dtable.type_name),
+                        signature,
+                     },
+                  ));
                }
             }
             Opcode::Return => {
                let result = self.pop();
                self.restore_return_point();
-               // Remove the function from the stack.
-               self.stack.pop().unwrap();
-               // Push the result onto the stack.
                self.push(result);
             }
 

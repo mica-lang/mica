@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
+use crate::bytecode::FunctionSignature;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
    pub byte: usize,
@@ -58,7 +60,7 @@ pub enum ErrorKind {
    CommaExpected,
 
    // Code generator
-   VariableDoesNotExist(String),
+   VariableDoesNotExist(Rc<str>),
    TooManyLocals,
    TooManyGlobals,
    TooManyCaptures,
@@ -71,6 +73,11 @@ pub enum ErrorKind {
    TooManyArguments,
    TooManyParameters,
    TooManyMethods,
+   InvalidMethodName,
+   MethodDoesNotExist {
+      type_name: Rc<str>,
+      signature: FunctionSignature,
+   },
 
    // Runtime
    TypeError {
@@ -114,6 +121,11 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyArguments => write!(f, "too many arguments"),
          Self::TooManyParameters => write!(f, "too many parameters"),
          Self::TooManyMethods => write!(f, "too many instance functions with different signatures"),
+         Self::InvalidMethodName => write!(f, "method name must be an identifier"),
+         Self::MethodDoesNotExist {
+            type_name,
+            signature,
+         } => write!(f, "method {} is not defined for {}", signature, type_name),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

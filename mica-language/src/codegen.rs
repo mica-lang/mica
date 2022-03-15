@@ -5,7 +5,9 @@ use std::mem;
 use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
-use crate::bytecode::{CaptureKind, Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
+use crate::bytecode::{
+   CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
+};
 use crate::common::{Error, ErrorKind};
 
 /// Info about a local variable on the stack.
@@ -562,6 +564,25 @@ impl<'e> CodeGenerator<'e> {
       Ok(())
    }
 
+   /// Generates code for a bare dot call (without parentheses).
+   fn generate_dot(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (left, method) = ast.node_pair(node);
+      self.generate_node(ast, left)?;
+
+      if ast.kind(method) != NodeKind::Identifier {
+         return Err(ast.error(method, ErrorKind::InvalidMethodName));
+      }
+      let signature = FunctionSignature {
+         name: Rc::clone(ast.string(method).unwrap()),
+         arity: Some(1),
+      };
+      let method_index =
+         self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+      self.chunk.push(Opcode::CallMethod(Opr24::pack((method_index, 1))));
+
+      Ok(())
+   }
+
    /// Generates code for a function declaration.
    fn generate_function(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (name_node, parameters) = ast.node_pair(node);
@@ -586,6 +607,8 @@ impl<'e> CodeGenerator<'e> {
       // Push a scope to enforce creating local variables.
       generator.push_scope();
       // Create local variables for all the parameters.
+      // Note that the function itself is _also_ treated as a parameter.
+      generator.create_variable("<this function>", VariableAllocation::Inherit).unwrap();
       for &parameter in parameter_list {
          let parameter_name = ast.string(parameter).unwrap();
          generator
@@ -599,7 +622,7 @@ impl<'e> CodeGenerator<'e> {
       self.locals = generator.locals.parent.take().unwrap();
 
       let function = Function {
-         name: Rc::from(name.unwrap_or("<anonymous>")),
+         name: name.cloned().unwrap_or_else(|| Rc::from("<anonymous>")),
          parameter_count: Some(
             u16::try_from(parameter_list.len())
                .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
@@ -668,7 +691,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Or => self.generate_or(ast, node)?,
 
          NodeKind::Assign => self.generate_assignment(ast, node)?,
-         NodeKind::Dot => todo!("dot operators are NYI"),
+         NodeKind::Dot => self.generate_dot(ast, node)?,
 
          NodeKind::Main => self.generate_node_list(ast, ast.children(node).unwrap())?,
 

@@ -515,7 +515,7 @@ pub struct Environment {
    /// Mapping from method indices to function signatures.
    function_signatures: Vec<FunctionSignature>,
    /// Dispatch tables for builtin types.
-   pub(crate) builtin_dtables: BuiltinDispatchTables,
+   pub builtin_dtables: BuiltinDispatchTables,
 }
 
 impl Environment {
@@ -599,9 +599,9 @@ pub struct DispatchTable {
 
 impl DispatchTable {
    /// Creates a new, empty dispatch table for a type with the given name.
-   pub fn new(type_name: &str) -> Self {
+   pub fn new(type_name: impl Into<Rc<str>>) -> Self {
       Self {
-         type_name: Rc::from(type_name),
+         type_name: type_name.into(),
          methods: Vec::new(),
       }
    }
@@ -610,9 +610,19 @@ impl DispatchTable {
    pub fn get_method(&self, index: u16) -> Option<&Rc<Closure>> {
       self.methods.get(index as usize).into_iter().flatten().next()
    }
+
+   /// Adds a method into the dispatch table.
+   pub fn set_method(&mut self, index: u16, closure: Rc<Closure>) {
+      let index = index as usize;
+      if index >= self.methods.len() {
+         self.methods.resize(index + 1, None);
+      }
+      self.methods[index] = Some(closure);
+   }
 }
 
-/// Dispatch tables for builtin types. These should be constructed by the standard library.
+/// Dispatch tables for instances of builtin types. These should be constructed by the standard
+/// library.
 #[derive(Debug)]
 pub struct BuiltinDispatchTables {
    pub nil: Rc<DispatchTable>,

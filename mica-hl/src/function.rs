@@ -11,16 +11,17 @@ fn create_rawff(
 /// Arguments passed to a varargs function.
 ///
 /// This is a wrapper that does things like type-checking and arity-checking.
-#[repr(transparent)]
 pub struct Arguments<'a> {
+   this: &'a Value,
    inner: &'a [Value],
 }
 
 impl<'a> Arguments<'a> {
-   fn new(arguments: &'a [Value]) -> Self {
+   fn new(raw_arguments: &'a [Value]) -> Self {
       // Skip the first argument, which is `self` (or the currently called function).
       Self {
-         inner: &arguments[1..],
+         this: &raw_arguments[0],
+         inner: &raw_arguments[1..],
       }
    }
 
@@ -51,6 +52,11 @@ impl<'a> Arguments<'a> {
       } else {
          Ok(())
       }
+   }
+
+   /// Returns the `self` parameter as a value.
+   pub fn raw_self(&self) -> &Value {
+      self.this
    }
 
    /// Returns the `n`th argument, or `None` if the argument is not present.
@@ -84,6 +90,26 @@ impl<'a> Arguments<'a> {
    }
 }
 
+/// Wrapper struct for marking functions that use the with-raw-self calling convention.
+///
+/// This `Deref`s to the inner value.
+#[repr(transparent)]
+pub struct RawSelf<'a>(&'a Value);
+
+impl std::ops::Deref for RawSelf<'_> {
+   type Target = Value;
+
+   fn deref(&self) -> &Self::Target {
+      self.0
+   }
+}
+
+impl<'a> From<&'a Value> for RawSelf<'a> {
+   fn from(value: &'a Value) -> Self {
+      Self(value)
+   }
+}
+
 /// A Rust function that can be called from Mica.
 ///
 /// To spare you the time needed to decipher the absolutely unreadable macro-generated
@@ -94,6 +120,14 @@ impl<'a> Arguments<'a> {
 ///     - `R`: [`ToValue`]
 ///   - `fn (A, B, C, ...) -> Result<R, E>`
 ///     - Each argument: [`TryFromValue`]
+///     - `R`: [`ToValue`]
+///   - `fn (Self, A, B, C, ...) -> R` where
+///     - `Self`: [`TryFromValueSelf`]
+///     - Each argument after `Self`: [`TryFromValue`]
+///     - `R`: [`ToValue`]
+///   - `fn (Self, A, B, C, ...) -> Result<R, E>`
+///     - `Self`: [`TryFromValueSelf`]
+///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - Due to a limitation in Rust's type system, a maximum of 8 arguments is supported now.
 ///     If more is needed, use the varargs versions described below.
@@ -136,41 +170,32 @@ pub mod ffvariants {
    pub struct Infallible<Args>(PhantomData<Args>);
    pub enum VarargsFallible {}
    pub enum VarargsInfallible {}
-}
 
-/// Implementation for zero arguments.
-impl<Ret, Err, F> ForeignFunction<ffvariants::Fallible<()>> for F
-where
-   Ret: ToValue + 'static,
-   Err: std::error::Error + 'static,
-   F: FnMut() -> Result<Ret, Err> + 'static,
-{
-   fn parameter_count(&self) -> Option<u16> {
-      Some(0)
+   pub enum ImmutableSelf {}
+   pub enum MutableSelf {}
+
+   // S is the self type (`ImmutableSelf` or `MutableSelf`).
+   pub struct FallibleRawSelf<Args>(PhantomData<Args>);
+   pub struct InfallibleRawSelf<Args>(PhantomData<Args>);
+   pub struct FallibleSelf<S, Args>(PhantomData<(S, Args)>);
+   pub struct InfallibleSelf<S, Args>(PhantomData<(S, Args)>);
+
+   mod sealed {
+      pub trait Sealed {}
+
+      impl<Args> Sealed for super::FallibleRawSelf<Args> {}
+      impl<Args> Sealed for super::InfallibleRawSelf<Args> {}
+      impl<S, Args> Sealed for super::FallibleSelf<S, Args> {}
+      impl<S, Args> Sealed for super::InfallibleSelf<S, Args> {}
    }
 
-   fn to_raw_foreign_function(mut self) -> RawForeignFunction {
-      create_rawff(move |_| {
-         self()
-            .map(|value| value.to_value())
-            .map_err(|error| LanguageErrorKind::User(Box::new(error)))
-      })
-   }
-}
+   /// Marker trait for all functions that accept a `self` (reference) as the first parameter.
+   pub trait Method: sealed::Sealed {}
 
-/// Implementation for zero arguments.
-impl<Ret, F> ForeignFunction<ffvariants::Infallible<()>> for F
-where
-   Ret: ToValue + 'static,
-   F: FnMut() -> Ret + 'static,
-{
-   fn parameter_count(&self) -> Option<u16> {
-      Some(0)
-   }
-
-   fn to_raw_foreign_function(mut self) -> RawForeignFunction {
-      create_rawff(move |_| Ok(self().to_value()))
-   }
+   impl<Args> Method for FallibleRawSelf<Args> {}
+   impl<Args> Method for InfallibleRawSelf<Args> {}
+   impl<S, Args> Method for FallibleSelf<S, Args> {}
+   impl<S, Args> Method for InfallibleSelf<S, Args> {}
 }
 
 macro_rules! impl_non_varargs {
@@ -178,9 +203,15 @@ macro_rules! impl_non_varargs {
    // Not that it needs to.
    // See the other arm for usage.
    (
-      @for $variant:tt;
+      @for $variant:tt, $($variant_args:ty),+;
+      $($genericdef:tt),+;
+      where
+         $($genericty:ty : $bound:path),+;
+      $params:tt;
+      $(base_parameter_count $base_parameter_count:tt;)?
+      $(let $this:tt = $setup:tt;)?
+      |$arguments:tt| $call_args:tt;
       $ret:ty;
-      $($genericdef:tt : $bound:path),+;
       |$result:tt| $map:expr;
       $($types:tt),*
    ) => {
@@ -188,16 +219,18 @@ macro_rules! impl_non_varargs {
       impl<
          $($genericdef,)+
          Fun,
-         $($types),+
-      > $crate::ForeignFunction<$crate::ffvariants::$variant<($($types,)+)>> for Fun
+         $($types),*
+      > $crate::ForeignFunction<$crate::ffvariants::$variant<$($variant_args,)+>> for Fun
       where
-         $($genericdef: $bound + 'static,)+
-         Fun: FnMut($($types),+) -> $ret + 'static,
-         $($types: TryFromValue + 'static,)+
+         $($genericty: $bound + 'static,)+
+         Fun: FnMut $params -> $ret + 'static,
+         $($types: TryFromValue + 'static,)*
       {
          fn parameter_count(&self) -> Option<u16> {
             const N: u16 = {
+               #[allow(unused)]
                let n = 0;
+               $(let n = $base_parameter_count;)?
                $(
                   // To force Rust into expanding $var into a sequence of additions, we create an
                   // unused variable to drive the expansion. Constant evaluation will ensure this is
@@ -205,27 +238,29 @@ macro_rules! impl_non_varargs {
                   #[allow(unused, non_snake_case)]
                   let $types = ();
                   let n = n + 1;
-               )+
+               )*
                n
             };
             Some(N)
          }
 
          fn to_raw_foreign_function(mut self) -> RawForeignFunction {
+            #[allow(unused_imports)]
             use $crate::MicaLanguageResultExt;
             create_rawff(move |args| {
-               let arguments = Arguments::new(args);
-               let n = 0;
+               let $arguments = Arguments::new(args);
+               let _n = 0;
                // Similar to `parameter_count`, we use $types as a driver for a sequential counter.
                // This time though we actually use the variables.
                $(
                   #[allow(non_snake_case)]
-                  let $types = arguments.get(n).mica_language()?;
+                  let $types = $arguments.get(_n).mica_language()?;
                   #[allow(unused)]
-                  let n = n + 1;
-               )+
+                  let _n = _n + 1;
+               )*
                {
-                  let $result = self($($types,)+);
+                  $(let mut $this = $setup;)?
+                  let $result = self $call_args;
                   $map
                }
             })
@@ -234,35 +269,159 @@ macro_rules! impl_non_varargs {
    };
 
    ($($types:tt),*) => {
+      // Help wanted!
+      // Uuuuuuuuuhhhh
+      // ummmmmmmmmmmmmmmm
+      // uhhhhhhh...
+      // oh no.
+
+      // Behold, ye who enter here.
+      // For this land is an absolute fucking mess and thou shall not add more calling conventions.
+
       impl_non_varargs!(
          // First we define the trait that is to be implemented.
-         @for Fallible;
+         @for Fallible, ($($types,)*);
+         // Then the generic types/bounds of the `impl`.
+         Ret, Err;
+         where
+            Ret: $crate::ToValue,
+            Err: std::error::Error;
+         // Then the arguments of the `FnMut`.
+         ($($types),*);
+         // Then the caller that expands argument to the function call.
+         |_arguments| ($($types,)*);
          // Then the return type of this calling convention.
          Result<Ret, Err>;
-         // Then the generic bounds of the `impl`.
-         Ret: $crate::ToValue,
-         Err: std::error::Error;
          // Then the "mapper" "function" that maps the function's result into the raw
          // calling convention.
          |result| result
             .map(|value| value.to_value())
             .map_err(|error| LanguageErrorKind::User(Box::new(error)));
          // Lastly we pass on the generic parameters entered into the macro.
-         $($types),+
+         $($types),*
       );
       impl_non_varargs!(
-         @for Infallible;
+         @for Infallible, ($($types,)*);
          Ret;
-         Ret: $crate::ToValue;
+         where Ret: $crate::ToValue;
+         ($($types),*);
+         |_arguments| ($($types,)*);
+         Ret;
          |value| Ok(value.to_value());
-         $($types),+
+         $($types),*
+      );
+
+      impl_non_varargs!(
+         @for FallibleRawSelf, ($($types,)*);
+         Ret, Err;
+         where
+            Ret: $crate::ToValue,
+            Err: std::error::Error;
+         ($crate::RawSelf, $($types),*);
+         // base_parameter_count needs to be provided for methods that accept `self`, because the
+         // `self` argument is not implicit in the parameter count
+         base_parameter_count 1;
+         |arguments| (arguments.raw_self().into(), $($types,)*);
+         Result<Ret, Err>;
+         |result| result
+            .map(|value| value.to_value())
+            .map_err(|error| LanguageErrorKind::User(Box::new(error)));
+         $($types),*
+      );
+      impl_non_varargs!(
+         @for InfallibleRawSelf, ($($types,)*);
+         Ret;
+         where Ret: $crate::ToValue;
+         ($crate::RawSelf, $($types),*);
+         base_parameter_count 1;
+         |arguments| (arguments.raw_self().into(), $($types,)*);
+         Ret;
+         |value| Ok(value.to_value());
+         $($types),*
+      );
+
+      impl_non_varargs!(
+         @for FallibleSelf, $crate::ffvariants::ImmutableSelf, (&S, $($types,)*);
+         S, Ret, Err;
+         where
+            Ret: $crate::ToValue,
+            Err: std::error::Error,
+            S: $crate::FromValueSelf;
+         (&S, $($types),*);
+         base_parameter_count 1;
+         |arguments| (
+            unsafe { $crate::FromValueSelf::from_value_self(arguments.raw_self()) },
+            $($types,)*
+         );
+         Result<Ret, Err>;
+         |result| result
+            .map(|value| value.to_value())
+            .map_err(|error| LanguageErrorKind::User(Box::new(error)));
+         $($types),*
+      );
+      impl_non_varargs!(
+         @for FallibleSelf, $crate::ffvariants::MutableSelf, (&mut S, $($types,)*);
+         S, Ret, Err;
+         where
+            Ret: $crate::ToValue,
+            Err: std::error::Error,
+            S: $crate::FromValueSelfMut;
+         (&mut S, $($types),*);
+         base_parameter_count 1;
+         let this = {
+            unsafe { S::from_value_self_mut(arguments.raw_self()) }.mica_language()?
+         };
+         |arguments| (&mut this, $($types,)*);
+         Result<Ret, Err>;
+         |result| result
+            .map(|value| value.to_value())
+            .map_err(|error| LanguageErrorKind::User(Box::new(error)));
+         $($types),*
+      );
+
+      impl_non_varargs!(
+         @for InfallibleSelf, $crate::ffvariants::ImmutableSelf, (&S, $($types,)*);
+         S, Ret;
+         where
+            Ret: $crate::ToValue,
+            S: $crate::FromValueSelf;
+         (&S, $($types),*);
+         base_parameter_count 1;
+         |arguments| (
+            unsafe { $crate::FromValueSelf::from_value_self(arguments.raw_self()) },
+            $($types,)*
+         );
+         Ret;
+         |value| Ok(value.to_value());
+         $($types),*
+      );
+      impl_non_varargs!(
+         @for InfallibleSelf, $crate::ffvariants::MutableSelf, (&mut S, $($types,)*);
+         S, Ret;
+         where
+            Ret: $crate::ToValue,
+            S: $crate::FromValueSelfMut;
+         (&mut S, $($types),*);
+         base_parameter_count 1;
+         let this = {
+            unsafe { S::from_value_self_mut(arguments.raw_self()) }.mica_language()?
+         };
+         |arguments| (&mut this, $($types,)*);
+         Ret;
+         |value| Ok(value.to_value());
+         $($types),*
       );
    };
 }
 
+// We only have support for up to 8 arguments, because anyone reasonable with their code shouldn't
+// use more anyways. Every argument we add results in a lot of code being generated, which slows
+// down compilation. See the macro expansion if you don't believe me.
+// -----
 // Rust-analyzer isn't too happy about this macro declaring variables with non-snake_case names.
 // In reality it doesn't hurt anything and actually makes code _more_ readable and maintainable
 // by reducing the amount of arguments we have to pass to the macro.
+impl_non_varargs!();
 impl_non_varargs!(A);
 impl_non_varargs!(A, B);
 impl_non_varargs!(A, B, C);

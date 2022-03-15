@@ -339,7 +339,7 @@ impl Fiber {
             }
             Opcode::CreateType => {
                let name = unsafe { self.chunk.read_string(&mut self.pc) };
-               let dispatch_table = DispatchTable::new(&format!("type {name}"));
+               let dispatch_table = DispatchTable::new(format!("type {name}").as_str());
                let struct_v = Struct::new_type(Rc::new(dispatch_table));
                self.stack.push(Value::Struct(Rc::new(struct_v)));
             }

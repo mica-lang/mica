@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
 use mica_language::bytecode::{
-   BuiltinDispatchTables, Chunk, Environment, Function, FunctionKind, Opr24,
+   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind, Opr24,
 };
 use mica_language::codegen::CodeGenerator;
 use mica_language::lexer::Lexer;
@@ -11,7 +11,7 @@ use mica_language::parser::Parser;
 use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
-use crate::{Error, Fiber, ForeignFunction, ToValue, TryFromValue};
+use crate::{Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue, TypeBuilder};
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
 
@@ -32,18 +32,46 @@ pub struct Engine {
 
 impl Engine {
    /// Creates a new engine.
-   pub fn new() -> Self {
-      Self::with_debug_options(Default::default())
+   pub fn new(stdlib: impl StandardLibrary) -> Self {
+      Self::with_debug_options(stdlib, Default::default())
    }
 
    /// Creates a new engine with specific debug options.
    ///
    /// [`Engine::new`] creates an engine with [`Default`] debug options, and should generally be
    /// preferred unless you're debugging the language's internals.
-   pub fn with_debug_options(debug_options: DebugOptions) -> Self {
+   ///
+   /// Constructing the engine can fail if the standard library defines way too many methods.
+   pub fn with_debug_options(
+      mut stdlib: impl StandardLibrary,
+      debug_options: DebugOptions,
+   ) -> Self {
+      // This is a little bad because it allocates a bunch of empty dtables only to discard them.
+      let mut env = Environment::new(Default::default());
+
+      macro_rules! get_dtables {
+         ($type_name:tt, $define:tt) => {{
+            let mut tb = TypeBuilder::new($type_name);
+            stdlib.$define(&mut tb);
+            tb.build_dtables(&mut env).unwrap()
+         }};
+      }
+      // TODO: Expose _*_type in the global scope.
+      let (_nil_type, nil_instance) = get_dtables!("Nil", define_nil);
+      let (_boolean_type, boolean_instance) = get_dtables!("Boolean", define_boolean);
+      let (_number_type, number_instance) = get_dtables!("Number", define_number);
+      let (_string_type, string_instance) = get_dtables!("String", define_string);
+      env.builtin_dtables = BuiltinDispatchTables {
+         nil: Rc::new(nil_instance),
+         boolean: Rc::new(boolean_instance),
+         number: Rc::new(number_instance),
+         string: Rc::new(string_instance),
+         function: Rc::new(DispatchTable::new("Function")), // TODO
+      };
+
       Self {
          runtime_env: Rc::new(RefCell::new(RuntimeEnvironment {
-            env: Environment::new(BuiltinDispatchTables::default()),
+            env,
             globals: Globals::new(),
          })),
          debug_options,
@@ -158,7 +186,7 @@ impl Engine {
    /// Declares a "raw" function in the global scope. Raw functions do not perform any type checks
    /// by default and accept a variable number of arguments.
    ///
-   /// You should generally prefer [`function`][`Self::function`] instead of this.
+   /// You should generally prefer [`add_function`][`Self::add_function`] instead of this.
    ///
    /// Note that this cannot accept [`GlobalId`]s, because a name is required to create the function
    /// and global IDs have their name erased.
@@ -170,7 +198,7 @@ impl Engine {
    /// # Errors
    ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn raw_function(
+   pub fn add_raw_function(
       &self,
       name: &str,
       parameter_count: impl Into<Option<u16>>,
@@ -199,17 +227,11 @@ impl Engine {
    /// # Errors
    ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
+   pub fn add_function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
    where
       F: ForeignFunction<V>,
    {
-      self.raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
-   }
-}
-
-impl Default for Engine {
-   fn default() -> Self {
-      Self::new()
+      self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
    }
 }
 

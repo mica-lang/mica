@@ -6,12 +6,16 @@ mod engine;
 mod error;
 mod fiber;
 mod function;
+mod stdlib;
+mod types;
 mod value;
 
 pub use engine::*;
 pub use error::*;
 pub use fiber::*;
 pub use function::*;
+pub use stdlib::*;
+pub use types::*;
 pub use value::*;
 
 pub use mica_language as language;

@@ -1,3 +1,5 @@
+use std::hint::unreachable_unchecked;
+use std::ops::DerefMut;
 use std::rc::Rc;
 
 use mica_language::common::ErrorKind;
@@ -147,4 +149,69 @@ where
          Ok(Some(T::try_from_value(value)?))
       }
    }
+}
+
+/// Implemented by all types that can come from a `self` parameter.
+///
+/// This should never be implemented manually unless you know what you're doing.
+pub trait FromValueSelf
+where
+   Self: Sized,
+{
+   /// Returns a shared reference to `Self` **without checking that the value is of the correct
+   /// type**.
+   ///
+   /// # Safety
+   ///
+   /// This assumes the value is of the correct type. Calling this with a value whose type is not
+   /// `Self` results in undefined behavior.
+   unsafe fn from_value_self(value: &Value) -> &Self;
+}
+
+/// `()` used as `Self` means that the method receiver is `nil`.
+impl FromValueSelf for () {
+   unsafe fn from_value_self(_: &Value) -> &Self {
+      &()
+   }
+}
+
+impl FromValueSelf for bool {
+   unsafe fn from_value_self(v: &Value) -> &Self {
+      match v {
+         Value::False => &false,
+         Value::True => &true,
+         _ => unreachable_unchecked(),
+      }
+   }
+}
+
+impl FromValueSelf for f64 {
+   unsafe fn from_value_self(v: &Value) -> &Self {
+      match v {
+         Value::Number(n) => n,
+         _ => unreachable_unchecked(),
+      }
+   }
+}
+
+pub trait FromValueSelfMut
+where
+   Self: Sized,
+{
+   type Ref: DerefMut<Target = Self>;
+
+   /// Returns a mutable reference to `Self` **without checking that the value is of the correct
+   /// type**.
+   ///
+   /// This trait is only available for value types with interior mutability, as this function
+   /// receives a shared, rather than mutable, reference.
+   ///
+   /// This returns an option because a value may already be mutably borrowed as a result of a
+   /// reentrant call into the VM.
+   ///
+   /// # Safety
+   ///
+   /// This assumes the value is of the correct type. Calling this with a value whose type is not
+   /// `Self` results in undefined behavior.
+   unsafe fn from_value_self_mut(value: &Value) -> Result<Self::Ref, Error>;
 }

@@ -593,6 +593,8 @@ impl Environment {
 pub struct DispatchTable {
    /// The name of the type this dispatch table contains functions for.
    pub type_name: Rc<str>,
+   /// The "child" dispatch table that holds instance methods.
+   pub instance: Option<Rc<DispatchTable>>,
    /// The functions in this dispatch table.
    methods: Vec<Option<Rc<Closure>>>,
 }
@@ -602,6 +604,7 @@ impl DispatchTable {
    pub fn new(type_name: impl Into<Rc<str>>) -> Self {
       Self {
          type_name: type_name.into(),
+         instance: None,
          methods: Vec::new(),
       }
    }

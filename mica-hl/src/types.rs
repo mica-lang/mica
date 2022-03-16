@@ -4,7 +4,7 @@ use std::rc::Rc;
 use mica_language::bytecode::{
    DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
 };
-use mica_language::value::Closure;
+use mica_language::value::{Closure, Struct, Value};
 
 use crate::{ffvariants, Error, ForeignFunction, RawForeignFunction};
 
@@ -78,12 +78,15 @@ where
    /// function accepts a variable number of arguments. Note that _unlike with bare raw functions_
    /// there can be two functions with the same name defined on a type, as long as they have
    /// different arities. Functions with specific arities take priority over varargs.
+   ///
+   /// Note that this function _consumes_ the builder; this is because calls to functions that add
+   /// into the type are meant to be chained together in one expression.
    pub fn add_raw_function(
-      &mut self,
+      mut self,
       name: &str,
       parameter_count: Option<u16>,
       f: RawForeignFunction,
-   ) -> &mut Self {
+   ) -> Self {
       self.instance_dtable.methods.push((
          FunctionSignature {
             name: Rc::from(name),
@@ -95,7 +98,7 @@ where
    }
 
    /// Adds an instance function to the struct.
-   pub fn add_function<F, V>(&mut self, name: &str, f: F) -> &mut Self
+   pub fn add_function<F, V>(self, name: &str, f: F) -> Self
    where
       V: ffvariants::Method<T>,
       F: ForeignFunction<V>,
@@ -103,16 +106,31 @@ where
       self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
    }
 
-   /// Destrutcures the struct builder into its type dtable and instance dtable, respectively.
-   pub(crate) fn build_dtables(
-      self,
-      env: &mut Environment,
-   ) -> Result<(DispatchTable, DispatchTable), Error> {
-      Ok((
-         self.type_dtable.build_dtable(Rc::clone(&self.type_name), env)?,
-         self
-            .instance_dtable
-            .build_dtable(Rc::from(format!("type {}", &self.type_name).as_str()), env)?,
-      ))
+   /// Builds the struct builder into its type dtable and instance dtable, respectively.
+   pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType, Error> {
+      let mut type_dtable =
+         Rc::new(self.type_dtable.build_dtable(Rc::from(format!("type {}", self.type_name)), env)?);
+      let instance_dtable =
+         Rc::new(self.instance_dtable.build_dtable(Rc::clone(&self.type_name), env)?);
+      Rc::get_mut(&mut type_dtable).unwrap().instance = Some(Rc::clone(&instance_dtable));
+      Ok(BuiltType {
+         type_dtable,
+         instance_dtable,
+         type_name: self.type_name,
+      })
+   }
+}
+
+/// Dispatch tables for an finished type.
+pub(crate) struct BuiltType {
+   pub(crate) type_name: Rc<str>,
+   pub(crate) type_dtable: Rc<DispatchTable>,
+   pub(crate) instance_dtable: Rc<DispatchTable>,
+}
+
+impl BuiltType {
+   /// Makes a struct value from the built type.
+   pub(crate) fn make_type_struct(&self) -> Value {
+      Value::Struct(Rc::new(Struct::new_type(Rc::clone(&self.type_dtable))))
    }
 }

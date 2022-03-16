@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
@@ -11,9 +12,13 @@ use mica_language::parser::Parser;
 use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
-use crate::{Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue, TypeBuilder};
+use crate::{
+   BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue, TypeBuilder,
+};
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
+
+use self::rtenv::RuntimeEnvironment;
 
 /// Options for debugging the language implementation.
 #[derive(Debug, Clone, Copy, Default)]
@@ -51,31 +56,40 @@ impl Engine {
 
       macro_rules! get_dtables {
          ($type_name:tt, $define:tt) => {{
-            let mut tb = TypeBuilder::new($type_name);
-            stdlib.$define(&mut tb);
-            tb.build_dtables(&mut env).unwrap()
+            let tb = TypeBuilder::new($type_name);
+            let tb = stdlib.$define(tb);
+            // Unwrapping here is fine because the stdlib should never declare THAT many methods.
+            tb.build(&mut env).unwrap()
          }};
       }
       // TODO: Expose _*_type in the global scope.
-      let (_nil_type, nil_instance) = get_dtables!("Nil", define_nil);
-      let (_boolean_type, boolean_instance) = get_dtables!("Boolean", define_boolean);
-      let (_number_type, number_instance) = get_dtables!("Number", define_number);
-      let (_string_type, string_instance) = get_dtables!("String", define_string);
+      let nil = get_dtables!("Nil", define_nil);
+      let boolean = get_dtables!("Boolean", define_boolean);
+      let number = get_dtables!("Number", define_number);
+      let string = get_dtables!("String", define_string);
       env.builtin_dtables = BuiltinDispatchTables {
-         nil: Rc::new(nil_instance),
-         boolean: Rc::new(boolean_instance),
-         number: Rc::new(number_instance),
-         string: Rc::new(string_instance),
+         nil: Rc::clone(&nil.instance_dtable),
+         boolean: Rc::clone(&boolean.instance_dtable),
+         number: Rc::clone(&number.instance_dtable),
+         string: Rc::clone(&string.instance_dtable),
          function: Rc::new(DispatchTable::new("Function")), // TODO
       };
 
-      Self {
+      let engine = Self {
          runtime_env: Rc::new(RefCell::new(RuntimeEnvironment {
             env,
             globals: Globals::new(),
          })),
          debug_options,
-      }
+      };
+      // Unwrapping here is fine because at this point we haven't got quite that many globals
+      // registered to overflow an Opr24.
+      engine.set_built_type(&nil).unwrap();
+      engine.set_built_type(&boolean).unwrap();
+      engine.set_built_type(&number).unwrap();
+      engine.set_built_type(&string).unwrap();
+
+      engine
    }
 
    /// Compiles a script.
@@ -198,6 +212,7 @@ impl Engine {
    /// # Errors
    ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
+   ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
    pub fn add_raw_function(
       &self,
       name: &str,
@@ -225,25 +240,49 @@ impl Engine {
    /// Declares a function in the global scope.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
-   ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
+   /// See [`add_raw_function`][`Self::add_raw_function`].
    pub fn add_function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
    where
       F: ForeignFunction<V>,
    {
       self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
    }
+
+   /// Declares a type in the global scope.
+   ///
+   /// # Errors
+   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
+   ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
+   ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
+   ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created
+   pub fn add_type<T>(&self, builder: TypeBuilder<T>) -> Result<(), Error> {
+      let built = {
+         let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
+         builder.build(&mut runtime_env.env)?
+      };
+      self.set_built_type(&built)?;
+      Ok(())
+   }
+
+   pub(crate) fn set_built_type(&self, typ: &BuiltType) -> Result<(), Error> {
+      self.set(typ.type_name.deref(), typ.make_type_struct())
+   }
 }
 
-/// The runtime environment. Contains declared globals and their values.
-pub(crate) struct RuntimeEnvironment {
-   pub(crate) env: Environment,
-   pub(crate) globals: Globals,
-}
+pub(crate) mod rtenv {
+   use mica_language::bytecode::Environment;
+   use mica_language::vm::Globals;
 
-impl RuntimeEnvironment {
-   pub fn split(&mut self) -> (&mut Environment, &mut Globals) {
-      (&mut self.env, &mut self.globals)
+   /// The runtime environment. Contains declared globals and their values.
+   pub struct RuntimeEnvironment {
+      pub(crate) env: Environment,
+      pub(crate) globals: Globals,
+   }
+
+   impl RuntimeEnvironment {
+      pub fn split(&mut self) -> (&mut Environment, &mut Globals) {
+         (&mut self.env, &mut self.globals)
+      }
    }
 }
 

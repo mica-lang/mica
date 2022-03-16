@@ -10,15 +10,21 @@ where
 struct Lib;
 
 impl StandardLibrary for Lib {
-   fn define_nil(&mut self, _builder: &mut TypeBuilder<()>) {}
-
-   fn define_boolean(&mut self, _builder: &mut TypeBuilder<bool>) {}
-
-   fn define_number(&mut self, builder: &mut TypeBuilder<f64>) {
-      builder.add_function("sqrt", ref_self(f64::sqrt));
+   fn define_nil(&mut self, builder: TypeBuilder<()>) -> TypeBuilder<()> {
+      builder
    }
 
-   fn define_string(&mut self, _builder: &mut TypeBuilder<&str>) {}
+   fn define_boolean(&mut self, builder: TypeBuilder<bool>) -> TypeBuilder<bool> {
+      builder
+   }
+
+   fn define_number(&mut self, builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
+      builder.add_function("sqrt", ref_self(f64::sqrt))
+   }
+
+   fn define_string(&mut self, builder: TypeBuilder<str>) -> TypeBuilder<str> {
+      builder
+   }
 }
 
 pub fn lib() -> impl StandardLibrary {

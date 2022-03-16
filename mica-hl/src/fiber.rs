@@ -4,7 +4,8 @@ use std::rc::Rc;
 use mica_language::value::Value;
 use mica_language::vm;
 
-use crate::{Error, RuntimeEnvironment, TryFromValue};
+use crate::rtenv::RuntimeEnvironment;
+use crate::{Error, TryFromValue};
 
 /// A fiber represents an independent, pausable thread of code execution.
 ///

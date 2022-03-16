@@ -19,14 +19,15 @@ impl DispatchTableDescriptor {
    /// Builds a dispatch table from this descriptor.
    pub(crate) fn build_dtable(
       self,
-      type_name: Rc<str>,
+      // The rc is passed by reference to prevent an unnecessary clone.
+      type_name: &Rc<str>,
       env: &mut Environment,
    ) -> Result<DispatchTable, Error> {
-      let mut dtable = DispatchTable::new(type_name);
+      let mut dtable = DispatchTable::new(Rc::clone(type_name));
       for (signature, f) in self.methods {
          let function_id = env
             .create_function(Function {
-               name: Rc::clone(&signature.name),
+               name: Rc::from(format!("{}.{}", type_name, signature.name)),
                parameter_count: signature.arity,
                kind: FunctionKind::Foreign(f),
             })
@@ -145,15 +146,24 @@ where
       V: ffvariants::Bare,
       F: ForeignFunction<V>,
    {
-      self.add_raw_static(name, f.parameter_count(), f.to_raw_foreign_function())
+      self.add_raw_static(
+         name,
+         f.parameter_count().map(|x| {
+            // Add 1 for the static receiver, which isn't counted into the bare function's
+            // signature.
+            x + 1
+         }),
+         f.to_raw_foreign_function(),
+      )
    }
 
    /// Builds the struct builder into its type dtable and instance dtable, respectively.
    pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType, Error> {
-      let mut type_dtable =
-         Rc::new(self.type_dtable.build_dtable(Rc::from(format!("type {}", self.type_name)), env)?);
+      let mut type_dtable = Rc::new(
+         self.type_dtable.build_dtable(&Rc::from(format!("type {}", self.type_name)), env)?,
+      );
       let instance_dtable =
-         Rc::new(self.instance_dtable.build_dtable(Rc::clone(&self.type_name), env)?);
+         Rc::new(self.instance_dtable.build_dtable(&Rc::clone(&self.type_name), env)?);
       Rc::get_mut(&mut type_dtable).unwrap().instance = Some(Rc::clone(&instance_dtable));
       Ok(BuiltType {
          type_dtable,

@@ -455,7 +455,11 @@ impl Fiber {
                      env,
                      ErrorKind::MethodDoesNotExist {
                         type_name: Rc::clone(&dtable.type_name),
-                        signature,
+                        signature: FunctionSignature {
+                           // Subtract 1 to omit the receiver from error messages.
+                           arity: signature.arity.map(|x| x - 1),
+                           ..signature
+                        },
                      },
                   ));
                }

@@ -232,27 +232,41 @@ impl Fiber {
             self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
          }
          FunctionKind::Foreign(f) => {
-            self.save_return_point();
-            self.call_stack.push(ReturnPoint {
-               chunk: None,
-               closure: Some(closure),
-               pc: 0,
-               stack_bottom: 0,
-            });
             let arguments =
                unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
             let result = match f(arguments) {
                Ok(value) => value,
                Err(kind) => {
-                  return Err(self.error(env, kind));
+                  return Err(self.error_during_function_call(Some(closure), env, kind));
                }
             };
-            self.call_stack.pop();
-            self.call_stack.pop();
             self.push(result);
          }
       }
       Ok(())
+   }
+
+   fn error_during_function_call(
+      &mut self,
+      closure: Option<Rc<Closure>>,
+      env: &mut Environment,
+      kind: ErrorKind,
+   ) -> Error {
+      self.save_return_point();
+      if let Some(closure) = closure.as_ref() {
+         self.call_stack.push(ReturnPoint {
+            chunk: None,
+            closure: Some(Rc::clone(closure)),
+            pc: 0,
+            stack_bottom: 0,
+         });
+      }
+      let error = self.error(env, kind);
+      if closure.is_some() {
+         self.call_stack.pop();
+      }
+      self.call_stack.pop();
+      error
    }
 
    /// Returns the dispatch table of the given value.
@@ -451,17 +465,15 @@ impl Fiber {
                            arity: None,
                         }
                      });
-                  return Err(self.error(
-                     env,
-                     ErrorKind::MethodDoesNotExist {
-                        type_name: Rc::clone(&dtable.type_name),
-                        signature: FunctionSignature {
-                           // Subtract 1 to omit the receiver from error messages.
-                           arity: signature.arity.map(|x| x - 1),
-                           ..signature
-                        },
+                  let error_kind = ErrorKind::MethodDoesNotExist {
+                     type_name: Rc::clone(&dtable.type_name),
+                     signature: FunctionSignature {
+                        // Subtract 1 to omit the receiver from error messages.
+                        arity: signature.arity.map(|x| x - 1),
+                        ..signature
                      },
-                  ));
+                  };
+                  return Err(self.error_during_function_call(None, env, error_kind));
                }
             }
             Opcode::Return => {

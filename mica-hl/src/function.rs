@@ -71,7 +71,7 @@ impl<'a> Arguments<'a> {
       T: TryFromValue,
    {
       let value = self.inner.get(n).cloned().unwrap_or(Value::Nil);
-      T::try_from_value(value).map_err(|error| {
+      T::try_from_value(&value).map_err(|error| {
          if let Error::TypeMismatch { expected, got } = error {
             Error::ArgumentTypeMismatch {
                index: n,
@@ -176,6 +176,25 @@ pub mod ffvariants {
    /// A bare varargs infallible function.
    pub enum VarargsInfallible {}
 
+   mod bare {
+      pub trait Sealed {}
+
+      impl<Args> Sealed for super::Fallible<Args> {}
+      impl<Args> Sealed for super::Infallible<Args> {}
+      impl Sealed for super::VarargsFallible {}
+      impl Sealed for super::VarargsInfallible {}
+   }
+
+   /// Marker trait for all functions that _don't_ accept a `self` reference as the first parameter.
+   ///
+   /// See also [`Method`].
+   pub trait Bare: bare::Sealed {}
+
+   impl<Args> Bare for Fallible<Args> {}
+   impl<Args> Bare for Infallible<Args> {}
+   impl Bare for VarargsFallible {}
+   impl Bare for VarargsInfallible {}
+
    // S is the self type (`ImmutableSelf` or `MutableSelf`).
    /// A fallible function with `RawSelf`.
    pub struct FallibleRawSelf<Args>(PhantomData<Args>);
@@ -186,7 +205,7 @@ pub mod ffvariants {
    /// An infallible function with typed `self`.
    pub struct InfallibleSelf<S, Args>(PhantomData<(S, Args)>);
 
-   mod sealed {
+   mod method {
       pub trait Sealed {}
 
       impl<Args> Sealed for super::FallibleRawSelf<Args> {}
@@ -216,7 +235,9 @@ pub mod ffvariants {
    }
 
    /// Marker trait for all functions that accept a `self` reference as the first parameter.
-   pub trait Method<S>: sealed::Sealed
+   ///
+   /// See also [`Bare`].
+   pub trait Method<S>: method::Sealed
    where
       S: ?Sized,
    {

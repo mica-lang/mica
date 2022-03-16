@@ -1,5 +1,5 @@
 use std::hint::unreachable_unchecked;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use mica_language::common::ErrorKind;
@@ -79,7 +79,7 @@ pub trait TryFromValue
 where
    Self: Sized,
 {
-   fn try_from_value(value: Value) -> Result<Self, Error>;
+   fn try_from_value(value: &Value) -> Result<Self, Error>;
 }
 
 fn convert_type_mismatch(error: ErrorKind) -> Error {
@@ -91,19 +91,19 @@ fn convert_type_mismatch(error: ErrorKind) -> Error {
 }
 
 impl TryFromValue for Value {
-   fn try_from_value(value: Value) -> Result<Self, Error> {
-      Ok(value)
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
+      Ok(value.clone())
    }
 }
 
 impl TryFromValue for () {
-   fn try_from_value(value: Value) -> Result<Self, Error> {
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
       value.nil().map_err(convert_type_mismatch)
    }
 }
 
 impl TryFromValue for bool {
-   fn try_from_value(value: Value) -> Result<Self, Error> {
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
       value.boolean().map_err(convert_type_mismatch)
    }
 }
@@ -111,7 +111,7 @@ impl TryFromValue for bool {
 macro_rules! try_from_value_numeric {
    ($T:ty) => {
       impl TryFromValue for $T {
-         fn try_from_value(value: Value) -> Result<Self, Error> {
+         fn try_from_value(value: &Value) -> Result<Self, Error> {
             Ok(value.number().map_err(convert_type_mismatch)? as $T)
          }
       }
@@ -131,10 +131,15 @@ try_from_value_numeric!(i64);
 try_from_value_numeric!(f32);
 try_from_value_numeric!(f64);
 
-/// Unfortunately this is not available for `&str` because lifetimes would be a pain.
+impl TryFromValue for Rc<str> {
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
+      value.string().cloned().map_err(convert_type_mismatch)
+   }
+}
+
 impl TryFromValue for String {
-   fn try_from_value(value: Value) -> Result<Self, Error> {
-      value.string().map(|s| s.to_owned()).map_err(convert_type_mismatch)
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
+      value.string().map(|s| s.deref().to_owned()).map_err(convert_type_mismatch)
    }
 }
 
@@ -142,7 +147,7 @@ impl<T> TryFromValue for Option<T>
 where
    T: TryFromValue,
 {
-   fn try_from_value(value: Value) -> Result<Self, Error> {
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
       if let Value::Nil = value {
          Ok(None)
       } else {

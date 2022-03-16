@@ -31,7 +31,7 @@ impl Fiber {
          let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
          let (env, globals) = runtime_env.split();
          let result = self.inner.interpret(env, globals)?;
-         Ok(Some(T::try_from_value(result)?))
+         Ok(Some(T::try_from_value(&result)?))
       }
    }
 
@@ -47,6 +47,6 @@ impl Fiber {
       while let Some(v) = self.resume()? {
          result = v;
       }
-      T::try_from_value(result)
+      T::try_from_value(&result)
    }
 }

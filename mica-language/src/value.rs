@@ -93,7 +93,7 @@ impl Value {
    }
 
    /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.
-   pub fn string(&self) -> Result<&str, ErrorKind> {
+   pub fn string(&self) -> Result<&Rc<str>, ErrorKind> {
       if let Value::String(s) = self {
          Ok(s)
       } else {

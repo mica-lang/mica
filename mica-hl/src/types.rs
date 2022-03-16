@@ -70,7 +70,7 @@ where
       }
    }
 
-   /// Adds a _raw_ instance function to the struct.
+   /// Adds a _raw_ instance function to the type.
    ///
    /// You should generally prefer [`add_function`][`Self::add_function`] instead of this.
    ///
@@ -97,13 +97,55 @@ where
       self
    }
 
+   /// Adds a _raw_ static function to the type.
+   ///
+   /// You should generally prefer [`add_static`][`Self::add_static`] instead of this.
+   ///
+   /// `parameter_count` should reflect the parameter count of the function. Pass `None` if the
+   /// function accepts a variable number of arguments. Note that _unlike with bare raw functions_
+   /// there can be two functions with the same name defined on a type, as long as they have
+   /// different arities. Functions with specific arities take priority over varargs.
+   ///
+   /// Note that this function _consumes_ the builder; this is because calls to functions that add
+   /// into the type are meant to be chained together in one expression.
+   pub fn add_raw_static(
+      mut self,
+      name: &str,
+      parameter_count: Option<u16>,
+      f: RawForeignFunction,
+   ) -> Self {
+      self.type_dtable.methods.push((
+         FunctionSignature {
+            name: Rc::from(name),
+            arity: parameter_count,
+         },
+         f,
+      ));
+      self
+   }
+
    /// Adds an instance function to the struct.
+   ///
+   /// The function must follow the "method" calling convention, in that it accepts `&`[`T`] or
+   /// `&mut `[`T`] as its first parameter.
    pub fn add_function<F, V>(self, name: &str, f: F) -> Self
    where
       V: ffvariants::Method<T>,
       F: ForeignFunction<V>,
    {
       self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
+   }
+
+   /// Adds a static function to the struct.
+   ///
+   /// The function must follow the "bare" calling convention, in that it doesn't accept a reference
+   /// to `T` as its first parameter.
+   pub fn add_static<F, V>(self, name: &str, f: F) -> Self
+   where
+      V: ffvariants::Bare,
+      F: ForeignFunction<V>,
+   {
+      self.add_raw_static(name, f.parameter_count(), f.to_raw_foreign_function())
    }
 
    /// Builds the struct builder into its type dtable and instance dtable, respectively.

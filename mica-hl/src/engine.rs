@@ -13,7 +13,8 @@ use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue, TypeBuilder,
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue,
+   TypeBuilder,
 };
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
@@ -194,7 +195,7 @@ impl Engine {
    {
       let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
       let id = id.to_global_id(&mut runtime_env.env)?;
-      T::try_from_value(runtime_env.globals.get(id.0))
+      T::try_from_value(&runtime_env.globals.get(id.0))
    }
 
    /// Declares a "raw" function in the global scope. Raw functions do not perform any type checks
@@ -243,6 +244,7 @@ impl Engine {
    /// See [`add_raw_function`][`Self::add_raw_function`].
    pub fn add_function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
    where
+      V: ffvariants::Bare,
       F: ForeignFunction<V>,
    {
       self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())

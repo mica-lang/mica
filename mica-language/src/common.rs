@@ -61,6 +61,7 @@ pub enum ErrorKind {
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
+   InvalidAssignment,
    TooManyLocals,
    TooManyGlobals,
    TooManyCaptures,
@@ -74,17 +75,16 @@ pub enum ErrorKind {
    TooManyParameters,
    TooManyMethods,
    InvalidMethodName,
-   MethodDoesNotExist {
-      type_name: Rc<str>,
-      signature: FunctionSignature,
-   },
 
    // Runtime
    TypeError {
       expected: Cow<'static, str>,
       got: Cow<'static, str>,
    },
-   InvalidAssignment,
+   MethodDoesNotExist {
+      type_name: Rc<str>,
+      signature: FunctionSignature,
+   },
    User(Box<dyn std::error::Error>),
 }
 
@@ -109,6 +109,7 @@ impl std::fmt::Display for ErrorKind {
          Self::CommaExpected => write!(f, "comma ',' expected"),
 
          Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
+         Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
          Self::TooManyLocals => write!(f, "too many local variables"),
          Self::TooManyGlobals => write!(f, "too many global variables"),
          Self::TooManyCaptures => write!(f, "too many variables captured in the closure"),
@@ -122,15 +123,14 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyParameters => write!(f, "too many parameters"),
          Self::TooManyMethods => write!(f, "too many instance functions with different signatures"),
          Self::InvalidMethodName => write!(f, "method name must be an identifier"),
-         Self::MethodDoesNotExist {
-            type_name,
-            signature,
-         } => write!(f, "method {} is not defined for {}", signature, type_name),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
-         Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
+         Self::MethodDoesNotExist {
+            type_name,
+            signature,
+         } => write!(f, "method {} is not defined for {}", signature, type_name),
          Self::User(error) => write!(f, "{}", error),
       }
    }

@@ -553,14 +553,49 @@ impl<'e> CodeGenerator<'e> {
    /// Generates code for a function call.
    fn generate_call(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (function, _) = ast.node_pair(node);
-      self.generate_node(ast, function)?;
-      let arguments = ast.children(node).unwrap();
-      for &argument in arguments {
-         self.generate_node(ast, argument)?;
+      match ast.kind(function) {
+         // Method calls need special treatment.
+         NodeKind::Dot => {
+            let (receiver, name) = ast.node_pair(function);
+            if ast.kind(name) != NodeKind::Identifier {
+               return Err(ast.error(name, ErrorKind::InvalidMethodName));
+            }
+            let name = ast.string(name).unwrap();
+
+            // Generate the receiver and arguments.
+            self.generate_node(ast, receiver)?;
+            let arguments = ast.children(node).unwrap();
+            for &argument in arguments {
+               self.generate_node(ast, argument)?;
+            }
+
+            // Construct the call.
+            let arity: u8 = (1 + arguments.len())
+               // ↑ Add 1 for the receiver, which is also an argument.
+               .try_into()
+               .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
+            let signature = FunctionSignature {
+               name: Rc::clone(name),
+               arity: Some(arity as u16),
+            };
+            let method_index =
+               self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+            self.chunk.push(Opcode::CallMethod(Opr24::pack((method_index, arity))));
+         }
+         _ => {
+            self.generate_node(ast, function)?;
+            let arguments = ast.children(node).unwrap();
+            for &argument in arguments {
+               self.generate_node(ast, argument)?;
+            }
+            self.chunk.push(Opcode::Call(
+               arguments
+                  .len()
+                  .try_into()
+                  .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
+            ));
+         }
       }
-      self.chunk.push(Opcode::Call(
-         arguments.len().try_into().map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
-      ));
       Ok(())
    }
 

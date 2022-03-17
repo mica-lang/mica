@@ -130,8 +130,15 @@ impl Lexer {
          self.advance();
       }
       if self.get() == '.' {
+         let dot = self.location.byte;
          self.advance();
-         if !matches!(self.get(), '0'..='9') {
+         if Self::is_identifier_start_char(self.get()) {
+            self.location.byte = dot;
+         } else if let '0'..='9' = self.get() {
+            while let '0'..='9' = self.get() {
+               self.advance();
+            }
+         } else {
             return Err(self.error(ErrorKind::MissingDigitsAfterDecimalPoint));
          }
       }

@@ -740,8 +740,13 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Return => todo!("return is NYI"),
 
          NodeKind::Struct => self.generate_struct(ast, node)?,
+         NodeKind::Impl => todo!("impl is NYI"),
 
-         NodeKind::IfBranch | NodeKind::ElseBranch | NodeKind::Parameters => {
+         | NodeKind::IfBranch
+         | NodeKind::ElseBranch
+         | NodeKind::Parameters
+         | NodeKind::Static
+         | NodeKind::Constructor => {
             unreachable!("AST implementation detail")
          }
       }

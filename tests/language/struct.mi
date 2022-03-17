@@ -11,3 +11,14 @@ assert(Test != Other)
 assert(do
    struct Test2
 end == nil)
+
+# A struct can be implemented with arbitrary methods.
+struct Greetings
+
+impl Greetings
+   func get(for_whom) static
+      "Hello, ".cat(for_whom).cat("!")
+   end
+end
+
+print(Greetings.get("World"))

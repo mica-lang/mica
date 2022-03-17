@@ -210,10 +210,13 @@ pub enum NodeKind {
 
    Func,
    Parameters,
+   Static,
+   Constructor,
    Call,
    Return,
 
    Struct,
+   Impl,
 }
 
 /// A `Debug` formatter that pretty-prints ASTs.

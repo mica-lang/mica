@@ -24,6 +24,9 @@ pub enum TokenKind {
    Return,
 
    Struct,
+   Impl,
+   Constructor,
+   Static,
 
    Plus,  // +
    Minus, // -
@@ -233,6 +236,9 @@ impl Lexer {
          "return" => TokenKind::Return,
 
          "struct" => TokenKind::Struct,
+         "impl" => TokenKind::Impl,
+         "constructor" => TokenKind::Constructor,
+         "static" => TokenKind::Static,
 
          _ => return None,
       })

@@ -618,23 +618,15 @@ impl<'e> CodeGenerator<'e> {
       Ok(())
    }
 
-   /// Generates code for a function declaration.
-   fn generate_function(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
-      let (name_node, parameters) = ast.node_pair(node);
+   fn generate_function(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      GenerateFunctionOptions { name }: GenerateFunctionOptions,
+   ) -> Result<GeneratedFunction, Error> {
+      let (_, parameters) = ast.node_pair(node);
       let parameter_list = ast.children(parameters).unwrap();
       let body = ast.children(node).unwrap();
-      let name = ast.string(name_node);
-
-      // Create the variable before compiling the function, to allow for recursion.
-      let variable = if let Some(name) = name {
-         Some(
-            self
-               .create_variable(name, VariableAllocation::Allocate)
-               .map_err(|kind| ast.error(name_node, kind))?,
-         )
-      } else {
-         None
-      };
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
       // NOTE(liquidev): Hopefully the allocation from this mem::take gets optimized out.
@@ -657,7 +649,7 @@ impl<'e> CodeGenerator<'e> {
       self.locals = generator.locals.parent.take().unwrap();
 
       let function = Function {
-         name: name.cloned().unwrap_or_else(|| Rc::from("<anonymous>")),
+         name,
          parameter_count: Some(
             u16::try_from(parameter_list.len())
                .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
@@ -668,13 +660,46 @@ impl<'e> CodeGenerator<'e> {
          },
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
-      self.chunk.push(Opcode::CreateClosure(function_id));
-      if let Some(variable) = variable {
-         self.generate_variable_assign(variable);
-         self.chunk.push(Opcode::Discard);
-         self.generate_nil();
-      }
 
+      Ok(GeneratedFunction { id: function_id })
+   }
+
+   /// Generates code for a bare function declaration.
+   fn generate_function_declaration(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name_node, _) = ast.node_pair(node);
+      let name = ast.string(name_node).unwrap();
+
+      // Create the variable before compiling the function, to allow for recursion.
+      let variable = self
+         .create_variable(name, VariableAllocation::Allocate)
+         .map_err(|kind| ast.error(name_node, kind))?;
+
+      let function = self.generate_function(
+         ast,
+         node,
+         GenerateFunctionOptions {
+            name: Rc::clone(name),
+         },
+      )?;
+
+      self.chunk.push(Opcode::CreateClosure(function.id));
+      self.generate_variable_assign(variable);
+      self.chunk.push(Opcode::Discard);
+      self.generate_nil();
+
+      Ok(())
+   }
+
+   /// Generates code for a function expression.
+   fn generate_function_expression(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let function = self.generate_function(
+         ast,
+         node,
+         GenerateFunctionOptions {
+            name: Rc::from("<anonymous>"),
+         },
+      )?;
+      self.chunk.push(Opcode::CreateClosure(function.id));
       Ok(())
    }
 
@@ -691,6 +716,14 @@ impl<'e> CodeGenerator<'e> {
       self.generate_variable_assign(variable);
       self.chunk.push(Opcode::Discard);
       self.generate_nil();
+
+      Ok(())
+   }
+
+   /// Generates code for an `impl` block.
+   fn generate_impl(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (implementee, _) = ast.node_pair(node);
+      let items = ast.children(node).unwrap();
 
       Ok(())
    }
@@ -735,12 +768,18 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::While => self.generate_while(ast, node)?,
          NodeKind::Break => self.generate_break(ast, node)?,
 
-         NodeKind::Func => self.generate_function(ast, node)?,
+         NodeKind::Func => {
+            if ast.node_pair(node).0 != NodeId::EMPTY {
+               self.generate_function_declaration(ast, node)?;
+            } else {
+               self.generate_function_expression(ast, node)?;
+            }
+         }
          NodeKind::Call => self.generate_call(ast, node)?,
          NodeKind::Return => todo!("return is NYI"),
 
          NodeKind::Struct => self.generate_struct(ast, node)?,
-         NodeKind::Impl => todo!("impl is NYI"),
+         NodeKind::Impl => self.generate_impl(ast, node)?,
 
          | NodeKind::IfBranch
          | NodeKind::ElseBranch
@@ -760,4 +799,12 @@ impl<'e> CodeGenerator<'e> {
       self.chunk.push(Opcode::Halt);
       Ok(Rc::new(self.chunk))
    }
+}
+
+struct GenerateFunctionOptions {
+   name: Rc<str>,
+}
+
+struct GeneratedFunction {
+   id: Opr24,
 }

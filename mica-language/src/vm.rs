@@ -1,6 +1,5 @@
 //! The virtual machine.
 
-use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr;
 use std::rc::Rc;

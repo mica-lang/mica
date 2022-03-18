@@ -21,4 +21,4 @@ impl Greetings
    end
 end
 
-print(Greetings.get("World"))
+assert(Greetings.get("World") == "Hello, World!")

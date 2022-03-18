@@ -20,14 +20,13 @@ impl DispatchTableDescriptor {
    pub(crate) fn build_dtable(
       self,
       // The rc is passed by reference to prevent an unnecessary clone.
-      type_name: &Rc<str>,
+      mut dtable: DispatchTable,
       env: &mut Environment,
    ) -> Result<DispatchTable, Error> {
-      let mut dtable = DispatchTable::new(Rc::clone(type_name));
       for (signature, f) in self.methods {
          let function_id = env
             .create_function(Function {
-               name: Rc::from(format!("{}.{}", type_name, signature.name)),
+               name: Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name)),
                parameter_count: signature.arity,
                kind: FunctionKind::Foreign(f),
             })
@@ -160,10 +159,14 @@ where
    /// Builds the struct builder into its type dtable and instance dtable, respectively.
    pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType, Error> {
       let mut type_dtable = Rc::new(
-         self.type_dtable.build_dtable(&Rc::from(format!("type {}", self.type_name)), env)?,
+         self
+            .type_dtable
+            .build_dtable(DispatchTable::new_for_type(Rc::clone(&self.type_name)), env)?,
       );
-      let instance_dtable =
-         Rc::new(self.instance_dtable.build_dtable(&Rc::clone(&self.type_name), env)?);
+      let instance_dtable = Rc::new(self.instance_dtable.build_dtable(
+         DispatchTable::new_for_instance(Rc::clone(&self.type_name)),
+         env,
+      )?);
       Rc::get_mut(&mut type_dtable).unwrap().instance = Some(Rc::clone(&instance_dtable));
       Ok(BuiltType {
          type_dtable,

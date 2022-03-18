@@ -7,6 +7,7 @@ use std::rc::Rc;
 use crate::ast::{Ast, NodeId, NodeKind};
 use crate::bytecode::{
    CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
+   Prototype,
 };
 use crate::common::{Error, ErrorKind};
 
@@ -622,7 +623,7 @@ impl<'e> CodeGenerator<'e> {
       &mut self,
       ast: &Ast,
       node: NodeId,
-      GenerateFunctionOptions { name }: GenerateFunctionOptions,
+      GenerateFunctionOptions { name, self_visible }: GenerateFunctionOptions,
    ) -> Result<GeneratedFunction, Error> {
       let (_, parameters) = ast.node_pair(node);
       let parameter_list = ast.children(parameters).unwrap();
@@ -634,8 +635,17 @@ impl<'e> CodeGenerator<'e> {
       // Push a scope to enforce creating local variables.
       generator.push_scope();
       // Create local variables for all the parameters.
-      // Note that the function itself is _also_ treated as a parameter.
-      generator.create_variable("<this function>", VariableAllocation::Inherit).unwrap();
+      // Note that in bare functions, the function itself acts as the `self` parameter.
+      generator
+         .create_variable(
+            if self_visible {
+               "self"
+            } else {
+               "<this function>"
+            },
+            VariableAllocation::Inherit,
+         )
+         .unwrap();
       for &parameter in parameter_list {
          let parameter_name = ast.string(parameter).unwrap();
          generator
@@ -648,12 +658,11 @@ impl<'e> CodeGenerator<'e> {
       generator.chunk.push(Opcode::Return);
       self.locals = generator.locals.parent.take().unwrap();
 
+      let parameter_count = u16::try_from(parameter_list.len())
+         .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
       let function = Function {
          name,
-         parameter_count: Some(
-            u16::try_from(parameter_list.len())
-               .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
-         ),
+         parameter_count: Some(parameter_count),
          kind: FunctionKind::Bytecode {
             chunk: Rc::new(generator.chunk),
             captured_locals: generator.locals.captures,
@@ -661,13 +670,23 @@ impl<'e> CodeGenerator<'e> {
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
 
-      Ok(GeneratedFunction { id: function_id })
+      Ok(GeneratedFunction {
+         id: function_id,
+         parameter_count,
+      })
    }
 
    /// Generates code for a bare function declaration.
    fn generate_function_declaration(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
-      let (name_node, _) = ast.node_pair(node);
+      let (name_node, parameters) = ast.node_pair(node);
       let name = ast.string(name_node).unwrap();
+
+      if ast.node_pair(parameters).0 != NodeId::EMPTY {
+         return Err(ast.error(
+            ast.node_pair(parameters).0,
+            ErrorKind::FunctionKindOutsideImpl,
+         ));
+      }
 
       // Create the variable before compiling the function, to allow for recursion.
       let variable = self
@@ -679,6 +698,7 @@ impl<'e> CodeGenerator<'e> {
          node,
          GenerateFunctionOptions {
             name: Rc::clone(name),
+            self_visible: false,
          },
       )?;
 
@@ -692,11 +712,19 @@ impl<'e> CodeGenerator<'e> {
 
    /// Generates code for a function expression.
    fn generate_function_expression(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (_, parameters) = ast.node_pair(node);
+      if ast.node_pair(parameters).0 != NodeId::EMPTY {
+         return Err(ast.error(
+            ast.node_pair(parameters).0,
+            ErrorKind::FunctionKindOutsideImpl,
+         ));
+      }
       let function = self.generate_function(
          ast,
          node,
          GenerateFunctionOptions {
             name: Rc::from("<anonymous>"),
+            self_visible: false,
          },
       )?;
       self.chunk.push(Opcode::CreateClosure(function.id));
@@ -724,6 +752,61 @@ impl<'e> CodeGenerator<'e> {
    fn generate_impl(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (implementee, _) = ast.node_pair(node);
       let items = ast.children(node).unwrap();
+
+      let mut proto = Prototype::default();
+
+      for &item in items {
+         match ast.kind(item) {
+            NodeKind::Func => {
+               let (name_node, parameters) = ast.node_pair(item);
+               if ast.kind(name_node) != NodeKind::Identifier {
+                  return Err(ast.error(item, ErrorKind::MissingMethodName));
+               }
+               let name = Rc::clone(ast.string(name_node).unwrap());
+               let (kind, _) = ast.node_pair(parameters);
+               let function = self.generate_function(
+                  ast,
+                  item,
+                  GenerateFunctionOptions {
+                     name: Rc::clone(&name),
+                     self_visible: match ast.kind(kind) {
+                        NodeKind::Empty | NodeKind::Static => true,
+                        NodeKind::Constructor => todo!("constructors are NYI"),
+                        _ => unreachable!(),
+                     },
+                  },
+               )?;
+               let map = match ast.kind(kind) {
+                  NodeKind::Empty => &mut proto.instance,
+                  NodeKind::Static | NodeKind::Constructor => &mut proto.statics,
+                  _ => unreachable!(),
+               };
+               let signature = FunctionSignature {
+                  name,
+                  arity: Some(1 + function.parameter_count),
+               };
+               let method_id =
+                  self.env.get_method_index(&signature).map_err(|kind| ast.error(item, kind))?;
+               if map.contains_key(&method_id) {
+                  return Err(ast.error(
+                     name_node,
+                     ErrorKind::MethodAlreadyImplemented(FunctionSignature {
+                        arity: signature.arity.map(|x| x - 1),
+                        ..signature
+                     }),
+                  ));
+               }
+               map.insert(method_id, function.id);
+            }
+            // NB: If other item types are allowed, don't forget to change the error message for
+            // InvalidImplItem.
+            _ => return Err(ast.error(item, ErrorKind::InvalidImplItem)),
+         }
+      }
+
+      let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
+      self.generate_node(ast, implementee)?;
+      self.chunk.push(Opcode::Implement(proto_id));
 
       Ok(())
    }
@@ -803,8 +886,10 @@ impl<'e> CodeGenerator<'e> {
 
 struct GenerateFunctionOptions {
    name: Rc<str>,
+   self_visible: bool,
 }
 
 struct GeneratedFunction {
    id: Opr24,
+   parameter_count: u16,
 }

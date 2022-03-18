@@ -172,6 +172,9 @@ pub enum Opcode {
    /// Returns to the calling function.
    Return,
 
+   /// Implements a struct according to a prototype identified by the operand.
+   Implement(Opr24),
+
    /// Negates a number (prefix `-`).
    Negate,
    /// Adds two numbers together (infix `+`).
@@ -516,6 +519,10 @@ pub struct Environment {
    function_signatures: Vec<FunctionSignature>,
    /// Dispatch tables for builtin types.
    pub builtin_dtables: BuiltinDispatchTables,
+   /// `impl` prototypes.
+   prototypes: Vec<Option<Prototype>>,
+   /// `prototypes` indices that have been taken out of the vec.
+   free_prototypes: Vec<Opr24>,
 }
 
 impl Environment {
@@ -527,6 +534,8 @@ impl Environment {
          method_indices: HashMap::new(),
          function_signatures: Vec::new(),
          builtin_dtables,
+         prototypes: Vec::new(),
+         free_prototypes: Vec::new(),
       }
    }
 
@@ -586,12 +595,36 @@ impl Environment {
    pub fn get_function_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
       self.function_signatures.get(method_index as usize)
    }
+
+   /// Creates a prototype and returns its ID.
+   pub(crate) fn create_prototype(&mut self, proto: Prototype) -> Result<Opr24, ErrorKind> {
+      let slot = if let Some(slot) = self.free_prototypes.pop() {
+         self.prototypes[u32::from(slot) as usize] = Some(proto);
+         slot
+      } else {
+         let slot = Opr24::try_from(self.prototypes.len()).map_err(|_| ErrorKind::TooManyImpls)?;
+         self.prototypes.push(Some(proto));
+         slot
+      };
+      Ok(slot)
+   }
+
+   /// Takes out the prototype with the given ID, as returned by `create_prototype`.
+   /// This function is for internal use in the VM and does not perform any checks, thus is marked
+   /// `unsafe`.
+   pub(crate) unsafe fn take_prototype_unchecked(&mut self, id: Opr24) -> Prototype {
+      let proto =
+         self.prototypes.get_unchecked_mut(u32::from(id) as usize).take().unwrap_unchecked();
+      self.free_prototypes.push(id);
+      proto
+   }
 }
 
 /// A dispatch table containing functions bound to an instance of a value.
 #[derive(Debug)]
 pub struct DispatchTable {
-   /// The name of the type this dispatch table contains functions for.
+   /// The pretty name of the type this dispatch table contains functions for.
+   pub pretty_name: Rc<str>,
    pub type_name: Rc<str>,
    /// The "child" dispatch table that holds instance methods.
    pub instance: Option<Rc<DispatchTable>>,
@@ -601,12 +634,25 @@ pub struct DispatchTable {
 
 impl DispatchTable {
    /// Creates a new, empty dispatch table for a type with the given name.
-   pub fn new(type_name: impl Into<Rc<str>>) -> Self {
+   fn new(pretty_name: impl Into<Rc<str>>, type_name: impl Into<Rc<str>>) -> Self {
       Self {
+         pretty_name: pretty_name.into(),
          type_name: type_name.into(),
          instance: None,
          methods: Vec::new(),
       }
+   }
+
+   /// Creates a new, empty type dispatch table with the given type name.
+   pub fn new_for_type(type_name: impl Into<Rc<str>>) -> Self {
+      let type_name = type_name.into();
+      Self::new(format!("type {type_name}"), type_name)
+   }
+
+   /// Creates a new, empty instance dispatch table with the given type name.
+   pub fn new_for_instance(type_name: impl Into<Rc<str>>) -> Self {
+      let type_name = type_name.into();
+      Self::new(Rc::clone(&type_name), type_name)
    }
 
    /// Returns a reference to the method at the given index.
@@ -639,11 +685,19 @@ pub struct BuiltinDispatchTables {
 impl Default for BuiltinDispatchTables {
    fn default() -> Self {
       Self {
-         nil: Rc::new(DispatchTable::new("Nil")),
-         boolean: Rc::new(DispatchTable::new("Boolean")),
-         number: Rc::new(DispatchTable::new("Number")),
-         string: Rc::new(DispatchTable::new("String")),
-         function: Rc::new(DispatchTable::new("Function")),
+         nil: Rc::new(DispatchTable::new("Nil", "Nil")),
+         boolean: Rc::new(DispatchTable::new("Boolean", "Boolean")),
+         number: Rc::new(DispatchTable::new("Number", "Boolean")),
+         string: Rc::new(DispatchTable::new("String", "String")),
+         function: Rc::new(DispatchTable::new("Function", "Function")),
       }
    }
+}
+
+/// The prototype of a struct. This contains a list of functions, from which closures are
+/// constructed at runtime to form a dispatch table.
+#[derive(Debug, Default)]
+pub(crate) struct Prototype {
+   pub(crate) instance: HashMap<u16, Opr24>,
+   pub(crate) statics: HashMap<u16, Opr24>,
 }

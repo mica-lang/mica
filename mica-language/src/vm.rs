@@ -1,5 +1,6 @@
 //! The virtual machine.
 
+use std::ops::Deref;
 use std::pin::Pin;
 use std::ptr;
 use std::rc::Rc;
@@ -269,6 +270,31 @@ impl Fiber {
       error
    }
 
+   fn create_closure(&mut self, env: &mut Environment, function_id: Opr24) -> Rc<Closure> {
+      let function = unsafe { env.get_function_unchecked_mut(function_id) };
+      let mut captures = Vec::new();
+      if let FunctionKind::Bytecode {
+         captured_locals, ..
+      } = &function.kind
+      {
+         for capture in captured_locals {
+            captures.push(match capture {
+               CaptureKind::Local(slot) => {
+                  self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot))
+               }
+               CaptureKind::Upvalue(index) => {
+                  let closure = self.closure.as_ref().unwrap();
+                  Pin::clone(&closure.captures[u32::from(*index) as usize])
+               }
+            });
+         }
+      }
+      Rc::new(Closure {
+         function_id,
+         captures,
+      })
+   }
+
    /// Returns the dispatch table of the given value.
    fn get_dispatch_table<'v>(value: &'v Value, env: &'v Environment) -> &'v DispatchTable {
       match value {
@@ -277,7 +303,23 @@ impl Fiber {
          Value::Number(_) => &env.builtin_dtables.number,
          Value::String(_) => &env.builtin_dtables.string,
          Value::Function(_) => &env.builtin_dtables.function,
-         Value::Struct(st) => &st.dispatch_table,
+         Value::Struct(st) => st.dtable(),
+      }
+   }
+
+   /// Initializes a dispatch table with methods obtained from a method ID to function ID map.
+   /// Each function's name is prepended with `type_name.`.
+   fn initialize_dtable(
+      &mut self,
+      methods: impl Iterator<Item = (u16, Opr24)>,
+      env: &mut Environment,
+      dtable: &mut DispatchTable,
+   ) {
+      for (method_id, function_id) in methods {
+         let function = unsafe { env.get_function_unchecked_mut(function_id) };
+         function.name = Rc::from(format!("{}.{}", dtable.pretty_name, function.name));
+         let closure = self.create_closure(env, function_id);
+         dtable.set_method(method_id, closure);
       }
    }
 
@@ -328,32 +370,12 @@ impl Fiber {
                self.push(Value::String(string));
             }
             Opcode::CreateClosure(function_id) => {
-               let function = unsafe { env.get_function_unchecked_mut(function_id) };
-               let mut captures = Vec::new();
-               if let FunctionKind::Bytecode {
-                  captured_locals, ..
-               } = &function.kind
-               {
-                  for capture in captured_locals {
-                     captures.push(match capture {
-                        CaptureKind::Local(slot) => {
-                           self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot))
-                        }
-                        CaptureKind::Upvalue(index) => {
-                           let closure = self.closure.as_ref().unwrap();
-                           Pin::clone(&closure.captures[u32::from(*index) as usize])
-                        }
-                     });
-                  }
-               }
-               self.push(Value::Function(Rc::new(Closure {
-                  function_id,
-                  captures,
-               })));
+               let closure = self.create_closure(env, function_id);
+               self.push(Value::Function(closure));
             }
             Opcode::CreateType => {
                let name = unsafe { self.chunk.read_string(&mut self.pc) };
-               let dispatch_table = DispatchTable::new(format!("type {name}").as_str());
+               let dispatch_table = DispatchTable::new_for_type(name);
                let struct_v = Struct::new_type(Rc::new(dispatch_table));
                self.stack.push(Value::Struct(Rc::new(struct_v)));
             }
@@ -466,7 +488,7 @@ impl Fiber {
                         }
                      });
                   let error_kind = ErrorKind::MethodDoesNotExist {
-                     type_name: Rc::clone(&dtable.type_name),
+                     type_name: Rc::clone(&dtable.pretty_name),
                      signature: FunctionSignature {
                         // Subtract 1 to omit the receiver from error messages.
                         arity: signature.arity.map(|x| x - 1),
@@ -482,8 +504,38 @@ impl Fiber {
                self.push(result);
             }
 
+            Opcode::Implement(proto_id) => {
+               let st = wrap_error!(self.stack_top_mut().struct_v());
+               let type_name = Rc::clone(&st.dtable().type_name);
+               let proto = unsafe { env.take_prototype_unchecked(proto_id) };
+
+               let mut type_dtable = DispatchTable::new_for_type(Rc::clone(&type_name));
+               self.initialize_dtable(
+                  proto.statics.iter().map(|(&k, &v)| (k, v)),
+                  env,
+                  &mut type_dtable,
+               );
+
+               let mut instance_dtable = DispatchTable::new_for_instance(type_name);
+               self.initialize_dtable(
+                  proto.instance.iter().map(|(&k, &v)| (k, v)),
+                  env,
+                  &mut instance_dtable,
+               );
+
+               let instance_dtable = Rc::new(instance_dtable);
+               type_dtable.instance = Some(instance_dtable);
+               let type_dtable = Rc::new(type_dtable);
+
+               unsafe {
+                  // Need to borrow here a second time. By this point we know that the unwrap
+                  // will succeed so it's safe to use unwrap_unchecked.
+                  let st = self.stack_top_mut().struct_v().unwrap_unchecked();
+                  *st.dtable.get() = type_dtable;
+               }
+            }
+
             Opcode::Negate => {
-               // TODO: Debug info.
                let number = wrap_error!(self.pop().number());
                self.push(Value::Number(-number))
             }

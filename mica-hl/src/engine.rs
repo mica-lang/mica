@@ -73,7 +73,7 @@ impl Engine {
          boolean: Rc::clone(&boolean.instance_dtable),
          number: Rc::clone(&number.instance_dtable),
          string: Rc::clone(&string.instance_dtable),
-         function: Rc::new(DispatchTable::new("Function")), // TODO
+         function: Rc::new(DispatchTable::new_for_instance("Function")), // TODO
       };
 
       let engine = Self {

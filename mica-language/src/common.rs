@@ -75,6 +75,11 @@ pub enum ErrorKind {
    TooManyParameters,
    TooManyMethods,
    InvalidMethodName,
+   FunctionKindOutsideImpl,
+   InvalidImplItem,
+   MissingMethodName,
+   TooManyImpls,
+   MethodAlreadyImplemented(FunctionSignature),
 
    // Runtime
    TypeError {
@@ -85,6 +90,7 @@ pub enum ErrorKind {
       type_name: Rc<str>,
       signature: FunctionSignature,
    },
+   StructAlreadyImplemented,
    User(Box<dyn std::error::Error>),
 }
 
@@ -123,6 +129,16 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyParameters => write!(f, "too many parameters"),
          Self::TooManyMethods => write!(f, "too many instance functions with different signatures"),
          Self::InvalidMethodName => write!(f, "method name must be an identifier"),
+         Self::FunctionKindOutsideImpl => write!(
+            f,
+            "function kinds (static, constructor) can only be used in 'impl' blocks"
+         ),
+         Self::InvalidImplItem => write!(f, "only functions are allowed in 'impl' blocks"),
+         Self::MissingMethodName => write!(f, "missing method name"),
+         Self::TooManyImpls => write!(f, "too many 'impl' blocks"),
+         Self::MethodAlreadyImplemented(signature) => {
+            write!(f, "method {signature} is already implemented")
+         }
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
@@ -131,6 +147,7 @@ impl std::fmt::Display for ErrorKind {
             type_name,
             signature,
          } => write!(f, "method {} is not defined for {}", signature, type_name),
+         Self::StructAlreadyImplemented => write!(f, "this struct is already implemented"),
          Self::User(error) => write!(f, "{}", error),
       }
    }

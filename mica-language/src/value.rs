@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
 use std::marker::PhantomPinned;
 use std::pin::Pin;
@@ -110,6 +110,15 @@ impl Value {
       }
    }
 
+   /// Ensures the value is a `Struct`, returning a type mismatch error if that's not the case.
+   pub fn struct_v(&self) -> Result<&Rc<Struct>, ErrorKind> {
+      if let Value::Struct(s) = self {
+         Ok(s)
+      } else {
+         Err(self.type_error("(any struct)"))
+      }
+   }
+
    /// Returns whether the value is truthy. All values except `Nil` and `False` are truthy.
    pub fn is_truthy(&self) -> bool {
       !matches!(self, Value::Nil | Value::False)
@@ -175,8 +184,8 @@ impl fmt::Debug for Value {
          Value::String(s) => write!(f, "{s:?}"),
          Value::Function(_) => write!(f, "<func>"),
          Value::Struct(s) => {
-            let dispatch_table = &s.dispatch_table;
-            let type_name = &dispatch_table.type_name;
+            let dispatch_table = s.dtable();
+            let type_name = &dispatch_table.pretty_name;
             write!(f, "<[{type_name}]>")
          }
       }
@@ -210,13 +219,30 @@ impl PartialEq for Value {
 /// is that types do not contain associated fields (Mica does not have static fields.)
 pub struct Struct {
    /// The disptach table of the struct. This may only be set once, and setting it seals the struct.
-   pub(crate) dispatch_table: Rc<DispatchTable>,
+   pub(crate) dtable: UnsafeCell<Rc<DispatchTable>>,
+   sealed: Cell<bool>,
 }
 
 impl Struct {
    /// Creates a new `Struct` representing a type.
-   pub fn new_type(dispatch_table: Rc<DispatchTable>) -> Self {
-      Self { dispatch_table }
+   pub fn new_type(dtable: Rc<DispatchTable>) -> Self {
+      Self {
+         dtable: UnsafeCell::new(dtable),
+         sealed: Cell::new(false),
+      }
+   }
+
+   /// Returns a reference to the dispatch table of the struct.
+   pub fn dtable(&self) -> &DispatchTable {
+      unsafe { self.dtable.get().as_ref().unwrap_unchecked() }
+   }
+
+   pub fn implement(&self, dtable: Rc<DispatchTable>) -> Result<(), ErrorKind> {
+      if self.sealed.get() {
+         return Err(ErrorKind::StructAlreadyImplemented);
+      }
+      unsafe { *self.dtable.get() = dtable }
+      Ok(())
    }
 }
 

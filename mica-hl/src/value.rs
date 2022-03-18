@@ -65,6 +65,12 @@ impl ToValue for String {
    }
 }
 
+impl ToValue for Rc<str> {
+   fn to_value(&self) -> Value {
+      Value::String(Rc::clone(self))
+   }
+}
+
 impl<T> ToValue for Option<T>
 where
    T: ToValue,
@@ -159,10 +165,7 @@ where
 /// Implemented by all types that can be a `&self` parameter in an instance function.
 ///
 /// This should never be implemented manually unless you know what you're doing.
-pub trait FromValueSelf
-where
-   Self: Sized,
-{
+pub trait FromValueSelf {
    /// Returns a shared reference to `Self` **without checking that the value is of the correct
    /// type**.
    ///
@@ -194,6 +197,15 @@ impl FromValueSelf for f64 {
    unsafe fn from_value_self(v: &Value) -> &Self {
       match v {
          Value::Number(n) => n,
+         _ => unreachable_unchecked(),
+      }
+   }
+}
+
+impl FromValueSelf for Rc<str> {
+   unsafe fn from_value_self(v: &Value) -> &Self {
+      match v {
+         Value::String(s) => s,
          _ => unreachable_unchecked(),
       }
    }

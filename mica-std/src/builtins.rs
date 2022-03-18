@@ -26,8 +26,8 @@ impl StandardLibrary for Lib {
          .add_function("sqrt", ref_self(f64::sqrt))
    }
 
-   fn define_string(&mut self, builder: TypeBuilder<str>) -> TypeBuilder<str> {
-      builder
+   fn define_string(&mut self, builder: TypeBuilder<Rc<str>>) -> TypeBuilder<Rc<str>> {
+      builder.add_function("cat", |s: &Rc<str>, t: Rc<str>| format!("{}{}", s, t))
    }
 }
 

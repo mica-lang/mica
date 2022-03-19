@@ -83,6 +83,7 @@ pub enum ErrorKind {
    TooManyFields,
    FieldDoesNotExist(Rc<str>),
    FieldOutsideOfImpl,
+   MissingFields(Vec<Rc<str>>),
 
    // Runtime
    TypeError {
@@ -147,6 +148,14 @@ impl std::fmt::Display for ErrorKind {
             write!(f, "fields cannot be referenced outside of 'impl' blocks")
          }
          Self::FieldDoesNotExist(name) => write!(f, "field '@{name}' does not exist"),
+         Self::MissingFields(fields) => {
+            let fields: Vec<_> = fields.iter().map(|name| format!("@{name}")).collect();
+            let fields = fields.join(", ");
+            write!(
+               f,
+               "the following fields were not assigned in this constructor: {fields}"
+            )
+         }
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

@@ -33,10 +33,37 @@ impl Vector
       @y = y
    end
 
+   # Fields must not be omitted in constructors.
+   func zero() constructor
+   end
+
    func x() @x end
    func y() @y end
+
+   func set_x(x) @x = x end
+   func set_y(y) @y = y end
+
+   func len_sq()
+      @x * @x + @y * @y
+   end
+
+   func len()
+      self.len_sq.sqrt
+   end
 end
 
 v = Vector.new(1, 2)
 assert(v.x == 1)
 assert(v.y == 2)
+v.set_x(4)
+v.set_y(5)
+assert(v.x == 4)
+assert(v.y == 5)
+assert(Vector.new(3, 4).len == 5)
+
+# Two constructed struct instances are never equal to each other.
+u = Vector.new(1, 2)
+v = Vector.new(1, 2)
+assert(u == u)
+assert(v == v)
+assert(u != v)

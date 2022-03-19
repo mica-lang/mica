@@ -1,6 +1,6 @@
 //! Bytecode generation.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::rc::Rc;
 
@@ -197,6 +197,8 @@ pub struct CodeGenerator<'e> {
    struct_data: Option<Box<StructData>>,
 
    allow_new_fields: bool,
+   is_constructor: bool,
+   assigned_fields: HashSet<Rc<str>>,
 }
 
 impl<'e> CodeGenerator<'e> {
@@ -211,6 +213,8 @@ impl<'e> CodeGenerator<'e> {
          struct_data: None,
 
          allow_new_fields: false,
+         is_constructor: false,
+         assigned_fields: HashSet::new(),
       }
    }
 
@@ -457,6 +461,11 @@ impl<'e> CodeGenerator<'e> {
                self.chunk.push(Opcode::AssignField(field));
             } else {
                return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
+            }
+            // In constructors, we need to keep track of which fields were assigned to report
+            // errors about missing field values.
+            if self.is_constructor && !self.allow_new_fields {
+               self.assigned_fields.insert(Rc::clone(name));
             }
          }
          _ => return Err(ast.error(target, ErrorKind::InvalidAssignment)),
@@ -709,6 +718,7 @@ impl<'e> CodeGenerator<'e> {
          generator.struct_data = self.struct_data.take();
          generator.allow_new_fields = call_conv.allow_new_fields();
       }
+      generator.is_constructor = call_conv.is_constructor();
 
       // Push a scope to start creating local variables.
       generator.push_scope();
@@ -760,6 +770,19 @@ impl<'e> CodeGenerator<'e> {
          generator.chunk.push(Opcode::Discard);
          let receiver = generator.struct_data.as_ref().unwrap().receiver.unwrap();
          generator.generate_variable_load(receiver);
+      }
+      // If we're in a constructor, we also have to check if all fields were assigned.
+      if call_conv.is_constructor() && !call_conv.allow_new_fields() {
+         let struct_data = generator.struct_data.as_ref().unwrap();
+         let missing: Vec<_> = struct_data
+            .fields
+            .keys()
+            .filter(|field| !generator.assigned_fields.contains(*field))
+            .cloned()
+            .collect();
+         if !missing.is_empty() {
+            return Err(ast.error(node, ErrorKind::MissingFields(missing)));
+         }
       }
 
       // Finish generating the chunk by inserting a `Return` opcode.

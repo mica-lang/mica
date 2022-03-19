@@ -5,6 +5,11 @@
 func nop() end
 assert(nop() == nil)
 
+# Function items return nil.
+assert(do
+   func f() end
+end == nil)
+
 # Arguments should not affect the function's result.
 func discard(x) end
 assert(discard(1) == nil)

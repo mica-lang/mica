@@ -22,3 +22,21 @@ impl Greetings
 end
 
 assert(Greetings.get("World") == "Hello, World!")
+
+# A struct can have a constructor that sets its fields up.
+# It can also have instance methods.
+struct Vector
+
+impl Vector
+   func new(x, y) constructor
+      @x = x
+      @y = y
+   end
+
+   func x() @x end
+   func y() @y end
+end
+
+v = Vector.new(1, 2)
+assert(v.x == 1)
+assert(v.y == 2)

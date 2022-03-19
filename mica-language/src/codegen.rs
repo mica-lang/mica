@@ -160,6 +160,33 @@ struct BreakableBlock {
    start: usize,
 }
 
+#[derive(Debug, Default)]
+struct StructData {
+   /// Mapping from field names to indices.
+   fields: HashMap<Rc<str>, Opr24>,
+   /// The `self` variable. Used in `@field` lookups.
+   receiver: Option<VariablePlace>,
+}
+
+impl StructData {
+   /// Returns the index of the field with the given name, or creates that field if it doesn't
+   /// exist yet.
+   fn get_or_create_field(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
+      if !self.fields.contains_key(name) {
+         let index = Opr24::try_from(self.fields.len()).map_err(|_| ErrorKind::TooManyFields)?;
+         self.fields.insert(Rc::from(name), index);
+         Ok(index)
+      } else {
+         Ok(*self.fields.get(name).unwrap())
+      }
+   }
+
+   /// Returns the index of the field with the given name, or `None` if there is no such field.
+   fn get_field(&self, name: &str) -> Option<Opr24> {
+      self.fields.get(name).copied()
+   }
+}
+
 pub struct CodeGenerator<'e> {
    env: &'e mut Environment,
 
@@ -167,6 +194,9 @@ pub struct CodeGenerator<'e> {
 
    locals: Box<Locals>,
    breakable_blocks: Vec<BreakableBlock>,
+   struct_data: Option<Box<StructData>>,
+
+   allow_new_fields: bool,
 }
 
 impl<'e> CodeGenerator<'e> {
@@ -178,6 +208,9 @@ impl<'e> CodeGenerator<'e> {
 
          locals: Default::default(),
          breakable_blocks: Vec::new(),
+         struct_data: None,
+
+         allow_new_fields: false,
       }
    }
 
@@ -367,6 +400,26 @@ impl<'e> CodeGenerator<'e> {
       }
    }
 
+   /// Generates code for a field lookup.
+   fn generate_field(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name, _) = ast.node_pair(node);
+      let name = ast.string(name).unwrap();
+      let struct_data = self
+         .struct_data
+         .as_deref()
+         .ok_or_else(|| ast.error(node, ErrorKind::FieldOutsideOfImpl))?;
+      let field_id = struct_data
+         .get_field(name)
+         .ok_or_else(|| ast.error(node, ErrorKind::FieldDoesNotExist(Rc::clone(name))))?;
+      // Unwrapping is OK here because fields are not allowed outside of functions, and each
+      // function with `StructData` passed in assigns to `receiver` at the start of its
+      // code generation.
+      let receiver = struct_data.receiver.unwrap();
+      self.generate_variable_load(receiver);
+      self.chunk.push(Opcode::GetField(field_id));
+      Ok(())
+   }
+
    /// Generates code for an assignment.
    fn generate_assignment(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (target, value) = ast.node_pair(node);
@@ -385,6 +438,26 @@ impl<'e> CodeGenerator<'e> {
                   .map_err(|kind| ast.error(node, kind))?
             };
             self.generate_variable_assign(variable);
+         }
+         NodeKind::Field => {
+            let (name, _) = ast.node_pair(target);
+            let name = ast.string(name).unwrap();
+            if let Some(struct_data) = self.struct_data.as_mut() {
+               let field = if self.allow_new_fields {
+                  struct_data.get_or_create_field(name).map_err(|kind| ast.error(node, kind))?
+               } else {
+                  struct_data.get_field(name).ok_or_else(|| {
+                     ast.error(target, ErrorKind::FieldDoesNotExist(Rc::clone(name)))
+                  })?
+               };
+               // Unwrapping is OK here because `receiver` is assigned at the start of each function
+               // in an `impl` block.
+               let receiver = struct_data.receiver.unwrap();
+               self.generate_variable_load(receiver);
+               self.chunk.push(Opcode::AssignField(field));
+            } else {
+               return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
+            }
          }
          _ => return Err(ast.error(target, ErrorKind::InvalidAssignment)),
       }
@@ -623,41 +696,83 @@ impl<'e> CodeGenerator<'e> {
       &mut self,
       ast: &Ast,
       node: NodeId,
-      GenerateFunctionOptions { name, self_visible }: GenerateFunctionOptions,
+      GenerateFunctionOptions { name, call_conv }: GenerateFunctionOptions,
    ) -> Result<GeneratedFunction, Error> {
       let (_, parameters) = ast.node_pair(node);
       let parameter_list = ast.children(parameters).unwrap();
       let body = ast.children(node).unwrap();
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
-      // NOTE(liquidev): Hopefully the allocation from this mem::take gets optimized out.
+      // NOTE: Hopefully the allocation from this mem::take gets optimized out.
       generator.locals.parent = Some(mem::take(&mut self.locals));
-      // Push a scope to enforce creating local variables.
+      if call_conv.has_field_access() {
+         generator.struct_data = self.struct_data.take();
+         generator.allow_new_fields = call_conv.allow_new_fields();
+      }
+
+      // Push a scope to start creating local variables.
       generator.push_scope();
       // Create local variables for all the parameters.
       // Note that in bare functions, the function itself acts as the `self` parameter.
-      generator
-         .create_variable(
-            if self_visible {
-               "self"
-            } else {
-               "<this function>"
-            },
-            VariableAllocation::Inherit,
-         )
-         .unwrap();
+      let receiver = if call_conv.has_visible_self() {
+         let receiver = generator.create_variable("self", VariableAllocation::Inherit).unwrap();
+         if let Some(struct_data) = generator.struct_data.as_deref_mut() {
+            struct_data.receiver = Some(receiver);
+         }
+         receiver
+      } else {
+         generator.create_variable("<receiver>", VariableAllocation::Inherit).unwrap()
+      };
       for &parameter in parameter_list {
          let parameter_name = ast.string(parameter).unwrap();
          generator
             .create_variable(parameter_name, VariableAllocation::Inherit)
             .map_err(|kind| ast.error(parameter, kind))?;
       }
+
+      // In constructors, we have to create `self` explicitly.
+      let create_struct = if call_conv.is_constructor() {
+         generator.generate_variable_load(receiver);
+         let instruction = generator.chunk.push(Opcode::Nop);
+         let receiver = generator
+            .create_variable("self", VariableAllocation::Allocate)
+            .map_err(|kind| ast.error(node, kind))?;
+         generator.generate_variable_assign(receiver);
+         generator.chunk.push(Opcode::Discard);
+         generator.struct_data.as_deref_mut().unwrap().receiver = Some(receiver);
+         Some(instruction)
+      } else {
+         None
+      };
+
       // Generate the body.
       generator.generate_node_list(ast, body)?;
+
+      // If we're in a constructor we have to backpatch the `CreateStruct` instruction with the
+      // number of fields.
+      if let Some(create_struct) = create_struct {
+         let field_count = generator.struct_data.as_ref().unwrap().fields.len();
+         let field_count = Opr24::try_from(field_count)
+            .map_err(|_| ast.error(ast.node_pair(parameters).0, ErrorKind::TooManyFields))?;
+         generator.chunk.patch(create_struct, Opcode::CreateStruct(field_count));
+         // We also have to discard whatever was at the top of the stack at the moment and
+         // return the struct we constructed.
+         generator.chunk.push(Opcode::Discard);
+         let receiver = generator.struct_data.as_ref().unwrap().receiver.unwrap();
+         generator.generate_variable_load(receiver);
+      }
+
+      // Finish generating the chunk by inserting a `Return` opcode.
       generator.pop_scope();
       generator.chunk.push(Opcode::Return);
-      self.locals = generator.locals.parent.take().unwrap();
 
+      // Take back what was taken from the parent generator.
+      self.locals = generator.locals.parent.take().unwrap();
+      if call_conv.has_field_access() {
+         self.struct_data = generator.struct_data;
+      }
+
+      // Construct the function.
       let parameter_count = u16::try_from(parameter_list.len())
          .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
       let function = Function {
@@ -698,7 +813,7 @@ impl<'e> CodeGenerator<'e> {
          node,
          GenerateFunctionOptions {
             name: Rc::clone(name),
-            self_visible: false,
+            call_conv: FunctionCallConv::Bare,
          },
       )?;
 
@@ -724,7 +839,7 @@ impl<'e> CodeGenerator<'e> {
          node,
          GenerateFunctionOptions {
             name: Rc::from("<anonymous>"),
-            self_visible: false,
+            call_conv: FunctionCallConv::Bare,
          },
       )?;
       self.chunk.push(Opcode::CreateClosure(function.id));
@@ -754,7 +869,12 @@ impl<'e> CodeGenerator<'e> {
       let items = ast.children(node).unwrap();
 
       let mut proto = Prototype::default();
+      // There's no need to save any old struct data because `impl` blocks don't nest freely.
+      // Yes, you can create an `impl` block in a function inside this `impl` block, but that
+      // function is handled by a different generator.
+      self.struct_data = Some(Box::new(StructData::default()));
 
+      let mut has_constructor = false;
       for &item in items {
          match ast.kind(item) {
             NodeKind::Func => {
@@ -769,9 +889,14 @@ impl<'e> CodeGenerator<'e> {
                   item,
                   GenerateFunctionOptions {
                      name: Rc::clone(&name),
-                     self_visible: match ast.kind(kind) {
-                        NodeKind::Empty | NodeKind::Static => true,
-                        NodeKind::Constructor => todo!("constructors are NYI"),
+                     call_conv: match ast.kind(kind) {
+                        NodeKind::Empty => FunctionCallConv::Instance,
+                        NodeKind::Static => FunctionCallConv::Static,
+                        NodeKind::Constructor => {
+                           let allow_new_fields = !has_constructor;
+                           has_constructor = true;
+                           FunctionCallConv::Constructor { allow_new_fields }
+                        }
                         _ => unreachable!(),
                      },
                   },
@@ -808,6 +933,8 @@ impl<'e> CodeGenerator<'e> {
       self.generate_node(ast, implementee)?;
       self.chunk.push(Opcode::Implement(proto_id));
 
+      self.struct_data = None;
+
       Ok(())
    }
 
@@ -843,6 +970,7 @@ impl<'e> CodeGenerator<'e> {
 
          NodeKind::Assign => self.generate_assignment(ast, node)?,
          NodeKind::Dot => self.generate_dot(ast, node)?,
+         NodeKind::Field => self.generate_field(ast, node)?,
 
          NodeKind::Main => self.generate_node_list(ast, ast.children(node).unwrap())?,
 
@@ -884,9 +1012,47 @@ impl<'e> CodeGenerator<'e> {
    }
 }
 
+/// The calling convention of a function.
+enum FunctionCallConv {
+   /// A bare function: `self` is invisible, fields cannot be assigned.
+   Bare,
+   /// A static function: `self` is visible, fields cannot be assigned.
+   Static,
+   /// An instance function: `self` is visible, fields can be assigned but not created.
+   Instance,
+   /// A constructor: `self` is created from scratch, fields can created if `allow_new_fields` is
+   /// true.
+   Constructor { allow_new_fields: bool },
+}
+
+impl FunctionCallConv {
+   fn has_field_access(&self) -> bool {
+      matches!(self, Self::Instance | Self::Constructor { .. })
+   }
+
+   fn has_visible_self(&self) -> bool {
+      // Note that `Constructor` does not have a visible `self`, because it's an allocated local
+      // rather than inherited.
+      matches!(self, Self::Static | Self::Instance)
+   }
+
+   fn is_constructor(&self) -> bool {
+      matches!(self, Self::Constructor { .. })
+   }
+
+   fn allow_new_fields(&self) -> bool {
+      matches!(
+         self,
+         Self::Constructor {
+            allow_new_fields: true
+         }
+      )
+   }
+}
+
 struct GenerateFunctionOptions {
    name: Rc<str>,
-   self_visible: bool,
+   call_conv: FunctionCallConv,
 }
 
 struct GeneratedFunction {

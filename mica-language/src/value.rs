@@ -221,6 +221,7 @@ pub struct Struct {
    /// The disptach table of the struct. This may only be set once, and setting it seals the struct.
    pub(crate) dtable: UnsafeCell<Rc<DispatchTable>>,
    sealed: Cell<bool>,
+   fields: UnsafeCell<Vec<Value>>,
 }
 
 impl Struct {
@@ -229,6 +230,16 @@ impl Struct {
       Self {
          dtable: UnsafeCell::new(dtable),
          sealed: Cell::new(false),
+         fields: UnsafeCell::new(Vec::new()),
+      }
+   }
+
+   /// Creates a new instance of this struct type.
+   pub(crate) unsafe fn new_instance(&self, field_count: usize) -> Self {
+      Self {
+         dtable: UnsafeCell::new(self.dtable().instance.clone().unwrap_unchecked()),
+         sealed: Cell::new(true),
+         fields: UnsafeCell::new(std::iter::repeat(Value::Nil).take(field_count).collect()),
       }
    }
 
@@ -237,12 +248,30 @@ impl Struct {
       unsafe { self.dtable.get().as_ref().unwrap_unchecked() }
    }
 
-   pub fn implement(&self, dtable: Rc<DispatchTable>) -> Result<(), ErrorKind> {
+   /// Implements the struct with the given dispatch table.
+   pub(crate) fn implement(&self, dtable: Rc<DispatchTable>) -> Result<(), ErrorKind> {
       if self.sealed.get() {
          return Err(ErrorKind::StructAlreadyImplemented);
       }
       unsafe { *self.dtable.get() = dtable }
+      self.sealed.set(true);
       Ok(())
+   }
+
+   /// Returns the value of a field.
+   ///
+   /// # Safety
+   /// This does not perform any borrow checks or bounds checks.
+   pub(crate) unsafe fn get_field(&self, index: usize) -> &Value {
+      (&*self.fields.get()).get_unchecked(index)
+   }
+
+   /// Sets the value of a field.
+   ///
+   /// # Safety
+   /// This does not perform any borrow checks or bounds checks.
+   pub(crate) unsafe fn set_field(&self, index: usize, value: Value) {
+      *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
    }
 }
 

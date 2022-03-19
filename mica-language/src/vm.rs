@@ -237,7 +237,7 @@ impl Fiber {
             let result = match f(arguments) {
                Ok(value) => value,
                Err(kind) => {
-                  return Err(self.error_during_function_call(Some(closure), env, kind));
+                  return Err(self.error_outside_function_call(Some(closure), env, kind));
                }
             };
             self.push(result);
@@ -246,7 +246,7 @@ impl Fiber {
       Ok(())
    }
 
-   fn error_during_function_call(
+   fn error_outside_function_call(
       &mut self,
       closure: Option<Rc<Closure>>,
       env: &mut Environment,
@@ -378,6 +378,18 @@ impl Fiber {
                let struct_v = Struct::new_type(Rc::new(dispatch_table));
                self.stack.push(Value::Struct(Rc::new(struct_v)));
             }
+            Opcode::CreateStruct(field_count) => {
+               // SAFETY: It's ok to use `unwrap_unchecked` because we're guaranteed the value on
+               // top is a struct.
+               //  - Constructors can only be created on types that weren't implemented yet.
+               //  - Thus, the only types that can be implemented are user-defined types.
+               //  - And each user-defined type is a struct.
+               //  - `Opcode::Implement` aborts execution if it isn't.
+               let type_struct = unsafe { self.pop().struct_v().cloned().unwrap_unchecked() };
+               let field_count = u32::from(field_count) as usize;
+               let instance = Rc::new(unsafe { type_struct.new_instance(field_count) });
+               self.push(Value::Struct(instance));
+            }
 
             Opcode::AssignGlobal(slot) => {
                let value = self.stack_top().clone();
@@ -417,6 +429,19 @@ impl Fiber {
                   self.open_upvalues.iter().rposition(|(slot, _)| *slot == stack_slot).unwrap();
                let (_, upvalue) = self.open_upvalues.remove(index);
                unsafe { upvalue.close() };
+            }
+            Opcode::GetField(index) => {
+               let struct_v = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let value = unsafe { struct_v.get_field(u32::from(index) as usize) };
+               self.push(value.clone());
+            }
+            Opcode::AssignField(index) => {
+               let struct_v = self.pop();
+               let value = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               self.push(value.clone());
+               unsafe { struct_v.set_field(u32::from(index) as usize, value) }
             }
 
             Opcode::Swap => {
@@ -494,7 +519,7 @@ impl Fiber {
                         ..signature
                      },
                   };
-                  return Err(self.error_during_function_call(None, env, error_kind));
+                  return Err(self.error_outside_function_call(None, env, error_kind));
                }
             }
             Opcode::Return => {
@@ -530,7 +555,8 @@ impl Fiber {
                   // Need to borrow here a second time. By this point we know that the unwrap
                   // will succeed so it's safe to use unwrap_unchecked.
                   let st = self.stack_top_mut().struct_v().unwrap_unchecked();
-                  *st.dtable.get() = type_dtable;
+                  st.implement(type_dtable)
+                     .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
                }
             }
 

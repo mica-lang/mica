@@ -199,6 +199,7 @@ pub enum NodeKind {
 
    Assign,
    Dot,
+   Field,
 
    Main,
    Do,

@@ -45,6 +45,7 @@ pub enum TokenKind {
 
    Assign, // =
    Dot,    // .
+   At,     // @
 
    LeftParen,  // (
    RightParen, // )
@@ -281,6 +282,7 @@ impl Lexer {
          }
 
          '.' => Ok(self.single_char_token(TokenKind::Dot)),
+         '@' => Ok(self.single_char_token(TokenKind::At)),
 
          '(' => Ok(self.single_char_token(TokenKind::LeftParen)),
          ')' => Ok(self.single_char_token(TokenKind::RightParen)),

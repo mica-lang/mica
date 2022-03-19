@@ -307,6 +307,12 @@ impl Parser {
          TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),
          TokenKind::Bang => self.unary_operator(token, NodeKind::Not),
 
+         TokenKind::At => {
+            let name = self.lexer.next_token()?;
+            let name = self.parse_identifier(name)?;
+            Ok(self.ast.build_node(NodeKind::Field, name).with_location(token.location).done())
+         }
+
          TokenKind::LeftParen => {
             let inner = self.parse_expression(0)?;
             if !matches!(self.lexer.next_token()?.kind, TokenKind::RightParen) {

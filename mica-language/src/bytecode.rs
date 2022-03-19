@@ -105,6 +105,7 @@ impl PackableToOpr24 for (u16, u8) {
 #[repr(u8)]
 pub enum Opcode {
    /// Doesn't do anything. Used as a default zero value if something goes wrong.
+   /// Also used for backpatching purposes.
    #[allow(unused)]
    Nop,
 
@@ -123,6 +124,9 @@ pub enum Opcode {
    /// Creates a unique type that can be later implemented. Must be followed by a string indicating
    /// the type's name.
    CreateType,
+   /// Creates a struct instance from the type at the top of the stack, with the specified amount
+   /// of fields.
+   CreateStruct(Opr24),
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal(Opr24),
@@ -138,6 +142,13 @@ pub enum Opcode {
    GetUpvalue(Opr24),
    /// Closes a local in its upvalue.
    CloseLocal(Opr24),
+   /// Loads a field from the struct on the top of the stack.
+   /// Assumes the value on top is a struct and not something else.
+   GetField(Opr24),
+   /// Assigns to a field in the struct on the top of the stack. The struct is consumed but the
+   /// value remains on the stack.
+   /// Assumes the second value from top is a struct and not something else.
+   AssignField(Opr24),
 
    /// Swaps the two values at the top of the stack.
    Swap,

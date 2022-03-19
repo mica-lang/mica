@@ -80,6 +80,9 @@ pub enum ErrorKind {
    MissingMethodName,
    TooManyImpls,
    MethodAlreadyImplemented(FunctionSignature),
+   TooManyFields,
+   FieldDoesNotExist(Rc<str>),
+   FieldOutsideOfImpl,
 
    // Runtime
    TypeError {
@@ -139,6 +142,11 @@ impl std::fmt::Display for ErrorKind {
          Self::MethodAlreadyImplemented(signature) => {
             write!(f, "method {signature} is already implemented")
          }
+         Self::TooManyFields => write!(f, "too many fields"),
+         Self::FieldOutsideOfImpl => {
+            write!(f, "fields cannot be referenced outside of 'impl' blocks")
+         }
+         Self::FieldDoesNotExist(name) => write!(f, "field '@{name}' does not exist"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

@@ -33,8 +33,11 @@ impl Vector
       @y = y
    end
 
-   # Fields must not be omitted in constructors.
+   # There can be more than one constructor. Each constructor after the first one must assign
+   # the same set of fields.
    func zero() constructor
+      @x = 0
+      @y = 0
    end
 
    func x() @x end
@@ -60,6 +63,9 @@ v.set_y(5)
 assert(v.x == 4)
 assert(v.y == 5)
 assert(Vector.new(3, 4).len == 5)
+z = Vector.zero
+assert(z.x == 0)
+assert(z.y == 0)
 
 # Two constructed struct instances are never equal to each other.
 u = Vector.new(1, 2)

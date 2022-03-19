@@ -36,3 +36,14 @@ end
 assert(fib(20) == 6765)
 # Deep recursion may take a while but should never crash the program (unless we run out of memory).
 assert(fib(30) == 832040)
+
+# `return` can be used to return from the function early.
+func test_return(x)
+   if x == 1 do
+      return 123
+   end
+   x + 1
+end
+
+assert(test_return(0) == 1)
+assert(test_return(1) == 123)

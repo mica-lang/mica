@@ -5,9 +5,9 @@ use crate::common::{Error, ErrorKind, Location};
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
    Number(f64),
-   String(String),
+   String(Rc<str>),
 
-   Identifier(String),
+   Identifier(Rc<str>),
 
    Nil,
    True,
@@ -22,6 +22,11 @@ pub enum TokenKind {
    End,
    Break,
    Return,
+
+   Struct,
+   Impl,
+   Constructor,
+   Static,
 
    Plus,  // +
    Minus, // -
@@ -39,6 +44,8 @@ pub enum TokenKind {
    GreaterEqual, // >=
 
    Assign, // =
+   Dot,    // .
+   At,     // @
 
    LeftParen,  // (
    RightParen, // )
@@ -127,8 +134,15 @@ impl Lexer {
          self.advance();
       }
       if self.get() == '.' {
+         let dot = self.location.byte;
          self.advance();
-         if !matches!(self.get(), '0'..='9') {
+         if Self::is_identifier_start_char(self.get()) {
+            self.location.byte = dot;
+         } else if let '0'..='9' = self.get() {
+            while let '0'..='9' = self.get() {
+               self.advance();
+            }
+         } else {
             return Err(self.error(ErrorKind::MissingDigitsAfterDecimalPoint));
          }
       }
@@ -221,6 +235,12 @@ impl Lexer {
          "end" => TokenKind::End,
          "break" => TokenKind::Break,
          "return" => TokenKind::Return,
+
+         "struct" => TokenKind::Struct,
+         "impl" => TokenKind::Impl,
+         "constructor" => TokenKind::Constructor,
+         "static" => TokenKind::Static,
+
          _ => return None,
       })
    }
@@ -236,7 +256,7 @@ impl Lexer {
          }
          '"' => {
             let string = self.string()?;
-            Ok(self.token(TokenKind::String(string)))
+            Ok(self.token(TokenKind::String(Rc::from(string))))
          }
 
          c if Self::is_identifier_start_char(c) => {
@@ -244,7 +264,7 @@ impl Lexer {
             Ok(if let Some(keyword) = Self::keyword(identifier) {
                self.token(keyword)
             } else {
-               let identifier = identifier.to_owned();
+               let identifier = Rc::from(identifier);
                self.token(TokenKind::Identifier(identifier))
             })
          }
@@ -260,6 +280,9 @@ impl Lexer {
          '>' => {
             Ok(self.single_or_double_char_token(TokenKind::Greater, '=', TokenKind::GreaterEqual))
          }
+
+         '.' => Ok(self.single_char_token(TokenKind::Dot)),
+         '@' => Ok(self.single_char_token(TokenKind::At)),
 
          '(' => Ok(self.single_char_token(TokenKind::LeftParen)),
          ')' => Ok(self.single_char_token(TokenKind::RightParen)),

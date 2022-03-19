@@ -22,7 +22,7 @@ pub struct Ast {
 
 enum NodeData {
    Number(f64),
-   String(String),
+   String(Rc<str>),
    Children(Vec<NodeId>),
 }
 
@@ -70,7 +70,7 @@ impl Ast {
       None
    }
 
-   pub fn string(&self, node: NodeId) -> Option<&str> {
+   pub fn string(&self, node: NodeId) -> Option<&Rc<str>> {
       if let Some(NodeData::String(s)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
          return Some(s);
       }
@@ -118,7 +118,7 @@ impl<'a> NodeBuilder<'a> {
       self
    }
 
-   pub fn with_string(self, string: String) -> Self {
+   pub fn with_string(self, string: Rc<str>) -> Self {
       unsafe {
          *self.ast.data.get_unchecked_mut(self.node.0 as usize) = Some(NodeData::String(string));
       }
@@ -198,6 +198,8 @@ pub enum NodeKind {
    GreaterEqual,
 
    Assign,
+   Dot,
+   Field,
 
    Main,
    Do,
@@ -209,8 +211,13 @@ pub enum NodeKind {
 
    Func,
    Parameters,
+   Static,
+   Constructor,
    Call,
    Return,
+
+   Struct,
+   Impl,
 }
 
 /// A `Debug` formatter that pretty-prints ASTs.

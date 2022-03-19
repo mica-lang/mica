@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 use std::rc::Rc;
 
+use crate::bytecode::FunctionSignature;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
    pub byte: usize,
@@ -58,7 +60,8 @@ pub enum ErrorKind {
    CommaExpected,
 
    // Code generator
-   VariableDoesNotExist(String),
+   VariableDoesNotExist(Rc<str>),
+   InvalidAssignment,
    TooManyLocals,
    TooManyGlobals,
    TooManyCaptures,
@@ -70,13 +73,28 @@ pub enum ErrorKind {
    TooManyFunctions,
    TooManyArguments,
    TooManyParameters,
+   TooManyMethods,
+   InvalidMethodName,
+   FunctionKindOutsideImpl,
+   InvalidImplItem,
+   MissingMethodName,
+   TooManyImpls,
+   MethodAlreadyImplemented(FunctionSignature),
+   TooManyFields,
+   FieldDoesNotExist(Rc<str>),
+   FieldOutsideOfImpl,
+   MissingFields(Vec<Rc<str>>),
 
    // Runtime
    TypeError {
       expected: Cow<'static, str>,
       got: Cow<'static, str>,
    },
-   InvalidAssignment,
+   MethodDoesNotExist {
+      type_name: Rc<str>,
+      signature: FunctionSignature,
+   },
+   StructAlreadyImplemented,
    User(Box<dyn std::error::Error>),
 }
 
@@ -101,6 +119,7 @@ impl std::fmt::Display for ErrorKind {
          Self::CommaExpected => write!(f, "comma ',' expected"),
 
          Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
+         Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
          Self::TooManyLocals => write!(f, "too many local variables"),
          Self::TooManyGlobals => write!(f, "too many global variables"),
          Self::TooManyCaptures => write!(f, "too many variables captured in the closure"),
@@ -112,11 +131,40 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyFunctions => write!(f, "too many unique functions"),
          Self::TooManyArguments => write!(f, "too many arguments"),
          Self::TooManyParameters => write!(f, "too many parameters"),
+         Self::TooManyMethods => write!(f, "too many instance functions with different signatures"),
+         Self::InvalidMethodName => write!(f, "method name must be an identifier"),
+         Self::FunctionKindOutsideImpl => write!(
+            f,
+            "function kinds (static, constructor) can only be used in 'impl' blocks"
+         ),
+         Self::InvalidImplItem => write!(f, "only functions are allowed in 'impl' blocks"),
+         Self::MissingMethodName => write!(f, "missing method name"),
+         Self::TooManyImpls => write!(f, "too many 'impl' blocks"),
+         Self::MethodAlreadyImplemented(signature) => {
+            write!(f, "method {signature} is already implemented")
+         }
+         Self::TooManyFields => write!(f, "too many fields"),
+         Self::FieldOutsideOfImpl => {
+            write!(f, "fields cannot be referenced outside of 'impl' blocks")
+         }
+         Self::FieldDoesNotExist(name) => write!(f, "field '@{name}' does not exist"),
+         Self::MissingFields(fields) => {
+            let fields: Vec<_> = fields.iter().map(|name| format!("@{name}")).collect();
+            let fields = fields.join(", ");
+            write!(
+               f,
+               "the following fields were not assigned in this constructor: {fields}"
+            )
+         }
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
-         Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
+         Self::MethodDoesNotExist {
+            type_name,
+            signature,
+         } => write!(f, "method {} is not defined for {}", signature, type_name),
+         Self::StructAlreadyImplemented => write!(f, "this struct is already implemented"),
          Self::User(error) => write!(f, "{}", error),
       }
    }

@@ -1,12 +1,12 @@
 use std::borrow::Cow;
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
 use std::marker::PhantomPinned;
 use std::pin::Pin;
 use std::rc::Rc;
-use std::{mem, ptr};
+use std::{fmt, mem, ptr};
 
-use crate::bytecode::Opr24;
+use crate::bytecode::{DispatchTable, Opr24};
 use crate::common::ErrorKind;
 
 /// The type of a value.
@@ -17,10 +17,11 @@ pub enum Type {
    Number,
    String,
    Function,
+   Struct,
 }
 
-impl std::fmt::Display for Type {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Type {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       write!(f, "{self:?}")
    }
 }
@@ -40,6 +41,8 @@ pub enum Value {
    String(Rc<str>),
    /// A function.
    Function(Rc<Closure>),
+   /// A struct.
+   Struct(Rc<Struct>),
 }
 
 impl Value {
@@ -51,6 +54,7 @@ impl Value {
          Value::Number(_) => Type::Number,
          Value::String(_) => Type::String,
          Value::Function(_) => Type::Function,
+         Value::Struct(_) => Type::Struct,
       }
    }
 
@@ -89,7 +93,7 @@ impl Value {
    }
 
    /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.
-   pub fn string(&self) -> Result<&str, ErrorKind> {
+   pub fn string(&self) -> Result<&Rc<str>, ErrorKind> {
       if let Value::String(s) = self {
          Ok(s)
       } else {
@@ -103,6 +107,15 @@ impl Value {
          Ok(c)
       } else {
          Err(self.type_error("Function"))
+      }
+   }
+
+   /// Ensures the value is a `Struct`, returning a type mismatch error if that's not the case.
+   pub fn struct_v(&self) -> Result<&Rc<Struct>, ErrorKind> {
+      if let Value::Struct(s) = self {
+         Ok(s)
+      } else {
+         Err(self.type_error("(any struct)"))
       }
    }
 
@@ -140,6 +153,7 @@ impl Value {
                }
             }
             Self::Function(_) => Ok(None),
+            Self::Struct(_) => Ok(None),
          }
       }
    }
@@ -160,8 +174,8 @@ impl From<bool> for Value {
    }
 }
 
-impl std::fmt::Debug for Value {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Value {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       match self {
          Value::Nil => f.write_str("nil"),
          Value::False => f.write_str("false"),
@@ -169,19 +183,20 @@ impl std::fmt::Debug for Value {
          Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s:?}"),
          Value::Function(_) => write!(f, "<func>"),
+         Value::Struct(s) => {
+            let dispatch_table = s.dtable();
+            let type_name = &dispatch_table.pretty_name;
+            write!(f, "<[{type_name}]>")
+         }
       }
    }
 }
 
-impl std::fmt::Display for Value {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Value {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       match self {
-         Value::Nil => f.write_str("nil"),
-         Value::False => f.write_str("false"),
-         Value::True => f.write_str("true"),
-         Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s}"),
-         Value::Function(_) => write!(f, "<func>"),
+         _ => fmt::Debug::fmt(&self, f),
       }
    }
 }
@@ -192,8 +207,71 @@ impl PartialEq for Value {
          (Self::Number(l), Self::Number(r)) => l == r,
          (Self::String(l), Self::String(r)) => l == r,
          (Self::Function(l), Self::Function(r)) => Rc::ptr_eq(l, r),
-         _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+         (Self::Struct(l), Self::Struct(r)) => Rc::ptr_eq(l, r),
+         _ => mem::discriminant(self) == mem::discriminant(other),
       }
+   }
+}
+
+/// The innards of a struct.
+///
+/// Note that both types and actual constructed structs use the same representation. The difference
+/// is that types do not contain associated fields (Mica does not have static fields.)
+pub struct Struct {
+   /// The disptach table of the struct. This may only be set once, and setting it seals the struct.
+   pub(crate) dtable: UnsafeCell<Rc<DispatchTable>>,
+   sealed: Cell<bool>,
+   fields: UnsafeCell<Vec<Value>>,
+}
+
+impl Struct {
+   /// Creates a new `Struct` representing a type.
+   pub fn new_type(dtable: Rc<DispatchTable>) -> Self {
+      Self {
+         dtable: UnsafeCell::new(dtable),
+         sealed: Cell::new(false),
+         fields: UnsafeCell::new(Vec::new()),
+      }
+   }
+
+   /// Creates a new instance of this struct type.
+   pub(crate) unsafe fn new_instance(&self, field_count: usize) -> Self {
+      Self {
+         dtable: UnsafeCell::new(self.dtable().instance.clone().unwrap_unchecked()),
+         sealed: Cell::new(true),
+         fields: UnsafeCell::new(std::iter::repeat(Value::Nil).take(field_count).collect()),
+      }
+   }
+
+   /// Returns a reference to the dispatch table of the struct.
+   pub fn dtable(&self) -> &DispatchTable {
+      unsafe { self.dtable.get().as_ref().unwrap_unchecked() }
+   }
+
+   /// Implements the struct with the given dispatch table.
+   pub(crate) fn implement(&self, dtable: Rc<DispatchTable>) -> Result<(), ErrorKind> {
+      if self.sealed.get() {
+         return Err(ErrorKind::StructAlreadyImplemented);
+      }
+      unsafe { *self.dtable.get() = dtable }
+      self.sealed.set(true);
+      Ok(())
+   }
+
+   /// Returns the value of a field.
+   ///
+   /// # Safety
+   /// This does not perform any borrow checks or bounds checks.
+   pub(crate) unsafe fn get_field(&self, index: usize) -> &Value {
+      (&*self.fields.get()).get_unchecked(index)
+   }
+
+   /// Sets the value of a field.
+   ///
+   /// # Safety
+   /// This does not perform any borrow checks or bounds checks.
+   pub(crate) unsafe fn set_field(&self, index: usize, value: Value) {
+      *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
    }
 }
 
@@ -207,13 +285,12 @@ pub struct Upvalue {
    _pinned: PhantomPinned,
 }
 
-impl std::fmt::Debug for Upvalue {
-   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Upvalue {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       f.debug_struct("Upvalue")
          .field("ptr", unsafe { self.ptr.get().as_ref() }.unwrap())
          .field("closed", unsafe { self.closed.get().as_ref() }.unwrap())
-         .field("_pinned", &self._pinned)
-         .finish()
+         .finish_non_exhaustive()
    }
 }
 

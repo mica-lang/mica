@@ -3,7 +3,9 @@
 use std::borrow::Cow;
 use std::fmt;
 
+/// A raw [`mica-language`][`crate::language`] error, with metadata such as stack traces.
 pub type LanguageError = mica_language::common::Error;
+/// A raw [`mica-language`][`crate::language`] error kind.
 pub type LanguageErrorKind = mica_language::common::ErrorKind;
 
 /// An error.
@@ -19,6 +21,8 @@ pub enum Error {
    TooManyGlobals,
    /// Too many functions were created.
    TooManyFunctions,
+   /// Too many methods with different signatures were declared.
+   TooManyMethods,
    /// A type mismatch occured.
    TypeMismatch {
       expected: Cow<'static, str>,
@@ -32,6 +36,8 @@ pub enum Error {
       expected: Cow<'static, str>,
       got: Cow<'static, str>,
    },
+   /// A value was mutably borrowed twice.
+   ReentrantMutableBorrow,
    /// A user-defined error.
    User(Box<dyn std::error::Error>),
 }
@@ -52,6 +58,7 @@ impl fmt::Display for Error {
          Self::EngineInUse => f.write_str("execution engine is in use by another fiber"),
          Self::TooManyGlobals => f.write_str("too many globals"),
          Self::TooManyFunctions => f.write_str("too many functions"),
+         Self::TooManyMethods => f.write_str("too many methods with different signatures"),
          Self::TypeMismatch { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
@@ -65,9 +72,11 @@ impl fmt::Display for Error {
          } => {
             write!(
                f,
-               "type mismatch at argument {index}, expected {expected} but got {got}"
+               "type mismatch at argument {}, expected {expected} but got {got}",
+               index + 1
             )
          }
+         Self::ReentrantMutableBorrow => write!(f, "method receiver mutation is not reentrant"),
          Self::User(error) => write!(f, "{error}"),
       }
    }
@@ -114,7 +123,9 @@ where
    }
 }
 
+/// Extensions for converting [`Result`]s into a `mica-language` FFI-friendly structure.
 pub trait MicaLanguageResultExt<T> {
+   /// Maps the error in the result to a [`LanguageErrorKind`].
    fn mica_language(self) -> Result<T, LanguageErrorKind>;
 }
 

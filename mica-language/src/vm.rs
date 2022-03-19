@@ -4,9 +4,11 @@ use std::pin::Pin;
 use std::ptr;
 use std::rc::Rc;
 
-use crate::bytecode::{CaptureKind, Chunk, Environment, FunctionKind, Opcode, Opr24};
+use crate::bytecode::{
+   CaptureKind, Chunk, DispatchTable, Environment, FunctionKind, FunctionSignature, Opcode, Opr24,
+};
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
-use crate::value::{Closure, Upvalue, Value};
+use crate::value::{Closure, Struct, Upvalue, Value};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -213,6 +215,113 @@ impl Fiber {
       self.stack.extend(std::iter::repeat_with(|| Value::Nil).take(n));
    }
 
+   fn enter_function(
+      &mut self,
+      env: &mut Environment,
+      closure: Rc<Closure>,
+      argument_count: usize,
+   ) -> Result<(), Error> {
+      let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
+      match &mut function.kind {
+         FunctionKind::Bytecode { chunk, .. } => {
+            self.save_return_point();
+            self.chunk = Rc::clone(chunk);
+            self.closure = Some(closure);
+            self.pc = 0;
+            self.stack_bottom = self.stack.len() - argument_count;
+            self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
+         }
+         FunctionKind::Foreign(f) => {
+            let arguments =
+               unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
+            let result = match f(arguments) {
+               Ok(value) => value,
+               Err(kind) => {
+                  return Err(self.error_outside_function_call(Some(closure), env, kind));
+               }
+            };
+            self.push(result);
+         }
+      }
+      Ok(())
+   }
+
+   fn error_outside_function_call(
+      &mut self,
+      closure: Option<Rc<Closure>>,
+      env: &mut Environment,
+      kind: ErrorKind,
+   ) -> Error {
+      self.save_return_point();
+      if let Some(closure) = closure.as_ref() {
+         self.call_stack.push(ReturnPoint {
+            chunk: None,
+            closure: Some(Rc::clone(closure)),
+            pc: 0,
+            stack_bottom: 0,
+         });
+      }
+      let error = self.error(env, kind);
+      if closure.is_some() {
+         self.call_stack.pop();
+      }
+      self.call_stack.pop();
+      error
+   }
+
+   fn create_closure(&mut self, env: &mut Environment, function_id: Opr24) -> Rc<Closure> {
+      let function = unsafe { env.get_function_unchecked_mut(function_id) };
+      let mut captures = Vec::new();
+      if let FunctionKind::Bytecode {
+         captured_locals, ..
+      } = &function.kind
+      {
+         for capture in captured_locals {
+            captures.push(match capture {
+               CaptureKind::Local(slot) => {
+                  self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot))
+               }
+               CaptureKind::Upvalue(index) => {
+                  let closure = self.closure.as_ref().unwrap();
+                  Pin::clone(&closure.captures[u32::from(*index) as usize])
+               }
+            });
+         }
+      }
+      Rc::new(Closure {
+         function_id,
+         captures,
+      })
+   }
+
+   /// Returns the dispatch table of the given value.
+   fn get_dispatch_table<'v>(value: &'v Value, env: &'v Environment) -> &'v DispatchTable {
+      match value {
+         Value::Nil => &env.builtin_dtables.nil,
+         Value::False | Value::True => &env.builtin_dtables.boolean,
+         Value::Number(_) => &env.builtin_dtables.number,
+         Value::String(_) => &env.builtin_dtables.string,
+         Value::Function(_) => &env.builtin_dtables.function,
+         Value::Struct(st) => st.dtable(),
+      }
+   }
+
+   /// Initializes a dispatch table with methods obtained from a method ID to function ID map.
+   /// Each function's name is prepended with `type_name.`.
+   fn initialize_dtable(
+      &mut self,
+      methods: impl Iterator<Item = (u16, Opr24)>,
+      env: &mut Environment,
+      dtable: &mut DispatchTable,
+   ) {
+      for (method_id, function_id) in methods {
+         let function = unsafe { env.get_function_unchecked_mut(function_id) };
+         function.name = Rc::from(format!("{}.{}", dtable.pretty_name, function.name));
+         let closure = self.create_closure(env, function_id);
+         dtable.set_method(method_id, closure);
+      }
+   }
+
    /// Interprets bytecode in the chunk, with the provided global storage.
    pub fn interpret(
       &mut self,
@@ -260,28 +369,26 @@ impl Fiber {
                self.push(Value::String(string));
             }
             Opcode::CreateClosure(function_id) => {
-               let function = unsafe { env.get_function_unchecked_mut(function_id) };
-               let mut captures = Vec::new();
-               if let FunctionKind::Bytecode {
-                  captured_locals, ..
-               } = &function.kind
-               {
-                  for capture in captured_locals {
-                     captures.push(match capture {
-                        CaptureKind::Local(slot) => {
-                           self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot))
-                        }
-                        CaptureKind::Upvalue(index) => {
-                           let closure = self.closure.as_ref().unwrap();
-                           Pin::clone(&closure.captures[u32::from(*index) as usize])
-                        }
-                     });
-                  }
-               }
-               self.push(Value::Function(Rc::new(Closure {
-                  function_id,
-                  captures,
-               })));
+               let closure = self.create_closure(env, function_id);
+               self.push(Value::Function(closure));
+            }
+            Opcode::CreateType => {
+               let name = unsafe { self.chunk.read_string(&mut self.pc) };
+               let dispatch_table = DispatchTable::new_for_type(name);
+               let struct_v = Struct::new_type(Rc::new(dispatch_table));
+               self.stack.push(Value::Struct(Rc::new(struct_v)));
+            }
+            Opcode::CreateStruct(field_count) => {
+               // SAFETY: It's ok to use `unwrap_unchecked` because we're guaranteed the value on
+               // top is a struct.
+               //  - Constructors can only be created on types that weren't implemented yet.
+               //  - Thus, the only types that can be implemented are user-defined types.
+               //  - And each user-defined type is a struct.
+               //  - `Opcode::Implement` aborts execution if it isn't.
+               let type_struct = unsafe { self.pop().struct_v().cloned().unwrap_unchecked() };
+               let field_count = u32::from(field_count) as usize;
+               let instance = Rc::new(unsafe { type_struct.new_instance(field_count) });
+               self.push(Value::Struct(instance));
             }
 
             Opcode::AssignGlobal(slot) => {
@@ -322,6 +429,19 @@ impl Fiber {
                   self.open_upvalues.iter().rposition(|(slot, _)| *slot == stack_slot).unwrap();
                let (_, upvalue) = self.open_upvalues.remove(index);
                unsafe { upvalue.close() };
+            }
+            Opcode::GetField(index) => {
+               let struct_v = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let value = unsafe { struct_v.get_field(u32::from(index) as usize) };
+               self.push(value.clone());
+            }
+            Opcode::AssignField(index) => {
+               let struct_v = self.pop();
+               let value = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               self.push(value.clone());
+               unsafe { struct_v.set_field(u32::from(index) as usize, value) }
             }
 
             Opcode::Swap => {
@@ -370,52 +490,77 @@ impl Fiber {
             }
 
             Opcode::Call(argument_count) => {
-               let argument_count = argument_count as usize;
-               let function_value = self.nth_from_top(argument_count + 1);
-               let closure = Rc::clone(wrap_error!(function_value.function()));
-               let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
-               match &mut function.kind {
-                  FunctionKind::Bytecode { chunk, .. } => {
-                     self.save_return_point();
-                     self.chunk = Rc::clone(chunk);
-                     self.closure = Some(Rc::clone(&closure));
-                     self.pc = 0;
-                     self.stack_bottom = self.stack.len() - argument_count;
-                     self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
-                  }
-                  FunctionKind::Foreign(f) => {
-                     self.save_return_point();
-                     self.call_stack.push(ReturnPoint {
-                        chunk: None,
-                        closure: Some(closure),
-                        pc: 0,
-                        stack_bottom: 0,
-                     });
-                     let arguments =
-                        unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
-                     let result = match f(arguments) {
-                        Ok(value) => value,
-                        Err(kind) => {
-                           return Err(self.error(env, kind));
+               // Add 1 to count in the called function itself, which is treated like an argument.
+               let argument_count = argument_count as usize + 1;
+               let function = self.nth_from_top(argument_count);
+               let closure = Rc::clone(wrap_error!(function.function()));
+               self.enter_function(env, closure, argument_count)?;
+            }
+            Opcode::CallMethod(arg) => {
+               let (method_index, argument_count) = arg.unpack();
+               let receiver = self.nth_from_top(argument_count as usize);
+               let dtable = Self::get_dispatch_table(receiver, env);
+               if let Some(closure) = dtable.get_method(method_index) {
+                  let closure = Rc::clone(closure);
+                  self.enter_function(env, closure, argument_count as usize)?;
+               } else {
+                  let signature =
+                     env.get_function_signature(method_index).cloned().unwrap_or_else(|| {
+                        FunctionSignature {
+                           name: Rc::from("(invalid method index)"),
+                           arity: None,
                         }
-                     };
-                     self.call_stack.pop();
-                     self.call_stack.pop();
-                     self.push(result);
-                  }
+                     });
+                  let error_kind = ErrorKind::MethodDoesNotExist {
+                     type_name: Rc::clone(&dtable.pretty_name),
+                     signature: FunctionSignature {
+                        // Subtract 1 to omit the receiver from error messages.
+                        arity: signature.arity.map(|x| x - 1),
+                        ..signature
+                     },
+                  };
+                  return Err(self.error_outside_function_call(None, env, error_kind));
                }
             }
             Opcode::Return => {
                let result = self.pop();
                self.restore_return_point();
-               // Remove the function from the stack.
-               self.stack.pop().unwrap();
-               // Push the result onto the stack.
                self.push(result);
             }
 
+            Opcode::Implement(proto_id) => {
+               let st = wrap_error!(self.stack_top_mut().struct_v());
+               let type_name = Rc::clone(&st.dtable().type_name);
+               let proto = unsafe { env.take_prototype_unchecked(proto_id) };
+
+               let mut type_dtable = DispatchTable::new_for_type(Rc::clone(&type_name));
+               self.initialize_dtable(
+                  proto.statics.iter().map(|(&k, &v)| (k, v)),
+                  env,
+                  &mut type_dtable,
+               );
+
+               let mut instance_dtable = DispatchTable::new_for_instance(type_name);
+               self.initialize_dtable(
+                  proto.instance.iter().map(|(&k, &v)| (k, v)),
+                  env,
+                  &mut instance_dtable,
+               );
+
+               let instance_dtable = Rc::new(instance_dtable);
+               type_dtable.instance = Some(instance_dtable);
+               let type_dtable = Rc::new(type_dtable);
+
+               unsafe {
+                  // Need to borrow here a second time. By this point we know that the unwrap
+                  // will succeed so it's safe to use unwrap_unchecked.
+                  let st = self.stack_top_mut().struct_v().unwrap_unchecked();
+                  st.implement(type_dtable)
+                     .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
+               }
+            }
+
             Opcode::Negate => {
-               // TODO: Debug info.
                let number = wrap_error!(self.pop().number());
                self.push(Value::Number(-number))
             }

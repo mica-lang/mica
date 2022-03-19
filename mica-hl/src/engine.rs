@@ -1,17 +1,25 @@
 use std::cell::RefCell;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
-use mica_language::bytecode::{Chunk, Environment, Function, FunctionKind, Opr24};
+use mica_language::bytecode::{
+   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind, Opr24,
+};
 use mica_language::codegen::CodeGenerator;
 use mica_language::lexer::Lexer;
 use mica_language::parser::Parser;
 use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
-use crate::{Error, Fiber, ForeignFunction, ToValue, TryFromValue};
+use crate::{
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue,
+   TypeBuilder,
+};
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
+
+use self::rtenv::RuntimeEnvironment;
 
 /// Options for debugging the language implementation.
 #[derive(Debug, Clone, Copy, Default)]
@@ -30,22 +38,59 @@ pub struct Engine {
 
 impl Engine {
    /// Creates a new engine.
-   pub fn new() -> Self {
-      Self::with_debug_options(Default::default())
+   pub fn new(stdlib: impl StandardLibrary) -> Self {
+      Self::with_debug_options(stdlib, Default::default())
    }
 
    /// Creates a new engine with specific debug options.
    ///
    /// [`Engine::new`] creates an engine with [`Default`] debug options, and should generally be
    /// preferred unless you're debugging the language's internals.
-   pub fn with_debug_options(debug_options: DebugOptions) -> Self {
-      Self {
+   ///
+   /// Constructing the engine can fail if the standard library defines way too many methods.
+   pub fn with_debug_options(
+      mut stdlib: impl StandardLibrary,
+      debug_options: DebugOptions,
+   ) -> Self {
+      // This is a little bad because it allocates a bunch of empty dtables only to discard them.
+      let mut env = Environment::new(Default::default());
+
+      macro_rules! get_dtables {
+         ($type_name:tt, $define:tt) => {{
+            let tb = TypeBuilder::new($type_name);
+            let tb = stdlib.$define(tb);
+            // Unwrapping here is fine because the stdlib should never declare THAT many methods.
+            tb.build(&mut env).unwrap()
+         }};
+      }
+      // TODO: Expose _*_type in the global scope.
+      let nil = get_dtables!("Nil", define_nil);
+      let boolean = get_dtables!("Boolean", define_boolean);
+      let number = get_dtables!("Number", define_number);
+      let string = get_dtables!("String", define_string);
+      env.builtin_dtables = BuiltinDispatchTables {
+         nil: Rc::clone(&nil.instance_dtable),
+         boolean: Rc::clone(&boolean.instance_dtable),
+         number: Rc::clone(&number.instance_dtable),
+         string: Rc::clone(&string.instance_dtable),
+         function: Rc::new(DispatchTable::new_for_instance("Function")), // TODO
+      };
+
+      let engine = Self {
          runtime_env: Rc::new(RefCell::new(RuntimeEnvironment {
-            env: Environment::new(),
+            env,
             globals: Globals::new(),
          })),
          debug_options,
-      }
+      };
+      // Unwrapping here is fine because at this point we haven't got quite that many globals
+      // registered to overflow an Opr24.
+      engine.set_built_type(&nil).unwrap();
+      engine.set_built_type(&boolean).unwrap();
+      engine.set_built_type(&number).unwrap();
+      engine.set_built_type(&string).unwrap();
+
+      engine
    }
 
    /// Compiles a script.
@@ -150,13 +195,13 @@ impl Engine {
    {
       let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
       let id = id.to_global_id(&mut runtime_env.env)?;
-      T::try_from_value(runtime_env.globals.get(id.0))
+      T::try_from_value(&runtime_env.globals.get(id.0))
    }
 
    /// Declares a "raw" function in the global scope. Raw functions do not perform any type checks
    /// by default and accept a variable number of arguments.
    ///
-   /// You should generally prefer [`function`][`Self::function`] instead of this.
+   /// You should generally prefer [`add_function`][`Self::add_function`] instead of this.
    ///
    /// Note that this cannot accept [`GlobalId`]s, because a name is required to create the function
    /// and global IDs have their name erased.
@@ -168,7 +213,8 @@ impl Engine {
    /// # Errors
    ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn raw_function(
+   ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
+   pub fn add_raw_function(
       &self,
       name: &str,
       parameter_count: impl Into<Option<u16>>,
@@ -195,31 +241,50 @@ impl Engine {
    /// Declares a function in the global scope.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
-   ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
+   /// See [`add_raw_function`][`Self::add_raw_function`].
+   pub fn add_function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
    where
+      V: ffvariants::Bare,
       F: ForeignFunction<V>,
    {
-      self.raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
+      self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
+   }
+
+   /// Declares a type in the global scope.
+   ///
+   /// # Errors
+   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
+   ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
+   ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
+   ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created
+   pub fn add_type<T>(&self, builder: TypeBuilder<T>) -> Result<(), Error> {
+      let built = {
+         let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
+         builder.build(&mut runtime_env.env)?
+      };
+      self.set_built_type(&built)?;
+      Ok(())
+   }
+
+   pub(crate) fn set_built_type(&self, typ: &BuiltType) -> Result<(), Error> {
+      self.set(typ.type_name.deref(), typ.make_type_struct())
    }
 }
 
-impl Default for Engine {
-   fn default() -> Self {
-      Self::new()
+pub(crate) mod rtenv {
+   use mica_language::bytecode::Environment;
+   use mica_language::vm::Globals;
+
+   /// The runtime environment. Contains declared globals and their values.
+   pub struct RuntimeEnvironment {
+      pub(crate) env: Environment,
+      pub(crate) globals: Globals,
    }
-}
 
-/// The runtime environment. Contains declared globals and their values.
-pub(crate) struct RuntimeEnvironment {
-   pub(crate) env: Environment,
-   pub(crate) globals: Globals,
-}
-
-impl RuntimeEnvironment {
-   pub fn split(&mut self) -> (&mut Environment, &mut Globals) {
-      (&mut self.env, &mut self.globals)
+   impl RuntimeEnvironment {
+      pub fn split(&mut self) -> (&mut Environment, &mut Globals) {
+         (&mut self.env, &mut self.globals)
+      }
    }
 }
 

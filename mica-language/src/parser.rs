@@ -38,6 +38,15 @@ impl Parser {
       }
    }
 
+   fn try_next(&mut self, kind: TokenKind) -> Result<Option<Token>, Error> {
+      let next_token = self.lexer.peek_token()?;
+      Ok(if next_token.kind == kind {
+         Some(self.lexer.next_token()?)
+      } else {
+         None
+      })
+   }
+
    fn precedence(token: &Token) -> i8 {
       match token.kind {
          TokenKind::Or => 1,
@@ -51,7 +60,7 @@ impl Parser {
          | TokenKind::GreaterEqual => 4,
          TokenKind::Plus | TokenKind::Minus => 5,
          TokenKind::Star | TokenKind::Slash => 6,
-         TokenKind::LeftParen => 7,
+         TokenKind::LeftParen | TokenKind::Dot => 7,
          _ => 0,
       }
    }
@@ -245,9 +254,19 @@ impl Parser {
          let name = p.lexer.next_token()?;
          p.parse_identifier(name)
       })?;
+
+      // We allow either `constructor` or `static`, but not both.
+      let kind = if let Some(token) = self.try_next(TokenKind::Constructor)? {
+         self.ast.build_node(NodeKind::Constructor, ()).with_location(token.location).done()
+      } else if let Some(token) = self.try_next(TokenKind::Static)? {
+         self.ast.build_node(NodeKind::Static, ()).with_location(token.location).done()
+      } else {
+         NodeId::EMPTY
+      };
+
       let parameters = self
          .ast
-         .build_node(NodeKind::Parameters, ())
+         .build_node(NodeKind::Parameters, kind)
          .with_location(left_paren.location)
          .with_children(parameters)
          .done();
@@ -287,6 +306,12 @@ impl Parser {
 
          TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),
          TokenKind::Bang => self.unary_operator(token, NodeKind::Not),
+
+         TokenKind::At => {
+            let name = self.lexer.next_token()?;
+            let name = self.parse_identifier(name)?;
+            Ok(self.ast.build_node(NodeKind::Field, name).with_location(token.location).done())
+         }
 
          TokenKind::LeftParen => {
             let inner = self.parse_expression(0)?;
@@ -351,6 +376,7 @@ impl Parser {
          TokenKind::GreaterEqual => self.binary_operator(left, token, NodeKind::GreaterEqual),
 
          TokenKind::Assign => self.binary_operator(left, token, NodeKind::Assign),
+         TokenKind::Dot => self.binary_operator(left, token, NodeKind::Dot),
 
          TokenKind::LeftParen => self.function_call(left, token),
 
@@ -363,6 +389,7 @@ impl Parser {
       matches!(token, TokenKind::LeftParen)
    }
 
+   /// Parses an expression.
    fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, Error> {
       let mut token = self.lexer.next_token()?;
       let mut left = self.parse_prefix(token)?;
@@ -381,6 +408,32 @@ impl Parser {
       Ok(left)
    }
 
+   /// Parses a struct declaration.
+   fn parse_struct(&mut self) -> Result<NodeId, Error> {
+      let struct_token = self.lexer.next_token()?;
+      let name = self.lexer.next_token()?;
+      let name = self.parse_identifier(name)?;
+      Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
+   }
+
+   /// Parses an `impl` block.
+   fn parse_impl(&mut self) -> Result<NodeId, Error> {
+      let impl_token = self.lexer.next_token()?;
+      let implementee = self.parse_expression(0)?;
+      let mut items = Vec::new();
+      // Note that we parse any type of item inside of the `impl` block.
+      // The codegen phase is the thing that ensures the items declared are valid.
+      self.parse_terminated_block(&impl_token, &mut items, |k| k == &TokenKind::End)?;
+      let _end = self.lexer.next_token()?;
+      Ok(self
+         .ast
+         .build_node(NodeKind::Impl, implementee)
+         .with_location(impl_token.location)
+         .with_children(items)
+         .done())
+   }
+
+   /// Parses a single item.
    fn parse_item(&mut self) -> Result<NodeId, Error> {
       let token = self.lexer.peek_token()?;
       match &token.kind {
@@ -388,10 +441,13 @@ impl Parser {
             let func_token = self.lexer.next_token()?;
             self.parse_function(func_token, false)
          }
+         TokenKind::Struct => self.parse_struct(),
+         TokenKind::Impl => self.parse_impl(),
          _ => self.parse_expression(0),
       }
    }
 
+   /// Parses a Mica program.
    pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
       let first_token = self.lexer.peek_token()?;
       let mut main = Vec::new();

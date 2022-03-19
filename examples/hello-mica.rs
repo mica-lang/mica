@@ -3,7 +3,7 @@
 use mica::Engine;
 
 fn main() {
-   let engine = Engine::new();
+   let engine = Engine::new(mica::std::lib());
    mica::std::load(&engine).unwrap();
 
    engine.set("x", 123_i32).unwrap();

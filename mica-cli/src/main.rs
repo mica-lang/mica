@@ -42,7 +42,7 @@ impl Completer for MicaValidator {
 
 impl Validator for MicaValidator {
    fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
-      let engine = Engine::new();
+      let engine = Engine::new(mica::std::lib());
       if let Err(error) = engine.compile("(repl)", ctx.input()) {
          use LanguageErrorKind as ErrorKind;
          if let Error::Compile(LanguageError::Compile {
@@ -83,10 +83,13 @@ fn interpret(
 }
 
 fn engine(options: &EngineOptions) -> Result<Engine, mica::Error> {
-   let engine = Engine::with_debug_options(mica::DebugOptions {
-      dump_ast: options.dump_ast,
-      dump_bytecode: options.dump_bytecode,
-   });
+   let engine = Engine::with_debug_options(
+      mica::std::lib(),
+      mica::DebugOptions {
+         dump_ast: options.dump_ast,
+         dump_bytecode: options.dump_bytecode,
+      },
+   );
    mica::std::load(&engine)?;
    Ok(engine)
 }

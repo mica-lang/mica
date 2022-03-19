@@ -43,9 +43,9 @@ fn assert(condition: Value, message: Option<Value>) -> Result<Value, mica_hl::Er
 
 /// Loads the core library into the engine.
 pub fn load_core(engine: &Engine) -> Result<(), mica_hl::Error> {
-   engine.function("print", print)?;
-   engine.function("error", error)?;
-   engine.function("assert", assert)?;
+   engine.add_function("print", print)?;
+   engine.add_function("error", error)?;
+   engine.add_function("assert", assert)?;
 
    Ok(())
 }

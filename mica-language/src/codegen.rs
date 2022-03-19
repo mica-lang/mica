@@ -1,11 +1,14 @@
 //! Bytecode generation.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
-use crate::bytecode::{CaptureKind, Chunk, Environment, Function, FunctionKind, Opcode, Opr24};
+use crate::bytecode::{
+   CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
+   Prototype,
+};
 use crate::common::{Error, ErrorKind};
 
 /// Info about a local variable on the stack.
@@ -157,6 +160,33 @@ struct BreakableBlock {
    start: usize,
 }
 
+#[derive(Debug, Default)]
+struct StructData {
+   /// Mapping from field names to indices.
+   fields: HashMap<Rc<str>, Opr24>,
+   /// The `self` variable. Used in `@field` lookups.
+   receiver: Option<VariablePlace>,
+}
+
+impl StructData {
+   /// Returns the index of the field with the given name, or creates that field if it doesn't
+   /// exist yet.
+   fn get_or_create_field(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
+      if !self.fields.contains_key(name) {
+         let index = Opr24::try_from(self.fields.len()).map_err(|_| ErrorKind::TooManyFields)?;
+         self.fields.insert(Rc::from(name), index);
+         Ok(index)
+      } else {
+         Ok(*self.fields.get(name).unwrap())
+      }
+   }
+
+   /// Returns the index of the field with the given name, or `None` if there is no such field.
+   fn get_field(&self, name: &str) -> Option<Opr24> {
+      self.fields.get(name).copied()
+   }
+}
+
 pub struct CodeGenerator<'e> {
    env: &'e mut Environment,
 
@@ -164,6 +194,11 @@ pub struct CodeGenerator<'e> {
 
    locals: Box<Locals>,
    breakable_blocks: Vec<BreakableBlock>,
+   struct_data: Option<Box<StructData>>,
+
+   allow_new_fields: bool,
+   is_constructor: bool,
+   assigned_fields: HashSet<Rc<str>>,
 }
 
 impl<'e> CodeGenerator<'e> {
@@ -175,6 +210,11 @@ impl<'e> CodeGenerator<'e> {
 
          locals: Default::default(),
          breakable_blocks: Vec::new(),
+         struct_data: None,
+
+         allow_new_fields: false,
+         is_constructor: false,
+         assigned_fields: HashSet::new(),
       }
    }
 
@@ -364,6 +404,26 @@ impl<'e> CodeGenerator<'e> {
       }
    }
 
+   /// Generates code for a field lookup.
+   fn generate_field(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name, _) = ast.node_pair(node);
+      let name = ast.string(name).unwrap();
+      let struct_data = self
+         .struct_data
+         .as_deref()
+         .ok_or_else(|| ast.error(node, ErrorKind::FieldOutsideOfImpl))?;
+      let field_id = struct_data
+         .get_field(name)
+         .ok_or_else(|| ast.error(node, ErrorKind::FieldDoesNotExist(Rc::clone(name))))?;
+      // Unwrapping is OK here because fields are not allowed outside of functions, and each
+      // function with `StructData` passed in assigns to `receiver` at the start of its
+      // code generation.
+      let receiver = struct_data.receiver.unwrap();
+      self.generate_variable_load(receiver);
+      self.chunk.push(Opcode::GetField(field_id));
+      Ok(())
+   }
+
    /// Generates code for an assignment.
    fn generate_assignment(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (target, value) = ast.node_pair(node);
@@ -382,6 +442,31 @@ impl<'e> CodeGenerator<'e> {
                   .map_err(|kind| ast.error(node, kind))?
             };
             self.generate_variable_assign(variable);
+         }
+         NodeKind::Field => {
+            let (name, _) = ast.node_pair(target);
+            let name = ast.string(name).unwrap();
+            if let Some(struct_data) = self.struct_data.as_mut() {
+               let field = if self.allow_new_fields {
+                  struct_data.get_or_create_field(name).map_err(|kind| ast.error(node, kind))?
+               } else {
+                  struct_data.get_field(name).ok_or_else(|| {
+                     ast.error(target, ErrorKind::FieldDoesNotExist(Rc::clone(name)))
+                  })?
+               };
+               // Unwrapping is OK here because `receiver` is assigned at the start of each function
+               // in an `impl` block.
+               let receiver = struct_data.receiver.unwrap();
+               self.generate_variable_load(receiver);
+               self.chunk.push(Opcode::AssignField(field));
+            } else {
+               return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
+            }
+            // In constructors, we need to keep track of which fields were assigned to report
+            // errors about missing field values.
+            if self.is_constructor && !self.allow_new_fields {
+               self.assigned_fields.insert(Rc::clone(name));
+            }
          }
          _ => return Err(ast.error(target, ErrorKind::InvalidAssignment)),
       }
@@ -551,71 +636,327 @@ impl<'e> CodeGenerator<'e> {
    /// Generates code for a function call.
    fn generate_call(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (function, _) = ast.node_pair(node);
-      self.generate_node(ast, function)?;
-      let arguments = ast.children(node).unwrap();
-      for &argument in arguments {
-         self.generate_node(ast, argument)?;
+      match ast.kind(function) {
+         // Method calls need special treatment.
+         NodeKind::Dot => {
+            let (receiver, name) = ast.node_pair(function);
+            if ast.kind(name) != NodeKind::Identifier {
+               return Err(ast.error(name, ErrorKind::InvalidMethodName));
+            }
+            let name = ast.string(name).unwrap();
+
+            // Generate the receiver and arguments.
+            self.generate_node(ast, receiver)?;
+            let arguments = ast.children(node).unwrap();
+            for &argument in arguments {
+               self.generate_node(ast, argument)?;
+            }
+
+            // Construct the call.
+            let arity: u8 = (1 + arguments.len())
+               // ↑ Add 1 for the receiver, which is also an argument.
+               .try_into()
+               .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
+            let signature = FunctionSignature {
+               name: Rc::clone(name),
+               arity: Some(arity as u16),
+            };
+            let method_index =
+               self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+            self.chunk.push(Opcode::CallMethod(Opr24::pack((method_index, arity))));
+         }
+         _ => {
+            self.generate_node(ast, function)?;
+            let arguments = ast.children(node).unwrap();
+            for &argument in arguments {
+               self.generate_node(ast, argument)?;
+            }
+            self.chunk.push(Opcode::Call(
+               arguments
+                  .len()
+                  .try_into()
+                  .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
+            ));
+         }
       }
-      self.chunk.push(Opcode::Call(
-         arguments.len().try_into().map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
-      ));
       Ok(())
    }
 
-   /// Generates code for a function declaration.
-   fn generate_function(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
-      let (name_node, parameters) = ast.node_pair(node);
+   /// Generates code for a bare dot call (without parentheses).
+   fn generate_dot(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (left, method) = ast.node_pair(node);
+      self.generate_node(ast, left)?;
+
+      if ast.kind(method) != NodeKind::Identifier {
+         return Err(ast.error(method, ErrorKind::InvalidMethodName));
+      }
+      let signature = FunctionSignature {
+         name: Rc::clone(ast.string(method).unwrap()),
+         arity: Some(1),
+      };
+      let method_index =
+         self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+      self.chunk.push(Opcode::CallMethod(Opr24::pack((method_index, 1))));
+
+      Ok(())
+   }
+
+   fn generate_function(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      GenerateFunctionOptions { name, call_conv }: GenerateFunctionOptions,
+   ) -> Result<GeneratedFunction, Error> {
+      let (_, parameters) = ast.node_pair(node);
       let parameter_list = ast.children(parameters).unwrap();
       let body = ast.children(node).unwrap();
-      let name = ast.string(name_node);
-
-      // Create the variable before compiling the function, to allow for recursion.
-      let variable = if let Some(name) = name {
-         Some(
-            self
-               .create_variable(name, VariableAllocation::Allocate)
-               .map_err(|kind| ast.error(name_node, kind))?,
-         )
-      } else {
-         None
-      };
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
-      // NOTE(liquidev): Hopefully the allocation from this mem::take gets optimized out.
+      // NOTE: Hopefully the allocation from this mem::take gets optimized out.
       generator.locals.parent = Some(mem::take(&mut self.locals));
-      // Push a scope to enforce creating local variables.
+      if call_conv.has_field_access() {
+         generator.struct_data = self.struct_data.take();
+         generator.allow_new_fields = call_conv.allow_new_fields();
+      }
+      generator.is_constructor = call_conv.is_constructor();
+
+      // Push a scope to start creating local variables.
       generator.push_scope();
       // Create local variables for all the parameters.
+      // Note that in bare functions, the function itself acts as the `self` parameter.
+      let receiver = if call_conv.has_visible_self() {
+         let receiver = generator.create_variable("self", VariableAllocation::Inherit).unwrap();
+         if let Some(struct_data) = generator.struct_data.as_deref_mut() {
+            struct_data.receiver = Some(receiver);
+         }
+         receiver
+      } else {
+         generator.create_variable("<receiver>", VariableAllocation::Inherit).unwrap()
+      };
       for &parameter in parameter_list {
          let parameter_name = ast.string(parameter).unwrap();
          generator
             .create_variable(parameter_name, VariableAllocation::Inherit)
             .map_err(|kind| ast.error(parameter, kind))?;
       }
+
+      // In constructors, we have to create `self` explicitly.
+      let create_struct = if call_conv.is_constructor() {
+         generator.generate_variable_load(receiver);
+         let instruction = generator.chunk.push(Opcode::Nop);
+         let receiver = generator
+            .create_variable("self", VariableAllocation::Allocate)
+            .map_err(|kind| ast.error(node, kind))?;
+         generator.generate_variable_assign(receiver);
+         generator.chunk.push(Opcode::Discard);
+         generator.struct_data.as_deref_mut().unwrap().receiver = Some(receiver);
+         Some(instruction)
+      } else {
+         None
+      };
+
       // Generate the body.
       generator.generate_node_list(ast, body)?;
+
+      // If we're in a constructor we have to backpatch the `CreateStruct` instruction with the
+      // number of fields.
+      if let Some(create_struct) = create_struct {
+         let field_count = generator.struct_data.as_ref().unwrap().fields.len();
+         let field_count = Opr24::try_from(field_count)
+            .map_err(|_| ast.error(ast.node_pair(parameters).0, ErrorKind::TooManyFields))?;
+         generator.chunk.patch(create_struct, Opcode::CreateStruct(field_count));
+         // We also have to discard whatever was at the top of the stack at the moment and
+         // return the struct we constructed.
+         generator.chunk.push(Opcode::Discard);
+         let receiver = generator.struct_data.as_ref().unwrap().receiver.unwrap();
+         generator.generate_variable_load(receiver);
+      }
+      // If we're in a constructor, we also have to check if all fields were assigned.
+      if call_conv.is_constructor() && !call_conv.allow_new_fields() {
+         let struct_data = generator.struct_data.as_ref().unwrap();
+         let missing: Vec<_> = struct_data
+            .fields
+            .keys()
+            .filter(|field| !generator.assigned_fields.contains(*field))
+            .cloned()
+            .collect();
+         if !missing.is_empty() {
+            return Err(ast.error(node, ErrorKind::MissingFields(missing)));
+         }
+      }
+
+      // Finish generating the chunk by inserting a `Return` opcode.
       generator.pop_scope();
       generator.chunk.push(Opcode::Return);
-      self.locals = generator.locals.parent.take().unwrap();
 
+      // Take back what was taken from the parent generator.
+      self.locals = generator.locals.parent.take().unwrap();
+      if call_conv.has_field_access() {
+         self.struct_data = generator.struct_data;
+      }
+
+      // Construct the function.
+      let parameter_count = u16::try_from(parameter_list.len())
+         .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
       let function = Function {
-         name: Rc::from(name.unwrap_or("<anonymous>")),
-         parameter_count: Some(
-            u16::try_from(parameter_list.len())
-               .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?,
-         ),
+         name,
+         parameter_count: Some(parameter_count),
          kind: FunctionKind::Bytecode {
             chunk: Rc::new(generator.chunk),
             captured_locals: generator.locals.captures,
          },
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
-      self.chunk.push(Opcode::CreateClosure(function_id));
-      if let Some(variable) = variable {
-         self.generate_variable_assign(variable);
-         self.chunk.push(Opcode::Discard);
-         self.generate_nil();
+
+      Ok(GeneratedFunction {
+         id: function_id,
+         parameter_count,
+      })
+   }
+
+   /// Generates code for a bare function declaration.
+   fn generate_function_declaration(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name_node, parameters) = ast.node_pair(node);
+      let name = ast.string(name_node).unwrap();
+
+      if ast.node_pair(parameters).0 != NodeId::EMPTY {
+         return Err(ast.error(
+            ast.node_pair(parameters).0,
+            ErrorKind::FunctionKindOutsideImpl,
+         ));
       }
+
+      // Create the variable before compiling the function, to allow for recursion.
+      let variable = self
+         .create_variable(name, VariableAllocation::Allocate)
+         .map_err(|kind| ast.error(name_node, kind))?;
+
+      let function = self.generate_function(
+         ast,
+         node,
+         GenerateFunctionOptions {
+            name: Rc::clone(name),
+            call_conv: FunctionCallConv::Bare,
+         },
+      )?;
+
+      self.chunk.push(Opcode::CreateClosure(function.id));
+      self.generate_variable_assign(variable);
+      self.chunk.push(Opcode::Discard);
+      self.generate_nil();
+
+      Ok(())
+   }
+
+   /// Generates code for a function expression.
+   fn generate_function_expression(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (_, parameters) = ast.node_pair(node);
+      if ast.node_pair(parameters).0 != NodeId::EMPTY {
+         return Err(ast.error(
+            ast.node_pair(parameters).0,
+            ErrorKind::FunctionKindOutsideImpl,
+         ));
+      }
+      let function = self.generate_function(
+         ast,
+         node,
+         GenerateFunctionOptions {
+            name: Rc::from("<anonymous>"),
+            call_conv: FunctionCallConv::Bare,
+         },
+      )?;
+      self.chunk.push(Opcode::CreateClosure(function.id));
+      Ok(())
+   }
+
+   /// Generates code for a struct declaration.
+   fn generate_struct(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (name, _) = ast.node_pair(node);
+      let name = ast.string(name).unwrap();
+
+      self.chunk.push(Opcode::CreateType);
+      self.chunk.push_string(name);
+      let variable = self
+         .create_variable(name, VariableAllocation::Allocate)
+         .map_err(|kind| ast.error(node, kind))?;
+      self.generate_variable_assign(variable);
+      self.chunk.push(Opcode::Discard);
+      self.generate_nil();
+
+      Ok(())
+   }
+
+   /// Generates code for an `impl` block.
+   fn generate_impl(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (implementee, _) = ast.node_pair(node);
+      let items = ast.children(node).unwrap();
+
+      let mut proto = Prototype::default();
+      // There's no need to save any old struct data because `impl` blocks don't nest freely.
+      // Yes, you can create an `impl` block in a function inside this `impl` block, but that
+      // function is handled by a different generator.
+      self.struct_data = Some(Box::new(StructData::default()));
+
+      let mut has_constructor = false;
+      for &item in items {
+         match ast.kind(item) {
+            NodeKind::Func => {
+               let (name_node, parameters) = ast.node_pair(item);
+               if ast.kind(name_node) != NodeKind::Identifier {
+                  return Err(ast.error(item, ErrorKind::MissingMethodName));
+               }
+               let name = Rc::clone(ast.string(name_node).unwrap());
+               let (kind, _) = ast.node_pair(parameters);
+               let function = self.generate_function(
+                  ast,
+                  item,
+                  GenerateFunctionOptions {
+                     name: Rc::clone(&name),
+                     call_conv: match ast.kind(kind) {
+                        NodeKind::Empty => FunctionCallConv::Instance,
+                        NodeKind::Static => FunctionCallConv::Static,
+                        NodeKind::Constructor => {
+                           let allow_new_fields = !has_constructor;
+                           has_constructor = true;
+                           FunctionCallConv::Constructor { allow_new_fields }
+                        }
+                        _ => unreachable!(),
+                     },
+                  },
+               )?;
+               let map = match ast.kind(kind) {
+                  NodeKind::Empty => &mut proto.instance,
+                  NodeKind::Static | NodeKind::Constructor => &mut proto.statics,
+                  _ => unreachable!(),
+               };
+               let signature = FunctionSignature {
+                  name,
+                  arity: Some(1 + function.parameter_count),
+               };
+               let method_id =
+                  self.env.get_method_index(&signature).map_err(|kind| ast.error(item, kind))?;
+               if map.contains_key(&method_id) {
+                  return Err(ast.error(
+                     name_node,
+                     ErrorKind::MethodAlreadyImplemented(FunctionSignature {
+                        arity: signature.arity.map(|x| x - 1),
+                        ..signature
+                     }),
+                  ));
+               }
+               map.insert(method_id, function.id);
+            }
+            // NB: If other item types are allowed, don't forget to change the error message for
+            // InvalidImplItem.
+            _ => return Err(ast.error(item, ErrorKind::InvalidImplItem)),
+         }
+      }
+
+      let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
+      self.generate_node(ast, implementee)?;
+      self.chunk.push(Opcode::Implement(proto_id));
+
+      self.struct_data = None;
 
       Ok(())
    }
@@ -651,6 +992,8 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Or => self.generate_or(ast, node)?,
 
          NodeKind::Assign => self.generate_assignment(ast, node)?,
+         NodeKind::Dot => self.generate_dot(ast, node)?,
+         NodeKind::Field => self.generate_field(ast, node)?,
 
          NodeKind::Main => self.generate_node_list(ast, ast.children(node).unwrap())?,
 
@@ -659,11 +1002,24 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::While => self.generate_while(ast, node)?,
          NodeKind::Break => self.generate_break(ast, node)?,
 
-         NodeKind::Func => self.generate_function(ast, node)?,
+         NodeKind::Func => {
+            if ast.node_pair(node).0 != NodeId::EMPTY {
+               self.generate_function_declaration(ast, node)?;
+            } else {
+               self.generate_function_expression(ast, node)?;
+            }
+         }
          NodeKind::Call => self.generate_call(ast, node)?,
          NodeKind::Return => todo!("return is NYI"),
 
-         NodeKind::IfBranch | NodeKind::ElseBranch | NodeKind::Parameters => {
+         NodeKind::Struct => self.generate_struct(ast, node)?,
+         NodeKind::Impl => self.generate_impl(ast, node)?,
+
+         | NodeKind::IfBranch
+         | NodeKind::ElseBranch
+         | NodeKind::Parameters
+         | NodeKind::Static
+         | NodeKind::Constructor => {
             unreachable!("AST implementation detail")
          }
       }
@@ -677,4 +1033,52 @@ impl<'e> CodeGenerator<'e> {
       self.chunk.push(Opcode::Halt);
       Ok(Rc::new(self.chunk))
    }
+}
+
+/// The calling convention of a function.
+enum FunctionCallConv {
+   /// A bare function: `self` is invisible, fields cannot be assigned.
+   Bare,
+   /// A static function: `self` is visible, fields cannot be assigned.
+   Static,
+   /// An instance function: `self` is visible, fields can be assigned but not created.
+   Instance,
+   /// A constructor: `self` is created from scratch, fields can created if `allow_new_fields` is
+   /// true.
+   Constructor { allow_new_fields: bool },
+}
+
+impl FunctionCallConv {
+   fn has_field_access(&self) -> bool {
+      matches!(self, Self::Instance | Self::Constructor { .. })
+   }
+
+   fn has_visible_self(&self) -> bool {
+      // Note that `Constructor` does not have a visible `self`, because it's an allocated local
+      // rather than inherited.
+      matches!(self, Self::Static | Self::Instance)
+   }
+
+   fn is_constructor(&self) -> bool {
+      matches!(self, Self::Constructor { .. })
+   }
+
+   fn allow_new_fields(&self) -> bool {
+      matches!(
+         self,
+         Self::Constructor {
+            allow_new_fields: true
+         }
+      )
+   }
+}
+
+struct GenerateFunctionOptions {
+   name: Rc<str>,
+   call_conv: FunctionCallConv,
+}
+
+struct GeneratedFunction {
+   id: Opr24,
+   parameter_count: u16,
 }

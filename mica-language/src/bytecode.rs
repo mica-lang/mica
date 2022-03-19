@@ -1,12 +1,12 @@
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::mem::size_of;
 use std::rc::Rc;
 
 use bytemuck::{Pod, Zeroable};
 
 use crate::common::{ErrorKind, Location};
-use crate::value::Value;
+use crate::value::{Closure, Value};
 
 /// A 24-bit integer encoding an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -34,6 +34,20 @@ impl Opr24 {
       } else {
          Err(U32TooBig(()))
       }
+   }
+
+   pub fn pack<T>(x: T) -> Self
+   where
+      T: PackableToOpr24,
+   {
+      x.pack_to_opr24()
+   }
+
+   pub fn unpack<T>(self) -> T
+   where
+      T: PackableToOpr24,
+   {
+      T::unpack_from_opr24(self)
    }
 }
 
@@ -66,11 +80,32 @@ impl std::fmt::Display for Opr24 {
 unsafe impl Zeroable for Opr24 {}
 unsafe impl Pod for Opr24 {}
 
+pub trait PackableToOpr24 {
+   fn pack_to_opr24(self) -> Opr24;
+   fn unpack_from_opr24(opr: Opr24) -> Self;
+}
+
+impl PackableToOpr24 for (u16, u8) {
+   fn pack_to_opr24(self) -> Opr24 {
+      // SAFETY: This packs the two numbers into 24 bits and will never exceed the range of an
+      // Opr24.
+      unsafe { Opr24::new((self.0 as u32) << 8 | self.1 as u32).unwrap_unchecked() }
+   }
+
+   fn unpack_from_opr24(opr: Opr24) -> Self {
+      let x = u32::from(opr);
+      let big = ((x & 0xFFFF00) >> 8) as u16;
+      let small = (x & 0x0000FF) as u8;
+      (big, small)
+   }
+}
+
 /// A VM opcode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Opcode {
    /// Doesn't do anything. Used as a default zero value if something goes wrong.
+   /// Also used for backpatching purposes.
    #[allow(unused)]
    Nop,
 
@@ -86,6 +121,12 @@ pub enum Opcode {
    PushString,
    /// Creates a closure from the function with the given ID and pushes it onto the stack.
    CreateClosure(Opr24),
+   /// Creates a unique type that can be later implemented. Must be followed by a string indicating
+   /// the type's name.
+   CreateType,
+   /// Creates a struct instance from the type at the top of the stack, with the specified amount
+   /// of fields.
+   CreateStruct(Opr24),
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal(Opr24),
@@ -101,6 +142,13 @@ pub enum Opcode {
    GetUpvalue(Opr24),
    /// Closes a local in its upvalue.
    CloseLocal(Opr24),
+   /// Loads a field from the struct on the top of the stack.
+   /// Assumes the value on top is a struct and not something else.
+   GetField(Opr24),
+   /// Assigns to a field in the struct on the top of the stack. The struct is consumed but the
+   /// value remains on the stack.
+   /// Assumes the second value from top is a struct and not something else.
+   AssignField(Opr24),
 
    /// Swaps the two values at the top of the stack.
    Swap,
@@ -129,8 +177,14 @@ pub enum Opcode {
 
    /// Calls a function with `.0` arguments.
    Call(u16),
+   /// Calls the `n`th method with `a` arguments, where `a` is encoded in the lower 8 bits, and
+   /// `n` is encoded in the upper 16 bits of `.0`.
+   CallMethod(Opr24),
    /// Returns to the calling function.
    Return,
+
+   /// Implements a struct according to a prototype identified by the operand.
+   Implement(Opr24),
 
    /// Negates a number (prefix `-`).
    Negate,
@@ -367,7 +421,9 @@ impl Debug for Chunk {
          #[allow(clippy::single_match)]
          match opcode {
             Opcode::PushNumber => write!(f, "{}", unsafe { self.read_number(&mut pc) })?,
-            Opcode::PushString => write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?,
+            Opcode::PushString | Opcode::CreateType => {
+               write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?
+            }
             | Opcode::JumpForward(amount)
             | Opcode::JumpForwardIfFalsy(amount)
             | Opcode::JumpForwardIfTruthy(amount) => {
@@ -383,6 +439,11 @@ impl Debug for Chunk {
                   "-> {:06x}",
                   pc - u32::from(amount) as usize + Opcode::SIZE
                )?;
+            }
+            Opcode::CallMethod(arg) => {
+               let (method_index, argument_count) = arg.unpack();
+               let arg = u32::from(arg);
+               write!(f, "{arg:06x}:[mi={method_index}, ac={argument_count}]")?;
             }
             _ => (),
          }
@@ -438,6 +499,24 @@ pub struct Function {
    pub kind: FunctionKind,
 }
 
+/// The signature of a function (its name and argument count).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FunctionSignature {
+   pub name: Rc<str>,
+   /// This arity number does not include the implicit `self` argument.
+   pub arity: Option<u16>,
+}
+
+impl fmt::Display for FunctionSignature {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      if let Some(arity) = self.arity {
+         write!(f, "{}/{}", self.name, arity)
+      } else {
+         write!(f, "{}/...", self.name)
+      }
+   }
+}
+
 /// An environment containing information about declared globals, functions, vtables.
 #[derive(Debug)]
 pub struct Environment {
@@ -445,14 +524,29 @@ pub struct Environment {
    globals: HashMap<String, Opr24>,
    /// Functions in the environment.
    functions: Vec<Function>,
+   /// Mapping from named function signatures to method indices.
+   method_indices: HashMap<FunctionSignature, u16>,
+   /// Mapping from method indices to function signatures.
+   function_signatures: Vec<FunctionSignature>,
+   /// Dispatch tables for builtin types.
+   pub builtin_dtables: BuiltinDispatchTables,
+   /// `impl` prototypes.
+   prototypes: Vec<Option<Prototype>>,
+   /// `prototypes` indices that have been taken out of the vec.
+   free_prototypes: Vec<Opr24>,
 }
 
 impl Environment {
    /// Creates a new, empty environment.
-   pub fn new() -> Self {
+   pub fn new(builtin_dtables: BuiltinDispatchTables) -> Self {
       Self {
          globals: HashMap::new(),
          functions: Vec::new(),
+         method_indices: HashMap::new(),
+         function_signatures: Vec::new(),
+         builtin_dtables,
+         prototypes: Vec::new(),
+         free_prototypes: Vec::new(),
       }
    }
 
@@ -472,9 +566,7 @@ impl Environment {
 
    /// Creates a function and returns its ID.
    pub fn create_function(&mut self, function: Function) -> Result<Opr24, ErrorKind> {
-      let slot =
-         Opr24::new(self.functions.len().try_into().map_err(|_| ErrorKind::TooManyFunctions)?)
-            .map_err(|_| ErrorKind::TooManyFunctions)?;
+      let slot = Opr24::try_from(self.functions.len()).map_err(|_| ErrorKind::TooManyFunctions)?;
       self.functions.push(function);
       Ok(slot)
    }
@@ -492,10 +584,131 @@ impl Environment {
    pub(crate) unsafe fn get_function_unchecked_mut(&mut self, id: Opr24) -> &mut Function {
       self.functions.get_unchecked_mut(u32::from(id) as usize)
    }
+
+   /// Tries to look up the index of a method, based on a function signature. Returns `None` if
+   /// there are too many function signatures in this environment.
+   pub fn get_method_index(&mut self, signature: &FunctionSignature) -> Result<u16, ErrorKind> {
+      // Don't use `entry` here to avoid cloning the signature.
+      if let Some(&index) = self.method_indices.get(signature) {
+         Ok(index)
+      } else {
+         // The number of entries in self.method_indices and self.function_signatures is always
+         // equal, so we can use their `len`s interchangably.
+         let index =
+            u16::try_from(self.method_indices.len()).map_err(|_| ErrorKind::TooManyMethods)?;
+         self.method_indices.insert(signature.clone(), index);
+         self.function_signatures.push(signature.clone());
+         Ok(index)
+      }
+   }
+
+   /// Returns the function with the given signature, or `None` if the method index is invalid.
+   pub fn get_function_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
+      self.function_signatures.get(method_index as usize)
+   }
+
+   /// Creates a prototype and returns its ID.
+   pub(crate) fn create_prototype(&mut self, proto: Prototype) -> Result<Opr24, ErrorKind> {
+      let slot = if let Some(slot) = self.free_prototypes.pop() {
+         self.prototypes[u32::from(slot) as usize] = Some(proto);
+         slot
+      } else {
+         let slot = Opr24::try_from(self.prototypes.len()).map_err(|_| ErrorKind::TooManyImpls)?;
+         self.prototypes.push(Some(proto));
+         slot
+      };
+      Ok(slot)
+   }
+
+   /// Takes out the prototype with the given ID, as returned by `create_prototype`.
+   /// This function is for internal use in the VM and does not perform any checks, thus is marked
+   /// `unsafe`.
+   pub(crate) unsafe fn take_prototype_unchecked(&mut self, id: Opr24) -> Prototype {
+      let proto =
+         self.prototypes.get_unchecked_mut(u32::from(id) as usize).take().unwrap_unchecked();
+      self.free_prototypes.push(id);
+      proto
+   }
 }
 
-impl Default for Environment {
-   fn default() -> Self {
-      Self::new()
+/// A dispatch table containing functions bound to an instance of a value.
+#[derive(Debug)]
+pub struct DispatchTable {
+   /// The pretty name of the type this dispatch table contains functions for.
+   pub pretty_name: Rc<str>,
+   pub type_name: Rc<str>,
+   /// The "child" dispatch table that holds instance methods.
+   pub instance: Option<Rc<DispatchTable>>,
+   /// The functions in this dispatch table.
+   methods: Vec<Option<Rc<Closure>>>,
+}
+
+impl DispatchTable {
+   /// Creates a new, empty dispatch table for a type with the given name.
+   fn new(pretty_name: impl Into<Rc<str>>, type_name: impl Into<Rc<str>>) -> Self {
+      Self {
+         pretty_name: pretty_name.into(),
+         type_name: type_name.into(),
+         instance: None,
+         methods: Vec::new(),
+      }
    }
+
+   /// Creates a new, empty type dispatch table with the given type name.
+   pub fn new_for_type(type_name: impl Into<Rc<str>>) -> Self {
+      let type_name = type_name.into();
+      Self::new(format!("type {type_name}"), type_name)
+   }
+
+   /// Creates a new, empty instance dispatch table with the given type name.
+   pub fn new_for_instance(type_name: impl Into<Rc<str>>) -> Self {
+      let type_name = type_name.into();
+      Self::new(Rc::clone(&type_name), type_name)
+   }
+
+   /// Returns a reference to the method at the given index.
+   pub fn get_method(&self, index: u16) -> Option<&Rc<Closure>> {
+      self.methods.get(index as usize).into_iter().flatten().next()
+   }
+
+   /// Adds a method into the dispatch table.
+   pub fn set_method(&mut self, index: u16, closure: Rc<Closure>) {
+      let index = index as usize;
+      if index >= self.methods.len() {
+         self.methods.resize(index + 1, None);
+      }
+      self.methods[index] = Some(closure);
+   }
+}
+
+/// Dispatch tables for instances of builtin types. These should be constructed by the standard
+/// library.
+#[derive(Debug)]
+pub struct BuiltinDispatchTables {
+   pub nil: Rc<DispatchTable>,
+   pub boolean: Rc<DispatchTable>,
+   pub number: Rc<DispatchTable>,
+   pub string: Rc<DispatchTable>,
+   pub function: Rc<DispatchTable>,
+}
+
+/// Default dispatch tables for built-in types are empty and do not implement any methods.
+impl Default for BuiltinDispatchTables {
+   fn default() -> Self {
+      Self {
+         nil: Rc::new(DispatchTable::new("Nil", "Nil")),
+         boolean: Rc::new(DispatchTable::new("Boolean", "Boolean")),
+         number: Rc::new(DispatchTable::new("Number", "Boolean")),
+         string: Rc::new(DispatchTable::new("String", "String")),
+         function: Rc::new(DispatchTable::new("Function", "Function")),
+      }
+   }
+}
+
+/// The prototype of a struct. This contains a list of functions, from which closures are
+/// constructed at runtime to form a dispatch table.
+#[derive(Debug, Default)]
+pub(crate) struct Prototype {
+   pub(crate) instance: HashMap<u16, Opr24>,
+   pub(crate) statics: HashMap<u16, Opr24>,
 }

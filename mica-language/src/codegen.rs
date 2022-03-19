@@ -869,6 +869,20 @@ impl<'e> CodeGenerator<'e> {
       Ok(())
    }
 
+   /// Generates code for a `return` expression.
+   fn generate_return(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (value, _) = ast.node_pair(node);
+      // Unlike breaking out of a loop, returning is super simple, as it implies that all locals
+      // are taken off the stack.
+      if value == NodeId::EMPTY {
+         self.generate_nil();
+      } else {
+         self.generate_node(ast, value)?;
+      }
+      self.chunk.push(Opcode::Return);
+      Ok(())
+   }
+
    /// Generates code for a struct declaration.
    fn generate_struct(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (name, _) = ast.node_pair(node);
@@ -1010,7 +1024,7 @@ impl<'e> CodeGenerator<'e> {
             }
          }
          NodeKind::Call => self.generate_call(ast, node)?,
-         NodeKind::Return => todo!("return is NYI"),
+         NodeKind::Return => self.generate_return(ast, node)?,
 
          NodeKind::Struct => self.generate_struct(ast, node)?,
          NodeKind::Impl => self.generate_impl(ast, node)?,

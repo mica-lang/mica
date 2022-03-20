@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::mem::size_of;
@@ -8,7 +7,6 @@ use bytemuck::{Pod, Zeroable};
 
 use crate::common::{ErrorKind, Location};
 use crate::value::{Closure, Value};
-use crate::vm::UserState;
 
 /// A 24-bit integer encoding an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

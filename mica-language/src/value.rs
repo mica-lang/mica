@@ -1,3 +1,5 @@
+//! Dynamically typed values.
+
 use std::borrow::Cow;
 use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;

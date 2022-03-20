@@ -1,16 +1,21 @@
+//! The representation of Mica's abstract syntax tree.
+
 use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use crate::common::{Error, ErrorKind, Location};
 
+/// A lightweight handle to a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct NodeId(u32);
 
 impl NodeId {
+   /// Represents the empty node in a syntax tree.
    pub const EMPTY: Self = NodeId(0);
 }
 
+/// An abstract syntax tree.
 pub struct Ast {
    module_name: Rc<str>,
 
@@ -20,6 +25,7 @@ pub struct Ast {
    data: Vec<Option<NodeData>>,
 }
 
+/// Data a node can carry around with it.
 enum NodeData {
    Number(f64),
    String(Rc<str>),
@@ -27,6 +33,7 @@ enum NodeData {
 }
 
 impl Ast {
+   /// Creates a new, empty syntax tree. The module name is used for error messages.
    pub fn new(module_name: Rc<str>) -> Self {
       let mut ast = Self {
          module_name,
@@ -38,6 +45,7 @@ impl Ast {
       ast
    }
 
+   /// Appends a node to the syntax tree.
    fn create_node(&mut self, kind: NodeKind, pair: impl ToNodePair) -> NodeId {
       let id = self.nodes.len();
       self.nodes.push((kind, pair.to_node_pair()));
@@ -46,23 +54,28 @@ impl Ast {
       NodeId(id as u32)
    }
 
+   /// Begins building a node in this syntax tree.
    pub fn build_node(&mut self, kind: NodeKind, pair: impl ToNodePair) -> NodeBuilder<'_> {
       let node = self.create_node(kind, pair);
       NodeBuilder { ast: self, node }
    }
 
+   /// Returns the kind of a node.
    pub fn kind(&self, node: NodeId) -> NodeKind {
       unsafe { self.nodes.get_unchecked(node.0 as usize).0 }
    }
 
+   /// Returns the raw pair of a node.
    pub fn pair(&self, node: NodeId) -> (u32, u32) {
       unsafe { self.nodes.get_unchecked(node.0 as usize).1 }
    }
 
+   /// Returns the source location of a node.
    pub fn location(&self, node: NodeId) -> Location {
       unsafe { *self.locations.get_unchecked(node.0 as usize) }
    }
 
+   /// Returns the number data of a node, or `None` if the node carries a different type of data.
    pub fn number(&self, node: NodeId) -> Option<f64> {
       if let &Some(NodeData::Number(n)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
          return Some(n);
@@ -70,6 +83,7 @@ impl Ast {
       None
    }
 
+   /// Returns the string data of a node, or `None` if the node carries a different type of data.
    pub fn string(&self, node: NodeId) -> Option<&Rc<str>> {
       if let Some(NodeData::String(s)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
          return Some(s);
@@ -77,6 +91,7 @@ impl Ast {
       None
    }
 
+   /// Returns the children data of a node, or `None` if the node carries a different type of data.
    pub fn children(&self, node: NodeId) -> Option<&[NodeId]> {
       if let Some(NodeData::Children(c)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
          return Some(c);
@@ -84,11 +99,13 @@ impl Ast {
       None
    }
 
+   /// Returns the pair of nodes this node points to.
    pub fn node_pair(&self, node: NodeId) -> (NodeId, NodeId) {
       let (left, right) = self.pair(node);
       (NodeId(left), NodeId(right))
    }
 
+   /// Constructs a compile error at the given node.
    pub fn error(&self, node: NodeId, kind: ErrorKind) -> Error {
       Error::Compile {
          module_name: Rc::clone(&self.module_name),
@@ -98,12 +115,14 @@ impl Ast {
    }
 }
 
+/// A node builder.
 pub struct NodeBuilder<'a> {
    ast: &'a mut Ast,
    node: NodeId,
 }
 
 impl<'a> NodeBuilder<'a> {
+   /// Sets the location of the node.
    pub fn with_location(self, location: Location) -> Self {
       unsafe {
          *self.ast.locations.get_unchecked_mut(self.node.0 as usize) = location;
@@ -111,6 +130,7 @@ impl<'a> NodeBuilder<'a> {
       self
    }
 
+   /// Sets the number data of the node.
    pub fn with_number(self, number: f64) -> Self {
       unsafe {
          *self.ast.data.get_unchecked_mut(self.node.0 as usize) = Some(NodeData::Number(number));
@@ -118,6 +138,7 @@ impl<'a> NodeBuilder<'a> {
       self
    }
 
+   /// Sets the string data of the node.
    pub fn with_string(self, string: Rc<str>) -> Self {
       unsafe {
          *self.ast.data.get_unchecked_mut(self.node.0 as usize) = Some(NodeData::String(string));
@@ -125,6 +146,7 @@ impl<'a> NodeBuilder<'a> {
       self
    }
 
+   /// Sets the children data of the node.
    pub fn with_children(self, children: Vec<NodeId>) -> Self {
       unsafe {
          *self.ast.data.get_unchecked_mut(self.node.0 as usize) =
@@ -133,11 +155,13 @@ impl<'a> NodeBuilder<'a> {
       self
    }
 
+   /// Finishes building the node and returns a handle to it.
    pub fn done(self) -> NodeId {
       self.node
    }
 }
 
+/// Implemented by all types convertible to a raw node pair.
 pub trait ToNodePair {
    fn to_node_pair(&self) -> (u32, u32);
 }
@@ -173,50 +197,88 @@ pub enum NodeKind {
    /// An empty node. Use `NodeId::EMPTY` to refer to an AST's empty node.
    Empty,
 
+   /// A `nil` literal.
    Nil,
+   /// A `false` literal.
    False,
+   /// A `true` literal.
    True,
+   /// A number literal. Must contain number data.
    Number,
+   /// A string literal. Must contain string data.
    String,
 
+   /// An identifier. Must contain string data.
    Identifier,
 
+   /// Negation operator (prefix `-`).
    Negate,
+   /// Addition operator `+`.
    Add,
+   /// Subtraction operator `-`.
    Subtract,
+   /// Multiplication operator `*`.
    Multiply,
+   /// Division operator `/`.
    Divide,
 
+   /// Boolean NOT `!`.
    Not,
+   /// Boolean AND `and`.
    And,
+   /// Boolean OR `or`.
    Or,
+   /// Equality operator `==`.
    Equal,
+   /// Inequality operator `!=`.
    NotEqual,
+   /// Less-than operator `<`.
    Less,
+   /// Greater-than operator `>`.
    Greater,
+   /// Less-than-or-equal-to operator `<=`.
    LessEqual,
+   /// Greater-than-or-equal-to operator `>=`.
    GreaterEqual,
 
+   /// Assignment operator `=`.
    Assign,
+   /// Method call operator `.`.
    Dot,
+   /// Field reference `@x`.
    Field,
 
+   /// Top-level code in a module.
    Main,
+   /// `do` expression.
    Do,
+   /// `if..do..elif..else..end` expression.
    If,
+   /// An `if` or `elif` branch of an `if` expression.
    IfBranch,
+   /// The `else` branch of an `if` expression.
    ElseBranch,
+   /// `while` loop.
    While,
+   /// `break` expression.
    Break,
 
+   /// Function (item or anonymous).
    Func,
+   /// Function parameters (the RHS of `Function`).
    Parameters,
+   /// `static` keyword (the LHS of `Parameters`).
    Static,
+   /// `constructor` keyword (the LHS of `Parameters`).
    Constructor,
+   /// A function call.
    Call,
+   /// `return` expression.
    Return,
 
+   /// A struct declaration.
    Struct,
+   /// An `impl` block.
    Impl,
 }
 

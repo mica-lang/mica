@@ -1,3 +1,5 @@
+//! The bytecode representation of Mica.
+
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::mem::size_of;
@@ -36,6 +38,7 @@ impl Opr24 {
       }
    }
 
+   /// Packs `T` into an `Opr24`.
    pub fn pack<T>(x: T) -> Self
    where
       T: PackableToOpr24,
@@ -43,6 +46,7 @@ impl Opr24 {
       x.pack_to_opr24()
    }
 
+   /// Unpacks an `Opr24` into `T`.
    pub fn unpack<T>(self) -> T
    where
       T: PackableToOpr24,
@@ -214,20 +218,24 @@ pub enum Opcode {
    __Padding([u8; 3]),
 }
 
+/// A jump was constructed whose offset stretched too far.
 #[derive(Debug)]
 pub struct JumpTooFar(());
 
 impl Opcode {
+   /// The size of an opcode.
    pub const SIZE: usize = {
       let size = std::mem::size_of::<Self>();
       assert!(size == 4);
       size
    };
 
+   /// Converts the opcode to a byte slice.
    pub fn as_bytes(&self) -> &[u8] {
       bytemuck::bytes_of(self)
    }
 
+   /// Returns the offset of a forward jump instruction.
    fn forward_jump_offset(from: usize, to: usize) -> Result<Opr24, JumpTooFar> {
       assert!(to >= from);
       let offset = to - from - Self::SIZE;
@@ -237,21 +245,25 @@ impl Opcode {
       Opr24::new(offset as u32).map_err(|_| JumpTooFar(()))
    }
 
+   /// Constructs a `JumpForward` instruction.
    pub fn jump_forward(from: usize, to: usize) -> Result<Self, JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
       Ok(Self::JumpForward(offset))
    }
 
+   /// Constructs a `JumpForwardIfFalsy` instruction.
    pub fn jump_forward_if_falsy(from: usize, to: usize) -> Result<Self, JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
       Ok(Self::JumpForwardIfFalsy(offset))
    }
 
+   /// Constructs a `JumpForwardIfTruthy` instruction.
    pub fn jump_forward_if_truthy(from: usize, to: usize) -> Result<Self, JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
       Ok(Self::JumpForwardIfTruthy(offset))
    }
 
+   /// Returns the offset of a backward jump instruction.
    fn backward_jump_offset(from: usize, to: usize) -> Result<Opr24, JumpTooFar> {
       assert!(to <= from);
       let offset = from - to + Self::SIZE;
@@ -261,6 +273,7 @@ impl Opcode {
       Opr24::new(offset as u32).map_err(|_| JumpTooFar(()))
    }
 
+   /// Constructs a `JumpBackward` instruction.
    pub fn jump_backward(from: usize, to: usize) -> Result<Self, JumpTooFar> {
       let offset = Self::backward_jump_offset(from, to)?;
       Ok(Self::JumpBackward(offset))

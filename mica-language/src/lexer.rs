@@ -1,7 +1,10 @@
+//! The lexer.
+
 use std::rc::Rc;
 
 use crate::common::{Error, ErrorKind, Location};
 
+/// The kind of a token.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
    Number(f64),
@@ -54,12 +57,14 @@ pub enum TokenKind {
    Eof,
 }
 
+/// A token kind paired with its source code location.
 #[derive(Debug, Clone)]
 pub struct Token {
    pub kind: TokenKind,
    pub location: Location,
 }
 
+/// Lexer state.
 pub struct Lexer {
    pub module_name: Rc<str>,
    input: String,
@@ -68,8 +73,10 @@ pub struct Lexer {
 }
 
 impl Lexer {
+   /// The EOF sentinel character.
    const EOF: char = '\0';
 
+   /// Creates a new lexer.
    pub fn new(module_name: Rc<str>, input: String) -> Self {
       Self {
          module_name,
@@ -79,6 +86,7 @@ impl Lexer {
       }
    }
 
+   /// Emits an error.
    fn error(&self, kind: ErrorKind) -> Error {
       Error::Compile {
          module_name: Rc::clone(&self.module_name),
@@ -87,6 +95,7 @@ impl Lexer {
       }
    }
 
+   /// Emits a token at the `token_start` location.
    fn token(&self, kind: TokenKind) -> Token {
       Token {
          kind,
@@ -94,20 +103,24 @@ impl Lexer {
       }
    }
 
+   /// Returns the character at the current position.
    fn get(&self) -> char {
       self.input[self.location.byte..].chars().next().unwrap_or(Self::EOF)
    }
 
+   /// Advances the current position by a character.
    fn advance(&mut self) {
       self.location.byte += self.get().len_utf8();
       self.location.column += 1;
    }
 
+   /// Advances the source location to the next line.
    fn advance_line(&mut self) {
       self.location.line += 1;
       self.location.column = 1;
    }
 
+   /// Skips whitespace characters.
    fn skip_whitespace(&mut self) {
       loop {
          match self.get() {
@@ -128,6 +141,7 @@ impl Lexer {
       }
    }
 
+   /// Parses a number.
    fn number(&mut self) -> Result<f64, Error> {
       let start = self.location.byte;
       while let '0'..='9' = self.get() {
@@ -153,6 +167,7 @@ impl Lexer {
       Ok(number)
    }
 
+   /// Parses a string.
    fn string(&mut self) -> Result<String, Error> {
       self.advance();
       let mut result = String::new();
@@ -180,11 +195,13 @@ impl Lexer {
       Ok(result)
    }
 
+   /// Parses a single character token.
    fn single_char_token(&mut self, kind: TokenKind) -> Token {
       self.advance();
       self.token(kind)
    }
 
+   /// Parses a token that's either one or two characters.
    fn single_or_double_char_token(
       &mut self,
       single: TokenKind,
@@ -200,14 +217,17 @@ impl Lexer {
       }
    }
 
+   /// Returns whether `c` can be the first character of an identifier.
    fn is_identifier_start_char(c: char) -> bool {
       c.is_alphabetic() || c == '_'
    }
 
+   /// Returns whether `c` can be a continuing character of an identifier.
    fn is_identifier_char(c: char) -> bool {
       c.is_alphanumeric() || c == '_'
    }
 
+   /// Parses an identifier.
    fn identifier(&mut self) -> &str {
       let start = self.location.byte;
       while Self::is_identifier_char(self.get()) {
@@ -217,6 +237,8 @@ impl Lexer {
       &self.input[start..end]
    }
 
+   /// Returns which keyword this identifier corresponds to, or `None` if the identifier is not
+   /// reserved.
    fn keyword(identifier: &str) -> Option<TokenKind> {
       Some(match identifier {
          "nil" => TokenKind::Nil,
@@ -245,6 +267,7 @@ impl Lexer {
       })
    }
 
+   /// Parses the next token and returns it.
    pub fn next_token(&mut self) -> Result<Token, Error> {
       self.skip_whitespace();
       self.token_start = self.location;
@@ -292,6 +315,7 @@ impl Lexer {
       }
    }
 
+   /// Peeks at what the next token's going to be without advancing the lexer's position.
    pub fn peek_token(&mut self) -> Result<Token, Error> {
       let location = self.location;
       let token = self.next_token()?;

@@ -92,7 +92,6 @@ impl Engine {
    /// Compiles a script.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::Compile`] - Syntax or semantic error
    pub fn compile(
       &mut self,
@@ -144,7 +143,6 @@ impl Engine {
    /// globals.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    pub fn global_id(&mut self, name: &str) -> Result<GlobalId, Error> {
       if let Some(slot) = self.env.get_global(name) {
@@ -161,7 +159,6 @@ impl Engine {
    /// The `id` parameter can be either an `&str` or a prefetched [`global_id`][`Self::global_id`].
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    pub fn set<G, T>(&mut self, id: G, value: T) -> Result<(), Error>
    where
@@ -178,7 +175,6 @@ impl Engine {
    /// The `id` parameter can be either an `&str` or a prefetched [`global_id`][`Self::global_id`].
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TypeMismatch`] - The type of the value is not convertible to `T`
    pub fn get<G, T>(&self, id: G) -> Result<T, Error>
@@ -206,7 +202,6 @@ impl Engine {
    /// checks you may receive a different amount of arguments than specified.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
    pub fn add_raw_function(
@@ -247,7 +242,6 @@ impl Engine {
    /// Declares a type in the global scope.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
    ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created

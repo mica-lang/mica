@@ -7,7 +7,17 @@ use mica_hl::{Arguments, Engine, MicaResultExt, Value};
 
 fn print(arguments: Arguments) {
    for value in arguments.array() {
-      print!("{}", value);
+      print!("{value}");
+   }
+   println!();
+}
+
+fn debug(arguments: Arguments) {
+   for (i, value) in arguments.array().iter().enumerate() {
+      if i > 0 {
+         print!("\t");
+      }
+      print!("{value:?}");
    }
    println!();
 }
@@ -44,6 +54,7 @@ fn assert(condition: Value, message: Option<Value>) -> Result<Value, mica_hl::Er
 /// Loads the core library into the engine.
 pub fn load_core(engine: &Engine) -> Result<(), mica_hl::Error> {
    engine.add_function("print", print)?;
+   engine.add_function("debug", debug)?;
    engine.add_function("error", error)?;
    engine.add_function("assert", assert)?;
 

@@ -1,4 +1,3 @@
-use std::fmt;
 use std::path::PathBuf;
 
 use mica::{Engine, Error, LanguageError, LanguageErrorKind, Value};
@@ -42,7 +41,7 @@ impl Completer for MicaValidator {
 
 impl Validator for MicaValidator {
    fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
-      let engine = Engine::new(mica::std::lib());
+      let mut engine = Engine::new(mica::std::lib());
       if let Err(error) = engine.compile("(repl)", ctx.input()) {
          use LanguageErrorKind as ErrorKind;
          if let Error::Compile(LanguageError::Compile {
@@ -58,11 +57,11 @@ impl Validator for MicaValidator {
    }
 }
 
-fn interpret(
-   engine: &Engine,
+fn interpret<'e>(
+   engine: &'e mut Engine,
    filename: &str,
    input: String,
-) -> Result<impl Iterator<Item = Result<Value, mica::Error>>, mica::Error> {
+) -> Result<impl Iterator<Item = Result<Value, mica::Error>> + 'e, mica::Error> {
    let mut fiber = match engine.start(filename, input) {
       Ok(fiber) => fiber,
       Err(error) => {
@@ -83,14 +82,14 @@ fn interpret(
 }
 
 fn engine(options: &EngineOptions) -> Result<Engine, mica::Error> {
-   let engine = Engine::with_debug_options(
+   let mut engine = Engine::with_debug_options(
       mica::std::lib(),
       mica::DebugOptions {
          dump_ast: options.dump_ast,
          dump_bytecode: options.dump_bytecode,
       },
    );
-   mica::std::load(&engine)?;
+   mica::std::load(&mut engine)?;
    Ok(engine)
 }
 
@@ -103,9 +102,9 @@ fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
       Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
    editor.set_helper(Some(MicaValidator));
 
-   let engine = engine(engine_options)?;
+   let mut engine = engine(engine_options)?;
    while let Ok(line) = editor.readline("> ") {
-      let iterator = match interpret(&engine, "(repl)", line) {
+      let iterator = match interpret(&mut engine, "(repl)", line) {
          Ok(iterator) => iterator,
          Err(_) => break,
       };
@@ -121,28 +120,9 @@ fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
    let opts = Options::from_args();
    if let Some(path) = &opts.file {
-      #[derive(Debug)]
-      struct CompileError;
-      #[derive(Debug)]
-      struct RuntimeError;
-
-      impl fmt::Display for CompileError {
-         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            fmt::Debug::fmt(self, f)
-         }
-      }
-      impl fmt::Display for RuntimeError {
-         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            fmt::Debug::fmt(self, f)
-         }
-      }
-
-      impl std::error::Error for CompileError {}
-      impl std::error::Error for RuntimeError {}
-
       let file = std::fs::read_to_string(path)?;
-      let engine = engine(&opts.engine_options)?;
-      let fiber = match interpret(&engine, path.to_str().unwrap(), file) {
+      let mut engine = engine(&opts.engine_options)?;
+      let fiber = match interpret(&mut engine, path.to_str().unwrap(), file) {
          Ok(iterator) => iterator,
          Err(_) => std::process::exit(-1),
       };

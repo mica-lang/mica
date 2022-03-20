@@ -1,25 +1,16 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-
+use mica_language::bytecode::Environment;
 use mica_language::value::Value;
-use mica_language::vm;
+use mica_language::vm::{self, Globals};
 
-use crate::rtenv::RuntimeEnvironment;
-use crate::{Error, TryFromValue};
+use crate::{Engine, Error, TryFromValue};
 
 /// A fiber represents an independent, pausable thread of code execution.
-///
-/// # Reentrancy
-///
-/// Note that fibers are not reentrant: an engine can only be running a single fiber at a time,
-/// due to Rust's exclusive mutability constraints. Trying to run two fibers at the same time will
-/// result in a panic.
-pub struct Fiber {
-   pub(crate) runtime_env: Rc<RefCell<RuntimeEnvironment>>,
+pub struct Fiber<'e> {
+   pub(crate) engine: &'e mut Engine,
    pub(crate) inner: vm::Fiber,
 }
 
-impl Fiber {
+impl<'e> Fiber<'e> {
    /// Resumes execution of a fiber. If execution is done already, returns `None`.
    pub fn resume<T>(&mut self) -> Result<Option<T>, Error>
    where
@@ -28,9 +19,7 @@ impl Fiber {
       if self.inner.halted() {
          Ok(None)
       } else {
-         let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-         let (env, globals) = runtime_env.split();
-         let result = self.inner.interpret(env, globals)?;
+         let result = self.inner.interpret(&mut *self.engine)?;
          Ok(Some(T::try_from_value(&result)?))
       }
    }
@@ -48,5 +37,23 @@ impl Fiber {
          result = v;
       }
       T::try_from_value(&result)
+   }
+}
+
+impl vm::UserState for &mut Engine {
+   fn env(&self) -> &Environment {
+      &self.env
+   }
+
+   fn globals(&self) -> &Globals {
+      &self.globals
+   }
+
+   fn env_mut(&mut self) -> &mut Environment {
+      &mut self.env
+   }
+
+   fn globals_mut(&mut self) -> &mut Globals {
+      &mut self.globals
    }
 }

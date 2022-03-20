@@ -219,11 +219,11 @@ impl Fiber {
 
    fn enter_function(
       &mut self,
-      env: &mut Environment,
+      s: &mut impl UserState,
       closure: Rc<Closure>,
       argument_count: usize,
    ) -> Result<(), Error> {
-      let function = unsafe { env.get_function_unchecked_mut(closure.function_id) };
+      let function = unsafe { s.env_mut().get_function_unchecked_mut(closure.function_id) };
       match &mut function.kind {
          FunctionKind::Bytecode { chunk, .. } => {
             self.save_return_point();
@@ -239,7 +239,7 @@ impl Fiber {
             let result = match f(arguments) {
                Ok(value) => value,
                Err(kind) => {
-                  return Err(self.error_outside_function_call(Some(closure), env, kind));
+                  return Err(self.error_outside_function_call(Some(closure), s.env_mut(), kind));
                }
             };
             self.push(result);
@@ -325,11 +325,10 @@ impl Fiber {
    }
 
    /// Interprets bytecode in the chunk, with the provided global storage.
-   pub fn interpret(
-      &mut self,
-      env: &mut Environment,
-      globals: &mut Globals,
-   ) -> Result<Value, Error> {
+   pub fn interpret<S>(&mut self, mut s: S) -> Result<Value, Error>
+   where
+      S: UserState,
+   {
       self.allocate_chunk_storage_slots(self.chunk.preallocate_stack_slots as usize);
 
       loop {
@@ -342,7 +341,7 @@ impl Fiber {
                   Ok(value) => value,
                   Err(kind) => {
                      self.save_return_point();
-                     return Err(self.error(env, kind));
+                     return Err(self.error(s.env(), kind));
                   }
                }
             }};
@@ -371,7 +370,7 @@ impl Fiber {
                self.push(Value::String(string));
             }
             Opcode::CreateClosure(function_id) => {
-               let closure = self.create_closure(env, function_id);
+               let closure = self.create_closure(s.env_mut(), function_id);
                self.push(Value::Function(closure));
             }
             Opcode::CreateType => {
@@ -395,10 +394,10 @@ impl Fiber {
 
             Opcode::AssignGlobal(slot) => {
                let value = self.stack_top().clone();
-               globals.set(slot, value);
+               s.globals_mut().set(slot, value);
             }
             Opcode::GetGlobal(slot) => {
-               let value = unsafe { globals.get_unchecked(slot) };
+               let value = unsafe { s.globals().get_unchecked(slot) };
                self.push(value);
             }
             Opcode::AssignLocal(slot) => {
@@ -496,18 +495,18 @@ impl Fiber {
                let argument_count = argument_count as usize + 1;
                let function = self.nth_from_top(argument_count);
                let closure = Rc::clone(wrap_error!(function.function()));
-               self.enter_function(env, closure, argument_count)?;
+               self.enter_function(&mut s, closure, argument_count)?;
             }
             Opcode::CallMethod(arg) => {
                let (method_index, argument_count) = arg.unpack();
                let receiver = self.nth_from_top(argument_count as usize);
-               let dtable = Self::get_dispatch_table(receiver, env);
+               let dtable = Self::get_dispatch_table(receiver, s.env());
                if let Some(closure) = dtable.get_method(method_index) {
                   let closure = Rc::clone(closure);
-                  self.enter_function(env, closure, argument_count as usize)?;
+                  self.enter_function(&mut s, closure, argument_count as usize)?;
                } else {
                   let signature =
-                     env.get_function_signature(method_index).cloned().unwrap_or_else(|| {
+                     s.env().get_function_signature(method_index).cloned().unwrap_or_else(|| {
                         FunctionSignature {
                            name: Rc::from("(invalid method index)"),
                            arity: None,
@@ -521,7 +520,7 @@ impl Fiber {
                         ..signature
                      },
                   };
-                  return Err(self.error_outside_function_call(None, env, error_kind));
+                  return Err(self.error_outside_function_call(None, s.env_mut(), error_kind));
                }
             }
             Opcode::Return => {
@@ -533,19 +532,19 @@ impl Fiber {
             Opcode::Implement(proto_id) => {
                let st = wrap_error!(self.stack_top_mut().struct_v());
                let type_name = Rc::clone(&st.dtable().type_name);
-               let proto = unsafe { env.take_prototype_unchecked(proto_id) };
+               let proto = unsafe { s.env_mut().take_prototype_unchecked(proto_id) };
 
                let mut type_dtable = DispatchTable::new_for_type(Rc::clone(&type_name));
                self.initialize_dtable(
                   proto.statics.iter().map(|(&k, &v)| (k, v)),
-                  env,
+                  s.env_mut(),
                   &mut type_dtable,
                );
 
                let mut instance_dtable = DispatchTable::new_for_instance(type_name);
                self.initialize_dtable(
                   proto.instance.iter().map(|(&k, &v)| (k, v)),
-                  env,
+                  s.env_mut(),
                   &mut instance_dtable,
                );
 
@@ -558,7 +557,7 @@ impl Fiber {
                   // will succeed so it's safe to use unwrap_unchecked.
                   let st = self.stack_top_mut().struct_v().unwrap_unchecked();
                   st.implement(type_dtable)
-                     .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
+                     .map_err(|kind| self.error_outside_function_call(None, s.env_mut(), kind))?;
                }
             }
 
@@ -619,4 +618,19 @@ impl Fiber {
 
       Ok(result)
    }
+}
+
+/// User-defined state that contains the environment and globals.
+pub trait UserState {
+   /// Returns an immutable reference to the environment.
+   fn env(&self) -> &Environment;
+
+   /// Returns an immutable reference to globals.
+   fn globals(&self) -> &Globals;
+
+   /// Returns a mutable reference to the environment.
+   fn env_mut(&mut self) -> &mut Environment;
+
+   /// Returns a mutable reference to globals.
+   fn globals_mut(&mut self) -> &mut Globals;
 }

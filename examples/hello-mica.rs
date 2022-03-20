@@ -3,8 +3,8 @@
 use mica::Engine;
 
 fn main() {
-   let engine = Engine::new(mica::std::lib());
-   mica::std::load(&engine).unwrap();
+   let mut engine = Engine::new(mica::std::lib());
+   mica::std::load(&mut engine).unwrap();
 
    engine.set("x", 123_i32).unwrap();
    engine.set("y", 456_i32).unwrap();

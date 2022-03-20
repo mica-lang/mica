@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -19,8 +18,6 @@ use crate::{
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
 
-use self::rtenv::RuntimeEnvironment;
-
 /// Options for debugging the language implementation.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DebugOptions {
@@ -32,7 +29,8 @@ pub struct DebugOptions {
 
 /// An execution engine. Contains information about things like globals, registered types, etc.
 pub struct Engine {
-   runtime_env: Rc<RefCell<RuntimeEnvironment>>,
+   pub(crate) env: Environment,
+   pub(crate) globals: Globals,
    debug_options: DebugOptions,
 }
 
@@ -76,11 +74,9 @@ impl Engine {
          function: Rc::new(DispatchTable::new_for_instance("Function")), // TODO
       };
 
-      let engine = Self {
-         runtime_env: Rc::new(RefCell::new(RuntimeEnvironment {
-            env,
-            globals: Globals::new(),
-         })),
+      let mut engine = Self {
+         env,
+         globals: Globals::new(),
          debug_options,
       };
       // Unwrapping here is fine because at this point we haven't got quite that many globals
@@ -96,10 +92,9 @@ impl Engine {
    /// Compiles a script.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::Compile`] - Syntax or semantic error
    pub fn compile(
-      &self,
+      &mut self,
       filename: impl AsRef<str>,
       source: impl Into<String>,
    ) -> Result<Script, Error> {
@@ -111,18 +106,16 @@ impl Engine {
          eprintln!("{:?}", DumpAst(&ast, root_node));
       }
 
-      let mut shared_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-      let main_chunk =
-         CodeGenerator::new(module_name, &mut shared_env.env).generate(&ast, root_node)?;
+      let main_chunk = CodeGenerator::new(module_name, &mut self.env).generate(&ast, root_node)?;
       if self.debug_options.dump_bytecode {
          eprintln!("Mica - global environment:");
-         eprintln!("{:#?}", shared_env.env);
+         eprintln!("{:#?}", self.env);
          eprintln!("Mica - main chunk disassembly:");
          eprintln!("{:#?}", main_chunk);
       }
 
       Ok(Script {
-         runtime_env: Rc::clone(&self.runtime_env),
+         engine: self,
          main_chunk,
       })
    }
@@ -134,11 +127,12 @@ impl Engine {
    /// # Errors
    /// See [`compile`][`Self::compile`].
    pub fn start(
-      &self,
+      &mut self,
       filename: impl AsRef<str>,
       source: impl Into<String>,
    ) -> Result<Fiber, Error> {
-      Ok(self.compile(filename, source)?.start())
+      let script = self.compile(filename, source)?;
+      Ok(script.into_fiber())
    }
 
    /// Returns the unique global ID for the global with the given name, or an error if there
@@ -149,15 +143,13 @@ impl Engine {
    /// globals.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn global_id(&self, name: &str) -> Result<GlobalId, Error> {
-      let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-      if let Some(slot) = runtime_env.env.get_global(name) {
+   pub fn global_id(&mut self, name: &str) -> Result<GlobalId, Error> {
+      if let Some(slot) = self.env.get_global(name) {
          Ok(GlobalId(slot))
       } else {
          Ok(GlobalId(
-            runtime_env.env.create_global(name).map_err(|_| Error::TooManyGlobals)?,
+            self.env.create_global(name).map_err(|_| Error::TooManyGlobals)?,
          ))
       }
    }
@@ -167,16 +159,14 @@ impl Engine {
    /// The `id` parameter can be either an `&str` or a prefetched [`global_id`][`Self::global_id`].
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn set<G, T>(&self, id: G, value: T) -> Result<(), Error>
+   pub fn set<G, T>(&mut self, id: G, value: T) -> Result<(), Error>
    where
       G: ToGlobalId,
       T: ToValue,
    {
-      let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-      let id = id.to_global_id(&mut runtime_env.env)?;
-      runtime_env.globals.set(id.0, value.to_value());
+      let id = id.to_global_id(&mut self.env)?;
+      self.globals.set(id.0, value.to_value());
       Ok(())
    }
 
@@ -185,17 +175,18 @@ impl Engine {
    /// The `id` parameter can be either an `&str` or a prefetched [`global_id`][`Self::global_id`].
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TypeMismatch`] - The type of the value is not convertible to `T`
    pub fn get<G, T>(&self, id: G) -> Result<T, Error>
    where
-      G: ToGlobalId,
+      G: TryToGlobalId,
       T: TryFromValue,
    {
-      let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-      let id = id.to_global_id(&mut runtime_env.env)?;
-      T::try_from_value(&runtime_env.globals.get(id.0))
+      if let Some(id) = id.try_to_global_id(&self.env) {
+         T::try_from_value(&self.globals.get(id.0))
+      } else {
+         T::try_from_value(&Value::Nil)
+      }
    }
 
    /// Declares a "raw" function in the global scope. Raw functions do not perform any type checks
@@ -211,18 +202,16 @@ impl Engine {
    /// checks you may receive a different amount of arguments than specified.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
    pub fn add_raw_function(
-      &self,
+      &mut self,
       name: &str,
       parameter_count: impl Into<Option<u16>>,
       f: RawForeignFunction,
    ) -> Result<(), Error> {
-      let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-      let global_id = name.to_global_id(&mut runtime_env.env)?;
-      let function_id = runtime_env
+      let global_id = name.to_global_id(&mut self.env)?;
+      let function_id = self
          .env
          .create_function(Function {
             name: Rc::from(name),
@@ -234,7 +223,7 @@ impl Engine {
          function_id,
          captures: Vec::new(),
       }));
-      runtime_env.globals.set(global_id.0, function);
+      self.globals.set(global_id.0, function);
       Ok(())
    }
 
@@ -242,7 +231,7 @@ impl Engine {
    ///
    /// # Errors
    /// See [`add_raw_function`][`Self::add_raw_function`].
-   pub fn add_function<F, V>(&self, name: &str, f: F) -> Result<(), Error>
+   pub fn add_function<F, V>(&mut self, name: &str, f: F) -> Result<(), Error>
    where
       V: ffvariants::Bare,
       F: ForeignFunction<V>,
@@ -253,52 +242,39 @@ impl Engine {
    /// Declares a type in the global scope.
    ///
    /// # Errors
-   ///  - [`Error::EngineInUse`] - A fiber is currently running in this engine
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
    ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created
-   pub fn add_type<T>(&self, builder: TypeBuilder<T>) -> Result<(), Error> {
-      let built = {
-         let mut runtime_env = self.runtime_env.try_borrow_mut().map_err(|_| Error::EngineInUse)?;
-         builder.build(&mut runtime_env.env)?
-      };
+   pub fn add_type<T>(&mut self, builder: TypeBuilder<T>) -> Result<(), Error> {
+      let built = { builder.build(&mut self.env)? };
       self.set_built_type(&built)?;
       Ok(())
    }
 
-   pub(crate) fn set_built_type(&self, typ: &BuiltType) -> Result<(), Error> {
+   pub(crate) fn set_built_type(&mut self, typ: &BuiltType) -> Result<(), Error> {
       self.set(typ.type_name.deref(), typ.make_type_struct())
    }
 }
 
-pub(crate) mod rtenv {
-   use mica_language::bytecode::Environment;
-   use mica_language::vm::Globals;
-
-   /// The runtime environment. Contains declared globals and their values.
-   pub struct RuntimeEnvironment {
-      pub(crate) env: Environment,
-      pub(crate) globals: Globals,
-   }
-
-   impl RuntimeEnvironment {
-      pub fn split(&mut self) -> (&mut Environment, &mut Globals) {
-         (&mut self.env, &mut self.globals)
-      }
-   }
-}
-
 /// A script pre-compiled into bytecode.
-pub struct Script {
-   runtime_env: Rc<RefCell<RuntimeEnvironment>>,
+pub struct Script<'e> {
+   engine: &'e mut Engine,
    main_chunk: Rc<Chunk>,
 }
 
-impl Script {
+impl<'e> Script<'e> {
    /// Starts running a script in a new fiber.
-   pub fn start(&self) -> Fiber {
+   pub fn start(&mut self) -> Fiber {
       Fiber {
-         runtime_env: Rc::clone(&self.runtime_env),
+         engine: self.engine,
+         inner: vm::Fiber::new(Rc::clone(&self.main_chunk)),
+      }
+   }
+
+   /// Starts running a script in a new fiber, consuming the script.
+   pub fn into_fiber(self) -> Fiber<'e> {
+      Fiber {
+         engine: self.engine,
          inner: vm::Fiber::new(Rc::clone(&self.main_chunk)),
       }
    }
@@ -338,5 +314,23 @@ impl ToGlobalId for &str {
       } else {
          env.create_global(*self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
       })
+   }
+}
+
+/// A trait for names convertible to global IDs.
+pub trait TryToGlobalId {
+   #[doc(hidden)]
+   fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId>;
+}
+
+impl TryToGlobalId for GlobalId {
+   fn try_to_global_id(&self, _: &Environment) -> Option<GlobalId> {
+      Some(*self)
+   }
+}
+
+impl TryToGlobalId for &str {
+   fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId> {
+      env.get_global(*self).map(GlobalId)
    }
 }

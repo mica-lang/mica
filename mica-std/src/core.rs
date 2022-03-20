@@ -52,7 +52,7 @@ fn assert(condition: Value, message: Option<Value>) -> Result<Value, mica_hl::Er
 }
 
 /// Loads the core library into the engine.
-pub fn load_core(engine: &Engine) -> Result<(), mica_hl::Error> {
+pub fn load_core(engine: &mut Engine) -> Result<(), mica_hl::Error> {
    engine.add_function("print", print)?;
    engine.add_function("debug", debug)?;
    engine.add_function("error", error)?;

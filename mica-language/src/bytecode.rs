@@ -560,7 +560,7 @@ impl Environment {
    }
 
    /// Tries to look up a global. Returns `None` if the global doesn't exist.
-   pub fn get_global(&mut self, name: &str) -> Option<Opr24> {
+   pub fn get_global(&self, name: &str) -> Option<Opr24> {
       self.globals.get(name).copied()
    }
 

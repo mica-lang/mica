@@ -15,8 +15,6 @@ pub enum Error {
    Compile(LanguageError),
    /// An error occured during runtime.
    Runtime(LanguageError),
-   /// The execution engine is in use.
-   EngineInUse,
    /// There are too many globals.
    TooManyGlobals,
    /// Too many functions were created.
@@ -55,7 +53,6 @@ impl fmt::Display for Error {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       match self {
          Self::Compile(error) | Self::Runtime(error) => error.fmt(f),
-         Self::EngineInUse => f.write_str("execution engine is in use by another fiber"),
          Self::TooManyGlobals => f.write_str("too many globals"),
          Self::TooManyFunctions => f.write_str("too many functions"),
          Self::TooManyMethods => f.write_str("too many methods with different signatures"),

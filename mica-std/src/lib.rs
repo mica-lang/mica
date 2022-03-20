@@ -9,7 +9,7 @@ pub use crate::builtins::lib;
 pub use crate::core::load_core;
 
 /// Loads the full standard library into the engine.
-pub fn load(engine: &Engine) -> Result<(), mica_hl::Error> {
+pub fn load(engine: &mut Engine) -> Result<(), mica_hl::Error> {
    load_core(engine)?;
 
    Ok(())

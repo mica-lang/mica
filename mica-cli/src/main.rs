@@ -142,8 +142,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
       let file = std::fs::read_to_string(path)?;
       let engine = engine(&opts.engine_options)?;
-      for result in interpret(&engine, path.to_str().unwrap(), file).map_err(|_| CompileError)? {
-         result.map_err(|_| RuntimeError)?;
+      let fiber = match interpret(&engine, path.to_str().unwrap(), file) {
+         Ok(iterator) => iterator,
+         Err(_) => std::process::exit(-1),
+      };
+      for result in fiber {
+         if result.is_err() {
+            std::process::exit(1);
+         }
       }
    } else {
       repl(&opts.engine_options)?;

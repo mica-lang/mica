@@ -155,8 +155,8 @@ pub enum Opcode {
    /// Removes the value at the top of the stack.
    Discard,
 
-   // Note that due to how the VM increments the program counter, forward jump instructions as if 4
-   // bytes were jumped over implicitly (the actual number of bytes that is jumped over is
+   // Note that due to how the VM increments the program counter, forward jump instructions as if
+   // 4 bytes were jumped over implicitly (the actual number of bytes that is jumped over is
    // `operand + 4`).
    /// Jumps the program counter forward by an amount of bytes.
    JumpForward(Opr24),

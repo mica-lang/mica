@@ -218,7 +218,8 @@ impl PartialEq for Value {
 /// Note that both types and actual constructed structs use the same representation. The difference
 /// is that types do not contain associated fields (Mica does not have static fields.)
 pub struct Struct {
-   /// The disptach table of the struct. This may only be set once, and setting it seals the struct.
+   /// The disptach table of the struct. This may only be set once, and setting it seals the
+   /// struct.
    pub(crate) dtable: UnsafeCell<Rc<DispatchTable>>,
    sealed: Cell<bool>,
    fields: UnsafeCell<Vec<Value>>,

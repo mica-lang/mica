@@ -1,15 +1,19 @@
+//! The parser.
+
 use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
 use crate::common::{Error, ErrorKind};
 use crate::lexer::{Lexer, Token, TokenKind};
 
+/// The parser's state.
 pub struct Parser {
    lexer: Lexer,
    ast: Ast,
 }
 
 impl Parser {
+   /// Constructs a new parser from a lexer.
    pub fn new(lexer: Lexer) -> Self {
       Self {
          ast: Ast::new(Rc::clone(&lexer.module_name)),
@@ -17,6 +21,7 @@ impl Parser {
       }
    }
 
+   /// Constructs a compilation error located at the given token.
    fn error(&self, token: &Token, kind: ErrorKind) -> Error {
       Error::Compile {
          module_name: Rc::clone(&self.lexer.module_name),
@@ -25,6 +30,7 @@ impl Parser {
       }
    }
 
+   /// Returns an error if the next token is not of the given kind.
    fn expect(
       &mut self,
       kind: TokenKind,
@@ -38,6 +44,8 @@ impl Parser {
       }
    }
 
+   /// If the next token's kind is equal to `kind`, advances to the next token and returns the
+   /// token. Otherwise returns `None`.
    fn try_next(&mut self, kind: TokenKind) -> Result<Option<Token>, Error> {
       let next_token = self.lexer.peek_token()?;
       Ok(if next_token.kind == kind {
@@ -47,6 +55,7 @@ impl Parser {
       })
    }
 
+   /// Returns the precedence level of the given token.
    fn precedence(token: &Token) -> i8 {
       match token.kind {
          TokenKind::Or => 1,
@@ -65,6 +74,7 @@ impl Parser {
       }
    }
 
+   /// Returns the associativity of the given token.
    fn associativity(token: &Token) -> Associativity {
       match token.kind {
          TokenKind::Assign => Associativity::Right,
@@ -72,10 +82,13 @@ impl Parser {
       }
    }
 
+   /// Parses a "unit literal". This is used for all literals that are uniquely identified by a
+   /// single token's kind (such as `nil`.)
    fn parse_unit(&mut self, token: Token, kind: NodeKind) -> NodeId {
       self.ast.build_node(kind, ()).with_location(token.location).done()
    }
 
+   /// Parses a number literal.
    fn parse_number(&mut self, token: Token) -> NodeId {
       if let &TokenKind::Number(x) = &token.kind {
          self
@@ -89,6 +102,7 @@ impl Parser {
       }
    }
 
+   /// Parses a string literal.
    fn parse_string(&mut self, token: Token) -> NodeId {
       if let TokenKind::String(s) = token.kind {
          self
@@ -102,6 +116,7 @@ impl Parser {
       }
    }
 
+   /// Parses an identifier.
    fn parse_identifier(&mut self, token: Token) -> Result<NodeId, Error> {
       if let TokenKind::Identifier(i) = token.kind {
          Ok(self
@@ -115,12 +130,14 @@ impl Parser {
       }
    }
 
+   /// Parses a unary operator. Any unary operator can be followed by a prefix token.
    fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
       let next_token = self.lexer.next_token()?;
       let right = self.parse_prefix(next_token)?;
       Ok(self.ast.build_node(kind, right).with_location(token.location).done())
    }
 
+   /// Parses a terminated block. Typically blocks are terminated with `end`.
    fn parse_terminated_block(
       &mut self,
       token: &Token,
@@ -136,6 +153,7 @@ impl Parser {
       Ok(())
    }
 
+   /// Parses a comma-separated list.
    fn parse_comma_separated(
       &mut self,
       dest: &mut Vec<NodeId>,
@@ -164,6 +182,7 @@ impl Parser {
       }
    }
 
+   /// Parses a `do` block.
    fn parse_do_block(&mut self, token: Token) -> Result<NodeId, Error> {
       let mut children = Vec::new();
       self.parse_terminated_block(&token, &mut children, |k| *k == TokenKind::End)?;
@@ -176,6 +195,7 @@ impl Parser {
          .done())
    }
 
+   /// Parses an `if` expression.
    fn parse_if_expression(&mut self, if_token: Token) -> Result<NodeId, Error> {
       let mut branches = Vec::new();
       let mut else_token = None;
@@ -226,6 +246,7 @@ impl Parser {
          .done())
    }
 
+   /// Parses a `while` expression.
    fn parse_while_expression(&mut self, token: Token) -> Result<NodeId, Error> {
       let condition = self.parse_expression(0)?;
       let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
@@ -240,6 +261,7 @@ impl Parser {
          .done())
    }
 
+   /// Parses a function. `anonymous` decides if the function has a name or not.
    fn parse_function(&mut self, func_token: Token, anonymous: bool) -> Result<NodeId, Error> {
       let name = if !anonymous {
          let name = self.lexer.next_token()?;
@@ -283,6 +305,10 @@ impl Parser {
          .done())
    }
 
+   /// Parses a "break-like" expression. This includes `break` and `return`.
+   ///
+   /// A break-like expression is a token followed followed by an optional value on the same line as
+   /// that token.
    fn parse_break_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
       let next_token = self.lexer.peek_token()?;
       let result = if next_token.location.line > token.location.line
@@ -295,6 +321,7 @@ impl Parser {
       Ok(self.ast.build_node(kind, result).with_location(token.location).done())
    }
 
+   /// Parses a prefix expression.
    fn parse_prefix(&mut self, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
          TokenKind::Nil => Ok(self.parse_unit(token, NodeKind::Nil)),
@@ -334,6 +361,7 @@ impl Parser {
       }
    }
 
+   /// Parses a binary operator.
    fn binary_operator(
       &mut self,
       left: NodeId,
@@ -346,6 +374,7 @@ impl Parser {
       Ok(self.ast.build_node(kind, (left, right)).with_location(token.location).done())
    }
 
+   /// Parses a function call.
    fn function_call(&mut self, left: NodeId, left_paren: Token) -> Result<NodeId, Error> {
       let mut arguments = Vec::new();
       self.parse_comma_separated(&mut arguments, TokenKind::RightParen, |p| {
@@ -359,6 +388,7 @@ impl Parser {
          .done())
    }
 
+   /// Parses an infix token.
    fn parse_infix(&mut self, left: NodeId, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
          TokenKind::Plus => self.binary_operator(left, token, NodeKind::Add),
@@ -467,6 +497,7 @@ impl Parser {
    }
 }
 
+/// The associativity of an infix token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 enum Associativity {

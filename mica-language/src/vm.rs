@@ -17,10 +17,12 @@ pub struct Globals {
 }
 
 impl Globals {
+   /// Creates a new storage.
    pub fn new() -> Self {
       Self { values: Vec::new() }
    }
 
+   /// Sets the global in the given slot.
    pub fn set(&mut self, slot: Opr24, value: Value) {
       let slot = u32::from(slot) as usize;
       if slot >= self.values.len() {
@@ -32,11 +34,18 @@ impl Globals {
       }
    }
 
+   /// Returns the global in the given slot, or `Nil` if there's no global there.
    pub fn get(&self, slot: Opr24) -> Value {
       let slot = u32::from(slot) as usize;
       self.values.get(slot).cloned().unwrap_or(Value::Nil)
    }
 
+   /// Returns the global in the given slot without performing bounds checks.
+   ///
+   /// # Safety
+   ///
+   /// This is only safe to use by the VM. The code generator ensures that all globals are set
+   /// before use.
    unsafe fn get_unchecked(&self, slot: Opr24) -> Value {
       let slot = u32::from(slot) as usize;
       self.values.get_unchecked(slot).clone()
@@ -49,6 +58,7 @@ impl Default for Globals {
    }
 }
 
+/// The return point saved before entering a functi
 struct ReturnPoint {
    chunk: Option<Rc<Chunk>>,
    closure: Option<Rc<Closure>>,
@@ -122,10 +132,12 @@ impl Fiber {
       }
    }
 
+   /// Pushes a value onto the stack.
    fn push(&mut self, value: Value) {
       self.stack.push(value);
    }
 
+   /// Pops a value off the stack.
    fn pop(&mut self) -> Value {
       #[cfg(debug_assertions)]
       {
@@ -137,6 +149,7 @@ impl Fiber {
       }
    }
 
+   /// Returns a reference to the value at the top of the stack.
    fn stack_top(&self) -> &Value {
       #[cfg(debug_assertions)]
       {
@@ -148,6 +161,7 @@ impl Fiber {
       }
    }
 
+   /// Returns a mutable reference to the value at the top of the stack.
    fn stack_top_mut(&mut self) -> &mut Value {
       #[cfg(debug_assertions)]
       {
@@ -160,6 +174,7 @@ impl Fiber {
       }
    }
 
+   /// Returns a reference to the `n`th value counted from the top of the stack.
    fn nth_from_top(&self, n: usize) -> &Value {
       #[cfg(debug_assertions)]
       {
@@ -213,10 +228,13 @@ impl Fiber {
       }
    }
 
+   /// Allocates `n` storage slots for local variables.
    fn allocate_chunk_storage_slots(&mut self, n: usize) {
       self.stack.extend(std::iter::repeat_with(|| Value::Nil).take(n));
    }
 
+   /// Calls a function. For bytecode functions this saves the stack and begins executing the
+   /// function's chunk. For foreign functions it simply calls the function.
    fn enter_function(
       &mut self,
       s: &mut impl UserState,
@@ -248,6 +266,7 @@ impl Fiber {
       Ok(())
    }
 
+   /// Constructs an error that wasn't triggered by a function call.
    fn error_outside_function_call(
       &mut self,
       closure: Option<Rc<Closure>>,
@@ -271,6 +290,7 @@ impl Fiber {
       error
    }
 
+   /// Constructs a closure from surrounding stack variables and upvalues.
    fn create_closure(&mut self, env: &mut Environment, function_id: Opr24) -> Rc<Closure> {
       let function = unsafe { env.get_function_unchecked_mut(function_id) };
       let mut captures = Vec::new();
@@ -324,7 +344,7 @@ impl Fiber {
       }
    }
 
-   /// Interprets bytecode in the chunk, with the provided global storage.
+   /// Interprets bytecode in the chunk, with the provided user state.
    pub fn interpret<S>(&mut self, mut s: S) -> Result<Value, Error>
    where
       S: UserState,

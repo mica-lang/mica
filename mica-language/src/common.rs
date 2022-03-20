@@ -1,8 +1,11 @@
+//! Common things, mostly error handling-related.
+
 use std::borrow::Cow;
 use std::rc::Rc;
 
 use crate::bytecode::FunctionSignature;
 
+/// A source location.
 #[derive(Debug, Clone, Copy)]
 pub struct Location {
    pub byte: usize,
@@ -11,17 +14,21 @@ pub struct Location {
 }
 
 impl Location {
+   /// The "uninitialized" location, used as a placeholder for proper locations in case there's a
+   /// bug in codegen.
    pub const UNINIT: Self = Self {
       byte: 0,
       line: 0,
       column: 0,
    };
 
+   /// Returns whether this location is the uninitialized location.
    pub fn is_uninit(&self) -> bool {
       self.line == 0 && self.column == 0
    }
 }
 
+/// The default location points to the first column on the first line.
 impl Default for Location {
    fn default() -> Self {
       Self {
@@ -38,6 +45,10 @@ impl std::fmt::Display for Location {
    }
 }
 
+/// The kind of an error.
+///
+/// Check the source code of the `Display` implementation to see which error kind corresponds
+/// to which error message.
 #[derive(Debug)]
 pub enum ErrorKind {
    // Lexer
@@ -170,20 +181,27 @@ impl std::fmt::Display for ErrorKind {
    }
 }
 
+/// An entry of a stack trace.
 #[derive(Debug)]
 pub struct StackTraceEntry {
+   /// The name of the current function.
    pub function_name: Rc<str>,
+   /// The name of the module the function was in.
    pub module_name: Rc<str>,
+   /// The source location in the module.
    pub location: Location,
 }
 
+/// An error.
 #[derive(Debug)]
 pub enum Error {
+   /// A compile-time error.
    Compile {
       kind: ErrorKind,
       module_name: Rc<str>,
       location: Location,
    },
+   /// A runtime error.
    Runtime {
       kind: ErrorKind,
       call_stack: Vec<StackTraceEntry>,

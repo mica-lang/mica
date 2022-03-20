@@ -257,14 +257,14 @@ impl<'e> CodeGenerator<'e> {
       let scope = self.locals.pop_scope();
       for variable in scope.variables_by_name.into_values() {
          if variable.is_captured {
-            self.chunk.push(Opcode::CloseLocal(variable.stack_slot));
+            self.chunk.emit(Opcode::CloseLocal(variable.stack_slot));
          }
       }
    }
 
    /// Generates a variable load instruction (GetLocal or GetGlobal).
    fn generate_variable_load(&mut self, variable: VariablePlace) {
-      self.chunk.push(match variable {
+      self.chunk.emit(match variable {
          VariablePlace::Global(slot) => Opcode::GetGlobal(slot),
          VariablePlace::Local(slot) => Opcode::GetLocal(slot),
          VariablePlace::Upvalue(slot) => Opcode::GetUpvalue(slot),
@@ -273,7 +273,7 @@ impl<'e> CodeGenerator<'e> {
 
    /// Generates a variable assign instruction (AssignLocal or AssignGlobal).
    fn generate_variable_assign(&mut self, variable: VariablePlace) {
-      self.chunk.push(match variable {
+      self.chunk.emit(match variable {
          VariablePlace::Global(slot) => Opcode::AssignGlobal(slot),
          VariablePlace::Local(slot) => Opcode::AssignLocal(slot),
          VariablePlace::Upvalue(slot) => Opcode::AssignUpvalue(slot),
@@ -282,7 +282,7 @@ impl<'e> CodeGenerator<'e> {
 
    /// Pushes a new breakable block.
    fn push_breakable_block(&mut self) {
-      let start = self.chunk.push(Opcode::Nop);
+      let start = self.chunk.emit(Opcode::Nop);
       self.breakable_blocks.push(BreakableBlock {
          breaks: Vec::new(),
          start,
@@ -299,7 +299,7 @@ impl<'e> CodeGenerator<'e> {
             // before `pop_breakable_block` was called.
             self.chunk.patch(jump, Opcode::jump_forward(jump, self.chunk.len()).unwrap());
          }
-         self.chunk.push(Opcode::ExitBreakableBlock(1));
+         self.chunk.emit(Opcode::ExitBreakableBlock(1));
       }
    }
 
@@ -313,7 +313,7 @@ impl<'e> CodeGenerator<'e> {
          for (i, &node) in nodes.iter().enumerate() {
             self.generate_node(ast, node)?;
             if i != nodes.len() - 1 {
-               self.chunk.push(Opcode::Discard);
+               self.chunk.emit(Opcode::Discard);
             }
          }
       }
@@ -322,12 +322,12 @@ impl<'e> CodeGenerator<'e> {
 
    /// Generates code for a nil literal.
    fn generate_nil(&mut self) {
-      self.chunk.push(Opcode::PushNil);
+      self.chunk.emit(Opcode::PushNil);
    }
 
    /// Generates code for a boolean literal.
    fn generate_boolean(&mut self, ast: &Ast, node: NodeId) {
-      self.chunk.push(match ast.kind(node) {
+      self.chunk.emit(match ast.kind(node) {
          NodeKind::True => Opcode::PushTrue,
          NodeKind::False => Opcode::PushFalse,
          _ => unreachable!(),
@@ -336,16 +336,16 @@ impl<'e> CodeGenerator<'e> {
 
    /// Generates code for a number literal.
    fn generate_number(&mut self, ast: &Ast, node: NodeId) {
-      self.chunk.push(Opcode::PushNumber);
+      self.chunk.emit(Opcode::PushNumber);
       let number = ast.number(node).unwrap();
-      self.chunk.push_number(number);
+      self.chunk.emit_number(number);
    }
 
    /// Generates code for a string literal.
    fn generate_string(&mut self, ast: &Ast, node: NodeId) {
-      self.chunk.push(Opcode::PushString);
+      self.chunk.emit(Opcode::PushString);
       let string = ast.string(node).unwrap();
-      self.chunk.push_string(string);
+      self.chunk.emit_string(string);
    }
 
    /// Generates code for a unary operator.
@@ -353,8 +353,8 @@ impl<'e> CodeGenerator<'e> {
       let (left, _) = ast.node_pair(node);
       self.generate_node(ast, left)?;
       match ast.kind(node) {
-         NodeKind::Negate => self.chunk.push(Opcode::Negate),
-         NodeKind::Not => self.chunk.push(Opcode::Not),
+         NodeKind::Negate => self.chunk.emit(Opcode::Negate),
+         NodeKind::Not => self.chunk.emit(Opcode::Not),
          _ => unreachable!(),
       };
       Ok(())
@@ -366,27 +366,27 @@ impl<'e> CodeGenerator<'e> {
       self.generate_node(ast, left)?;
       self.generate_node(ast, right)?;
       match ast.kind(node) {
-         NodeKind::Negate => self.chunk.push(Opcode::Negate),
+         NodeKind::Negate => self.chunk.emit(Opcode::Negate),
 
-         NodeKind::Add => self.chunk.push(Opcode::Add),
-         NodeKind::Subtract => self.chunk.push(Opcode::Subtract),
-         NodeKind::Multiply => self.chunk.push(Opcode::Multiply),
-         NodeKind::Divide => self.chunk.push(Opcode::Divide),
+         NodeKind::Add => self.chunk.emit(Opcode::Add),
+         NodeKind::Subtract => self.chunk.emit(Opcode::Subtract),
+         NodeKind::Multiply => self.chunk.emit(Opcode::Multiply),
+         NodeKind::Divide => self.chunk.emit(Opcode::Divide),
 
-         NodeKind::Equal => self.chunk.push(Opcode::Equal),
+         NodeKind::Equal => self.chunk.emit(Opcode::Equal),
          NodeKind::NotEqual => {
-            self.chunk.push(Opcode::Equal);
-            self.chunk.push(Opcode::Not)
+            self.chunk.emit(Opcode::Equal);
+            self.chunk.emit(Opcode::Not)
          }
-         NodeKind::Less => self.chunk.push(Opcode::Less),
-         NodeKind::LessEqual => self.chunk.push(Opcode::LessEqual),
+         NodeKind::Less => self.chunk.emit(Opcode::Less),
+         NodeKind::LessEqual => self.chunk.emit(Opcode::LessEqual),
          NodeKind::Greater => {
-            self.chunk.push(Opcode::Swap);
-            self.chunk.push(Opcode::Less)
+            self.chunk.emit(Opcode::Swap);
+            self.chunk.emit(Opcode::Less)
          }
          NodeKind::GreaterEqual => {
-            self.chunk.push(Opcode::Swap);
-            self.chunk.push(Opcode::LessEqual)
+            self.chunk.emit(Opcode::Swap);
+            self.chunk.emit(Opcode::LessEqual)
          }
          _ => unreachable!(),
       };
@@ -420,7 +420,7 @@ impl<'e> CodeGenerator<'e> {
       // code generation.
       let receiver = struct_data.receiver.unwrap();
       self.generate_variable_load(receiver);
-      self.chunk.push(Opcode::GetField(field_id));
+      self.chunk.emit(Opcode::GetField(field_id));
       Ok(())
    }
 
@@ -458,7 +458,7 @@ impl<'e> CodeGenerator<'e> {
                // in an `impl` block.
                let receiver = struct_data.receiver.unwrap();
                self.generate_variable_load(receiver);
-               self.chunk.push(Opcode::AssignField(field));
+               self.chunk.emit(Opcode::AssignField(field));
             } else {
                return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
             }
@@ -491,7 +491,7 @@ impl<'e> CodeGenerator<'e> {
       for (i, &branch) in branches.iter().enumerate() {
          // We need to discard the previous branch's condition (if there was a previous branch).
          if i > 0 {
-            self.chunk.push(Opcode::Discard);
+            self.chunk.emit(Opcode::Discard);
          }
 
          let then = ast.children(branch).unwrap();
@@ -502,11 +502,11 @@ impl<'e> CodeGenerator<'e> {
                self.push_scope();
                self.generate_node(ast, condition)?;
                // Generate a Nop that is later backpatched with a ConditionalJumpForward.
-               let jump = self.chunk.push(Opcode::Nop);
-               self.chunk.push(Opcode::Discard); // The condition has to be discarded.
+               let jump = self.chunk.emit(Opcode::Nop);
+               self.chunk.emit(Opcode::Discard); // The condition has to be discarded.
                self.generate_node_list(ast, then)?;
                self.pop_scope();
-               let jump_to_end = self.chunk.push(Opcode::Nop);
+               let jump_to_end = self.chunk.emit(Opcode::Nop);
                jumps_to_end.push(jump_to_end);
                self.chunk.patch(
                   jump,
@@ -527,8 +527,8 @@ impl<'e> CodeGenerator<'e> {
 
       // If there was no `else` branch, we need to patch in an implicit one that returns `nil`.
       if ast.kind(*branches.last().unwrap()) != NodeKind::ElseBranch {
-         self.chunk.push(Opcode::Discard);
-         self.chunk.push(Opcode::PushNil);
+         self.chunk.emit(Opcode::Discard);
+         self.chunk.emit(Opcode::PushNil);
       }
 
       // Backpatch all jumps to end with an unconditional jump forward.
@@ -547,8 +547,8 @@ impl<'e> CodeGenerator<'e> {
    fn generate_and(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (left, right) = ast.node_pair(node);
       self.generate_node(ast, left)?;
-      let jump_past_right = self.chunk.push(Opcode::Nop);
-      self.chunk.push(Opcode::Discard);
+      let jump_past_right = self.chunk.emit(Opcode::Nop);
+      self.chunk.emit(Opcode::Discard);
       self.generate_node(ast, right)?;
       self.chunk.patch(
          jump_past_right,
@@ -562,8 +562,8 @@ impl<'e> CodeGenerator<'e> {
    fn generate_or(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (left, right) = ast.node_pair(node);
       self.generate_node(ast, left)?;
-      let jump_past_right = self.chunk.push(Opcode::Nop);
-      self.chunk.push(Opcode::Discard);
+      let jump_past_right = self.chunk.emit(Opcode::Nop);
+      self.chunk.emit(Opcode::Discard);
       self.generate_node(ast, right)?;
       self.chunk.patch(
          jump_past_right,
@@ -585,15 +585,15 @@ impl<'e> CodeGenerator<'e> {
 
       let start = self.chunk.len();
       self.generate_node(ast, condition)?;
-      let jump_to_end = self.chunk.push(Opcode::Nop);
+      let jump_to_end = self.chunk.emit(Opcode::Nop);
       // Discard the condition if it's true.
-      self.chunk.push(Opcode::Discard);
+      self.chunk.emit(Opcode::Discard);
 
       self.generate_node_list(ast, body)?;
       // While loops don't yield a value.
-      self.chunk.push(Opcode::Discard);
+      self.chunk.emit(Opcode::Discard);
 
-      self.chunk.push(
+      self.chunk.emit(
          Opcode::jump_backward(self.chunk.len(), start)
             .map_err(|_| ast.error(node, ErrorKind::LoopTooLarge))?,
       );
@@ -603,10 +603,10 @@ impl<'e> CodeGenerator<'e> {
             .map_err(|_| ast.error(node, ErrorKind::LoopTooLarge))?,
       );
       // Discard the condition if it's false.
-      self.chunk.push(Opcode::Discard);
+      self.chunk.emit(Opcode::Discard);
 
       // Because while loops are an expression, they must produce a value. That value is `nil`.
-      self.chunk.push(Opcode::PushNil);
+      self.chunk.emit(Opcode::PushNil);
 
       // `break`s produce a value (or `nil` by default), so we need to jump over the
       // fallback `PushNil`.
@@ -624,7 +624,7 @@ impl<'e> CodeGenerator<'e> {
       } else {
          self.generate_nil();
       }
-      let jump = self.chunk.push(Opcode::Nop);
+      let jump = self.chunk.emit(Opcode::Nop);
       if let Some(block) = self.breakable_blocks.last_mut() {
          block.breaks.push(jump);
       } else {
@@ -663,7 +663,7 @@ impl<'e> CodeGenerator<'e> {
             };
             let method_index =
                self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
-            self.chunk.push(Opcode::CallMethod(Opr24::pack((method_index, arity))));
+            self.chunk.emit(Opcode::CallMethod(Opr24::pack((method_index, arity))));
          }
          _ => {
             self.generate_node(ast, function)?;
@@ -671,7 +671,7 @@ impl<'e> CodeGenerator<'e> {
             for &argument in arguments {
                self.generate_node(ast, argument)?;
             }
-            self.chunk.push(Opcode::Call(
+            self.chunk.emit(Opcode::Call(
                arguments
                   .len()
                   .try_into()
@@ -696,7 +696,7 @@ impl<'e> CodeGenerator<'e> {
       };
       let method_index =
          self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
-      self.chunk.push(Opcode::CallMethod(Opr24::pack((method_index, 1))));
+      self.chunk.emit(Opcode::CallMethod(Opr24::pack((method_index, 1))));
 
       Ok(())
    }
@@ -743,12 +743,12 @@ impl<'e> CodeGenerator<'e> {
       // In constructors, we have to create `self` explicitly.
       let create_struct = if call_conv.is_constructor() {
          generator.generate_variable_load(receiver);
-         let instruction = generator.chunk.push(Opcode::Nop);
+         let instruction = generator.chunk.emit(Opcode::Nop);
          let receiver = generator
             .create_variable("self", VariableAllocation::Allocate)
             .map_err(|kind| ast.error(node, kind))?;
          generator.generate_variable_assign(receiver);
-         generator.chunk.push(Opcode::Discard);
+         generator.chunk.emit(Opcode::Discard);
          generator.struct_data.as_deref_mut().unwrap().receiver = Some(receiver);
          Some(instruction)
       } else {
@@ -767,7 +767,7 @@ impl<'e> CodeGenerator<'e> {
          generator.chunk.patch(create_struct, Opcode::CreateStruct(field_count));
          // We also have to discard whatever was at the top of the stack at the moment and
          // return the struct we constructed.
-         generator.chunk.push(Opcode::Discard);
+         generator.chunk.emit(Opcode::Discard);
          let receiver = generator.struct_data.as_ref().unwrap().receiver.unwrap();
          generator.generate_variable_load(receiver);
       }
@@ -787,7 +787,7 @@ impl<'e> CodeGenerator<'e> {
 
       // Finish generating the chunk by inserting a `Return` opcode.
       generator.pop_scope();
-      generator.chunk.push(Opcode::Return);
+      generator.chunk.emit(Opcode::Return);
 
       // Take back what was taken from the parent generator.
       self.locals = generator.locals.parent.take().unwrap();
@@ -840,9 +840,9 @@ impl<'e> CodeGenerator<'e> {
          },
       )?;
 
-      self.chunk.push(Opcode::CreateClosure(function.id));
+      self.chunk.emit(Opcode::CreateClosure(function.id));
       self.generate_variable_assign(variable);
-      self.chunk.push(Opcode::Discard);
+      self.chunk.emit(Opcode::Discard);
       self.generate_nil();
 
       Ok(())
@@ -865,7 +865,7 @@ impl<'e> CodeGenerator<'e> {
             call_conv: FunctionCallConv::Bare,
          },
       )?;
-      self.chunk.push(Opcode::CreateClosure(function.id));
+      self.chunk.emit(Opcode::CreateClosure(function.id));
       Ok(())
    }
 
@@ -879,7 +879,7 @@ impl<'e> CodeGenerator<'e> {
       } else {
          self.generate_node(ast, value)?;
       }
-      self.chunk.push(Opcode::Return);
+      self.chunk.emit(Opcode::Return);
       Ok(())
    }
 
@@ -888,13 +888,13 @@ impl<'e> CodeGenerator<'e> {
       let (name, _) = ast.node_pair(node);
       let name = ast.string(name).unwrap();
 
-      self.chunk.push(Opcode::CreateType);
-      self.chunk.push_string(name);
+      self.chunk.emit(Opcode::CreateType);
+      self.chunk.emit_string(name);
       let variable = self
          .create_variable(name, VariableAllocation::Allocate)
          .map_err(|kind| ast.error(node, kind))?;
       self.generate_variable_assign(variable);
-      self.chunk.push(Opcode::Discard);
+      self.chunk.emit(Opcode::Discard);
       self.generate_nil();
 
       Ok(())
@@ -968,7 +968,7 @@ impl<'e> CodeGenerator<'e> {
 
       let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
       self.generate_node(ast, implementee)?;
-      self.chunk.push(Opcode::Implement(proto_id));
+      self.chunk.emit(Opcode::Implement(proto_id));
 
       self.struct_data = None;
 
@@ -1044,7 +1044,7 @@ impl<'e> CodeGenerator<'e> {
    /// Generates code for the given AST.
    pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Rc<Chunk>, Error> {
       self.generate_node(ast, root_node)?;
-      self.chunk.push(Opcode::Halt);
+      self.chunk.emit(Opcode::Halt);
       Ok(Rc::new(self.chunk))
    }
 }

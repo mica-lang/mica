@@ -148,7 +148,7 @@ pub trait ForeignFunction<V> {
    fn parameter_count(&self) -> Option<u16>;
 
    /// Converts the function to a `RawForeignFunction`.
-   fn to_raw_foreign_function(self) -> RawForeignFunction;
+   fn into_raw_foreign_function(self) -> RawForeignFunction;
 }
 
 /// Variants of `ForeignFunction`.
@@ -295,7 +295,7 @@ macro_rules! impl_non_varargs {
             Some(N)
          }
 
-         fn to_raw_foreign_function(mut self) -> RawForeignFunction {
+         fn into_raw_foreign_function(mut self) -> RawForeignFunction {
             #[allow(unused_imports)]
             use $crate::MicaLanguageResultExt;
             create_rawff(move |args| {
@@ -496,7 +496,7 @@ where
       None
    }
 
-   fn to_raw_foreign_function(mut self) -> RawForeignFunction {
+   fn into_raw_foreign_function(mut self) -> RawForeignFunction {
       create_rawff(move |args| {
          self(Arguments::new(args))
             .map(|value| value.to_value())
@@ -515,7 +515,7 @@ where
       None
    }
 
-   fn to_raw_foreign_function(mut self) -> RawForeignFunction {
+   fn into_raw_foreign_function(mut self) -> RawForeignFunction {
       create_rawff(move |args| Ok(self(Arguments::new(args)).to_value()))
    }
 }

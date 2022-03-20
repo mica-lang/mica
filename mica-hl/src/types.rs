@@ -133,7 +133,7 @@ where
       V: ffvariants::Method<T>,
       F: ForeignFunction<V>,
    {
-      self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
+      self.add_raw_function(name, f.parameter_count(), f.into_raw_foreign_function())
    }
 
    /// Adds a static function to the struct.
@@ -152,7 +152,7 @@ where
             // signature.
             x + 1
          }),
-         f.to_raw_foreign_function(),
+         f.into_raw_foreign_function(),
       )
    }
 

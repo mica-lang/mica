@@ -247,7 +247,7 @@ impl Engine {
       V: ffvariants::Bare,
       F: ForeignFunction<V>,
    {
-      self.add_raw_function(name, f.parameter_count(), f.to_raw_foreign_function())
+      self.add_raw_function(name, f.parameter_count(), f.into_raw_foreign_function())
    }
 
    /// Declares a type in the global scope.

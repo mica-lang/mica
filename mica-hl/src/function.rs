@@ -122,15 +122,17 @@ impl<'a> From<&'a Value> for RawSelf<'a> {
 ///     - Each argument: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - `fn (Self, A, B, C, ...) -> R` where
-///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or [`FromValueSelfMut`][`crate::FromValueSelfMut`]
+///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or
+///       [`FromValueSelfMut`][`crate::FromValueSelfMut`]
 ///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
 ///   - `fn (Self, A, B, C, ...) -> Result<R, E>`
-///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or [`FromValueSelfMut`][`crate::FromValueSelfMut`]
+///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or
+///       [`FromValueSelfMut`][`crate::FromValueSelfMut`]
 ///     - Each argument after `Self`: [`TryFromValue`]
 ///     - `R`: [`ToValue`]
-///   - Due to a limitation in Rust's type system, a maximum of 8 arguments is supported now.
-///     If more is needed, use the varargs versions described below.
+///   - Due to a limitation in Rust's type system, a maximum of 8 arguments is supported now. If
+///     more is needed, use the varargs versions described below.
 /// - Variable number of dynamically typed arguments
 ///   - `fn (`[`Arguments`]`) -> R` where `R`: [`ToValue`]
 ///   - `fn (`[`Arguments`]`) -> Result<R, E>` where

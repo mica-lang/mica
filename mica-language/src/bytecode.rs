@@ -297,7 +297,7 @@ impl Chunk {
    }
 
    /// Pushes an opcode into the chunk. Returns where the opcode is located.
-   pub fn push(&mut self, opcode: Opcode) -> usize {
+   pub fn emit(&mut self, opcode: Opcode) -> usize {
       let position = self.bytes.len();
       self.bytes.extend_from_slice(opcode.as_bytes());
       self.locations.push(self.codegen_location);
@@ -305,7 +305,7 @@ impl Chunk {
    }
 
    /// Pushes a number into the chunk.
-   pub fn push_number(&mut self, number: f64) {
+   pub fn emit_number(&mut self, number: f64) {
       let bytes = number.to_le_bytes();
       self.bytes.extend_from_slice(&bytes);
       // 8 bytes, so push twice.
@@ -316,7 +316,7 @@ impl Chunk {
    /// Pushes a string into the chunk.
    ///
    /// The string is padded with zeroes such that opcodes are aligned to four bytes.
-   pub fn push_string(&mut self, string: &str) {
+   pub fn emit_string(&mut self, string: &str) {
       let start = self.len();
 
       // I don't know of any 128-bit targets so this cast should be OK. Also, it isn't physically

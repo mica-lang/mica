@@ -92,7 +92,9 @@ impl Fiber {
       self.halted
    }
 
-   fn error(&self, env: &Environment, kind: ErrorKind) -> Error {
+   /// Halts the VM and produces an error.
+   fn error(&mut self, env: &Environment, kind: ErrorKind) -> Error {
+      self.halted = true;
       Error::Runtime {
          kind,
          call_stack: self

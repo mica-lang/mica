@@ -106,6 +106,8 @@ pub enum ErrorKind {
       signature: FunctionSignature,
    },
    StructAlreadyImplemented,
+   UserDataAlreadyBorrowed,
+
    User(Box<dyn std::error::Error>),
 }
 
@@ -176,6 +178,7 @@ impl std::fmt::Display for ErrorKind {
             signature,
          } => write!(f, "method {} is not defined for {}", signature, type_name),
          Self::StructAlreadyImplemented => write!(f, "this struct is already implemented"),
+         Self::UserDataAlreadyBorrowed => write!(f, "this user data is already borrowed"),
          Self::User(error) => write!(f, "{}", error),
       }
    }

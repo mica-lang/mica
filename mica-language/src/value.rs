@@ -1,7 +1,8 @@
 //! Dynamically typed values.
 
+use std::any::Any;
 use std::borrow::Cow;
-use std::cell::{Cell, UnsafeCell};
+use std::cell::{Cell, RefCell, UnsafeCell};
 use std::cmp::Ordering;
 use std::marker::PhantomPinned;
 use std::pin::Pin;
@@ -12,19 +13,46 @@ use crate::bytecode::{DispatchTable, Opr24};
 use crate::common::ErrorKind;
 
 /// The type of a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone)]
 pub enum Type {
    Nil,
    Boolean,
    Number,
    String,
    Function,
-   Struct,
+   Struct(Rc<Struct>),
+   UserData(Rc<UserData>),
+}
+
+impl PartialEq for Type {
+   fn eq(&self, other: &Self) -> bool {
+      match (self, other) {
+         (Self::Struct(a), Self::Struct(b)) => Rc::ptr_eq(a, b),
+         (Self::UserData(a), Self::UserData(b)) => Rc::ptr_eq(a, b),
+         _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+      }
+   }
+}
+
+impl Eq for Type {}
+
+impl fmt::Debug for Type {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      match self {
+         Self::Nil => write!(f, "Nil"),
+         Self::Boolean => write!(f, "Boolean"),
+         Self::Number => write!(f, "Number"),
+         Self::String => write!(f, "String"),
+         Self::Function => write!(f, "Function"),
+         Self::Struct(s) => write!(f, "{}", s.dtable().type_name),
+         Self::UserData(u) => write!(f, "{}", u.dtable.type_name),
+      }
+   }
 }
 
 impl fmt::Display for Type {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      write!(f, "{self:?}")
+      fmt::Debug::fmt(&self, f)
    }
 }
 
@@ -45,6 +73,8 @@ pub enum Value {
    Function(Rc<Closure>),
    /// A struct.
    Struct(Rc<Struct>),
+   /// Dynamically-typed user data.
+   UserData(Rc<UserData>),
 }
 
 impl Value {
@@ -56,7 +86,8 @@ impl Value {
          Value::Number(_) => Type::Number,
          Value::String(_) => Type::String,
          Value::Function(_) => Type::Function,
-         Value::Struct(_) => Type::Struct,
+         Value::Struct(s) => Type::Struct(Rc::clone(s)),
+         Value::UserData(u) => Type::UserData(Rc::clone(u)),
       }
    }
 
@@ -121,6 +152,21 @@ impl Value {
       }
    }
 
+   /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error if
+   /// that's not the case.
+   pub fn user_data<T>(&self) -> Result<&Rc<UserData>, ErrorKind>
+   where
+      T: UserDataInfo,
+   {
+      if let Value::UserData(u) = self {
+         let user_data = u.data.try_borrow().map_err(|_| ErrorKind::UserDataAlreadyBorrowed)?;
+         if user_data.is::<T>() {
+            return Ok(u);
+         }
+      }
+      Err(self.type_error(T::type_name()))
+   }
+
    /// Returns whether the value is truthy. All values except `Nil` and `False` are truthy.
    pub fn is_truthy(&self) -> bool {
       !matches!(self, Value::Nil | Value::False)
@@ -156,6 +202,7 @@ impl Value {
             }
             Self::Function(_) => Ok(None),
             Self::Struct(_) => Ok(None),
+            Self::UserData(_) => Ok(None),
          }
       }
    }
@@ -178,6 +225,11 @@ impl From<bool> for Value {
 
 impl fmt::Debug for Value {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      fn dtable(f: &mut fmt::Formatter, dtable: &DispatchTable) -> fmt::Result {
+         let type_name = &dtable.pretty_name;
+         write!(f, "<[{type_name}]>")
+      }
+
       match self {
          Value::Nil => f.write_str("nil"),
          Value::False => f.write_str("false"),
@@ -185,11 +237,8 @@ impl fmt::Debug for Value {
          Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s:?}"),
          Value::Function(_) => write!(f, "<func>"),
-         Value::Struct(s) => {
-            let dispatch_table = s.dtable();
-            let type_name = &dispatch_table.pretty_name;
-            write!(f, "<[{type_name}]>")
-         }
+         Value::Struct(s) => dtable(f, s.dtable()),
+         Value::UserData(u) => dtable(f, &u.dtable),
       }
    }
 }
@@ -276,6 +325,51 @@ impl Struct {
    pub(crate) unsafe fn set_field(&self, index: usize, value: Value) {
       *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
    }
+}
+
+/// The innards of user data.
+///
+/// This contains the RefCell that's used for shared mutation, as well as its dtable.
+pub struct UserData {
+   data: RefCell<Box<dyn Any>>,
+   pub(crate) dtable: Rc<DispatchTable>,
+}
+
+impl UserData {
+   /// Creates a new `UserData`.
+   pub fn new<T>(data: T, dtable: Rc<DispatchTable>) -> Self
+   where
+      T: Any,
+   {
+      Self {
+         data: RefCell::new(Box::new(data)),
+         dtable,
+      }
+   }
+
+   /// Returns the [`RefCell<T>`][`RefCell`] that contains the object.
+   ///
+   /// Note that this method is safe, even though the [`RefCell`] lets you do some sketchy things,
+   /// such as replacing the object inside with one that's incompatible with the user data's dtable.
+   /// This is because the VM doesn't care what you do with the data, and neither does it care
+   /// about what the methods in the dtable do. As far as it's concerned it's all fully safe.
+   ///
+   /// High-level wrappers such as [`mica-hl`](https://crates.io/crates/mica-hl) _can_ do unsafe
+   /// things under the hood (eg. not checking the type of what's in the box), but as long as they
+   /// maintain a safe interface on the surface, everything is OK.
+   pub fn data(&self) -> &RefCell<Box<dyn Any>> {
+      &self.data
+   }
+
+   /// Returns a reference to the user data's dispatch table.
+   pub fn dtable(&self) -> &DispatchTable {
+      &self.dtable
+   }
+}
+
+pub trait UserDataInfo: Any {
+   /// Returns the type name of the user data.
+   fn type_name<'a>() -> &'a str;
 }
 
 /// An upvalue captured by a closure.

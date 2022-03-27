@@ -16,6 +16,17 @@ where
    move |x, y| f(*x, y)
 }
 
+#[derive(Debug)]
+struct ShiftOverflow;
+
+impl std::fmt::Display for ShiftOverflow {
+   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      f.write_str("left or right shift overflow")
+   }
+}
+
+impl std::error::Error for ShiftOverflow {}
+
 struct Lib;
 
 impl StandardLibrary for Lib {
@@ -30,10 +41,11 @@ impl StandardLibrary for Lib {
    fn define_number(&mut self, builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
       builder
          // Constants
-         .add_static("pi", || std::f64::consts::PI)
          .add_static("nan", || f64::NAN)
          .add_static("infinity", || f64::INFINITY)
          .add_static("epsilon", || f64::EPSILON)
+         .add_static("e", || std::f64::consts::E)
+         .add_static("pi", || std::f64::consts::PI)
          // Static methods
          .add_static("parse", |s: Rc<str>| -> Result<f64, _> { s.parse() })
          // Math stuff
@@ -84,6 +96,17 @@ impl StandardLibrary for Lib {
          .add_function("is_subnormal", ref_self1(f64::is_subnormal))
          .add_function("is_sign_positive", ref_self1(f64::is_sign_positive))
          .add_function("is_sign_negative", ref_self1(f64::is_sign_negative))
+         // Bit arithmetic
+         .add_function("bnot", |x: &f64| !(*x as u32) as f64)
+         .add_function("band", |x: &f64, y: f64| (*x as u32 & y as u32) as f64)
+         .add_function("bor", |x: &f64, y: f64| (*x as u32 | y as u32) as f64)
+         .add_function("bxor", |x: &f64, y: f64| (*x as u32 ^ y as u32) as f64)
+         .add_function("shl", |x: &f64, y: f64| -> Result<_, ShiftOverflow> {
+            Ok(((*x as u32).checked_shl(y as u32).ok_or(ShiftOverflow)?) as f64)
+         })
+         .add_function("shr", |x: &f64, y: f64| -> Result<_, ShiftOverflow> {
+            Ok(((*x as u32).checked_shr(y as u32).ok_or(ShiftOverflow)?) as f64)
+         })
    }
 
    fn define_string(&mut self, builder: TypeBuilder<Rc<str>>) -> TypeBuilder<Rc<str>> {

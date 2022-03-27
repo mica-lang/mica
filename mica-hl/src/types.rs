@@ -10,7 +10,7 @@ use mica_language::value::{Closure, Value};
 use crate::userdata::Type;
 use crate::{ffvariants, Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction};
 
-type Constructor<T> = Box<dyn FnOnce(&dyn ObjectConstructor<T>) -> RawForeignFunction>;
+type Constructor<T> = Box<dyn FnOnce(Rc<dyn ObjectConstructor<T>>) -> RawForeignFunction>;
 
 /// A descriptor for a dispatch table. Defines which methods are available on the table, as well
 /// as their implementations.
@@ -142,6 +142,33 @@ where
       self
    }
 
+   /// Adds a _raw_ constructor to the type.
+   ///
+   /// You should generally prefer [`add_constructor`][`Self::add_constructor`] instead of this.
+   ///
+   /// `parameter_count` should reflect the parameter count of the function. Pass `None` if the
+   /// function accepts a variable number of arguments. Note that _unlike with bare raw functions_
+   /// there can be two functions with the same name defined on a type, as long as they have
+   /// different arities. Functions with specific arities take priority over varargs.
+   ///
+   /// Note that this function _consumes_ the builder; this is because calls to functions that add
+   /// into the type are meant to be chained together in one expression.
+   pub fn add_raw_constructor(
+      mut self,
+      name: &str,
+      parameter_count: Option<u16>,
+      f: Constructor<T>,
+   ) -> Self {
+      self.constructors.push((
+         FunctionSignature {
+            name: Rc::from(name),
+            arity: parameter_count,
+         },
+         f,
+      ));
+      self
+   }
+
    /// Adds an instance function to the struct.
    ///
    /// The function must follow the "method" calling convention, in that it accepts `&`[`T`] or
@@ -151,7 +178,7 @@ where
       V: ffvariants::Method<T>,
       F: ForeignFunction<V>,
    {
-      self.add_raw_function(name, f.parameter_count(), f.into_raw_foreign_function())
+      self.add_raw_function(name, F::parameter_count(), f.into_raw_foreign_function())
    }
 
    /// Adds a static function to the struct.
@@ -165,7 +192,7 @@ where
    {
       self.add_raw_static(
          name,
-         f.parameter_count().map(|x| {
+         F::parameter_count().map(|x| {
             // Add 1 for the static receiver, which isn't counted into the bare function's
             // signature.
             x + 1
@@ -174,10 +201,30 @@ where
       )
    }
 
+   /// Adds a constructor to the type.
+   ///
+   /// A constructor is a static function responsible for creating instances of a type. The function
+   /// passed to this one must return another function that actually constructs the object.
+   ///
+   /// Constructors use the "bare" calling convention, in that they don't accept a `self` parameter.
+   pub fn add_constructor<F, G, V>(self, name: &str, f: F) -> Self
+   where
+      V: ffvariants::Bare,
+      F: FnOnce(Rc<dyn ObjectConstructor<T>>) -> G,
+      F: 'static,
+      G: ForeignFunction<V>,
+   {
+      self.add_raw_constructor(
+         name,
+         G::parameter_count().map(|x| x + 1),
+         Box::new(|ctor| f(ctor).into_raw_foreign_function()),
+      )
+   }
+
    /// Builds the struct builder into its type dtable and instance dtable, respectively.
    pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType<T>, Error>
    where
-      T: Sized,
+      T: Any + Sized,
    {
       // Build the dtables.
       let mut type_dtable = self
@@ -205,12 +252,12 @@ where
          }
       }
 
-      let instancer = Instancer {
+      let instancer: Rc<dyn ObjectConstructor<T>> = Rc::new(Instancer {
          instance_dtable: Rc::clone(&instance_dtable),
          _data: PhantomData,
-      };
+      });
       for (signature, constructor) in self.constructors {
-         let f = constructor(&instancer);
+         let f = constructor(Rc::clone(&instancer));
          DispatchTableDescriptor::add_function_to_dtable(env, &mut type_dtable, signature, f)?;
       }
 

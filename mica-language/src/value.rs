@@ -330,6 +330,9 @@ impl Struct {
 pub trait UserData: Any {
    /// Returns the user data's dispatch table.
    fn dtable(&self) -> &DispatchTable;
+
+   /// Converts a reference to `UserData` to `Any`.
+   fn as_any(&self) -> &dyn Any;
 }
 
 /// An upvalue captured by a closure.

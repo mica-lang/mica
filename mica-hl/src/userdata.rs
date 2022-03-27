@@ -35,6 +35,10 @@ where
    fn dtable(&self) -> &DispatchTable {
       &self.dtable
    }
+
+   fn as_any(&self) -> &dyn Any {
+      self
+   }
 }
 
 /// A constructor of objects of type `T`.
@@ -106,6 +110,10 @@ where
 {
    fn dtable(&self) -> &DispatchTable {
       &self.dtable
+   }
+
+   fn as_any(&self) -> &dyn Any {
+      self
    }
 }
 

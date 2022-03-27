@@ -8,34 +8,34 @@ use mica_language::common::ErrorKind;
 use crate::{Error, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value};
 
 /// Used for converting types into dynamically typed values.
-pub trait ToValue {
-   fn to_value(&self) -> Value;
+pub trait IntoValue {
+   fn into_value(self) -> Value;
 }
 
-impl ToValue for Value {
-   fn to_value(&self) -> Value {
-      self.clone()
+impl IntoValue for Value {
+   fn into_value(self) -> Value {
+      self
    }
 }
 
 /// The unit type is represented as `nil` inside the VM.
-impl ToValue for () {
-   fn to_value(&self) -> Value {
+impl IntoValue for () {
+   fn into_value(self) -> Value {
       Value::Nil
    }
 }
 
-impl ToValue for bool {
-   fn to_value(&self) -> Value {
-      Value::from(*self)
+impl IntoValue for bool {
+   fn into_value(self) -> Value {
+      Value::from(self)
    }
 }
 
 macro_rules! to_value_numeric {
    ($T:ty) => {
-      impl ToValue for $T {
-         fn to_value(&self) -> Value {
-            Value::Number(*self as f64)
+      impl IntoValue for $T {
+         fn into_value(self) -> Value {
+            Value::Number(self as f64)
          }
       }
    };
@@ -54,30 +54,39 @@ to_value_numeric!(i64);
 to_value_numeric!(f32);
 to_value_numeric!(f64);
 
-impl ToValue for &str {
-   fn to_value(&self) -> Value {
-      Value::String(Rc::from(*self))
+impl IntoValue for &str {
+   fn into_value(self) -> Value {
+      Value::String(Rc::from(self))
    }
 }
 
-impl ToValue for String {
-   fn to_value(&self) -> Value {
-      Value::String(Rc::from(self.as_str()))
+impl IntoValue for String {
+   fn into_value(self) -> Value {
+      Value::String(Rc::from(self))
    }
 }
 
-impl ToValue for Rc<str> {
-   fn to_value(&self) -> Value {
-      Value::String(Rc::clone(self))
+impl IntoValue for Rc<str> {
+   fn into_value(self) -> Value {
+      Value::String(self)
    }
 }
 
-impl<T> ToValue for Option<T>
+impl<T> IntoValue for Option<T>
 where
-   T: ToValue,
+   T: IntoValue,
 {
-   fn to_value(&self) -> Value {
-      self.as_ref().map(|x| x.to_value()).unwrap_or(Value::Nil)
+   fn into_value(self) -> Value {
+      self.map(|x| x.into_value()).unwrap_or(Value::Nil)
+   }
+}
+
+impl<T> IntoValue for Object<T>
+where
+   T: Any,
+{
+   fn into_value(self) -> Value {
+      Value::UserData(Rc::new(Box::new(self)))
    }
 }
 
@@ -288,7 +297,7 @@ where
    unsafe fn from_value_self_mut(value: &Value) -> Result<(&mut Self, Self::Guard), Error> {
       match value {
          Value::UserData(user_data) => {
-            if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
+            if let Some(object) = user_data.as_any().downcast_ref::<Object<T>>() {
                object.unsafe_borrow_mut()
             } else {
                unreachable_unchecked()

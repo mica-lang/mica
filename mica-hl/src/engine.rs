@@ -13,8 +13,8 @@ use mica_language::value::{Closure, Value};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, ToValue, TryFromValue,
-   TypeBuilder,
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, IntoValue, StandardLibrary, TryFromValue,
+   TypeBuilder, UserData,
 };
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
@@ -164,10 +164,10 @@ impl Engine {
    pub fn set<G, T>(&mut self, id: G, value: T) -> Result<(), Error>
    where
       G: ToGlobalId,
-      T: ToValue,
+      T: IntoValue,
    {
       let id = id.to_global_id(&mut self.env)?;
-      self.globals.set(id.0, value.to_value());
+      self.globals.set(id.0, value.into_value());
       Ok(())
    }
 
@@ -237,7 +237,7 @@ impl Engine {
       V: ffvariants::Bare,
       F: ForeignFunction<V>,
    {
-      self.add_raw_function(name, f.parameter_count(), f.into_raw_foreign_function())
+      self.add_raw_function(name, F::parameter_count(), f.into_raw_foreign_function())
    }
 
    /// Declares a type in the global scope.
@@ -248,7 +248,7 @@ impl Engine {
    ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created
    pub fn add_type<T>(&mut self, builder: TypeBuilder<T>) -> Result<(), Error>
    where
-      T: Any,
+      T: Any + UserData,
    {
       let built = builder.build(&mut self.env)?;
       self.set_built_type(&built)?;

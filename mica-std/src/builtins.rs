@@ -22,6 +22,7 @@ impl StandardLibrary for Lib {
 
    fn define_number(&mut self, builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
       builder
+         .add_static("pi", || std::f64::consts::PI)
          .add_static("parse", |s: Rc<str>| -> Result<f64, _> { s.parse() })
          .add_function("sqrt", ref_self(f64::sqrt))
    }

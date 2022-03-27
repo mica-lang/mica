@@ -1,3 +1,0 @@
-f = File.open("README.md")
-print(f)
-f.close()

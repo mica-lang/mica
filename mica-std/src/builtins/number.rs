@@ -21,7 +21,7 @@ pub(super) fn define(builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
       .add_function("abs", ref_self1(f64::abs))
       .add_function("signum", ref_self1(f64::signum))
       .add_function("div", ref_self2(f64::div_euclid))
-      .add_function("rem", ref_self2(f64::rem_euclid))
+      .add_function("mod", ref_self2(f64::rem_euclid))
       .add_function("pow", ref_self2(f64::powf))
       .add_function("sqrt", ref_self1(f64::sqrt))
       .add_function("exp", ref_self1(f64::exp))

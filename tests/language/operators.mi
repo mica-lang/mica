@@ -1,0 +1,32 @@
+# Tests all of Mica's various operators.
+
+# Boolean operators
+assert(!true == false)
+assert(!false == true)
+
+# Relation between numbers
+assert(1 == 1)
+assert(1 != 2)
+assert(1 < 2)
+assert(1 <= 2)
+assert(2 <= 2)
+assert(2 > 1)
+assert(2 >= 1)
+assert(2 >= 2)
+
+# Arithmetic
+assert(1 + 1 == 2)
+assert(1 - 2 == -1)
+assert(2 + 2 * 2 == 6)
+assert(2 * 2 == 4)
+assert(4 / 2 == 2)
+
+# Logic
+assert((false and false) == false)
+assert((true and false) == false)
+assert((false and true) == false)
+assert((true and true) == true)
+assert((false or false) == false)
+assert((true or false) == true)
+assert((false or true) == true)
+assert((true or true) == true)

@@ -43,7 +43,7 @@ pub(super) fn define(builder: TypeBuilder<Rc<str>>) -> TypeBuilder<Rc<str>> {
          s.replace(pat.deref(), &with)
       })
       .add_function(
-         "replacen",
+         "replace",
          |s: &Rc<str>, pat: Rc<str>, with: Rc<str>, n: usize| s.replacen(pat.deref(), &with, n),
       )
       .add_function("trim", |s: &Rc<str>| s.trim().to_owned())

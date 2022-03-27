@@ -1,9 +1,11 @@
 mod number;
+mod string;
 
 use std::rc::Rc;
 
 use mica_hl::{StandardLibrary, TypeBuilder};
 
+/// Converts a function that takes a `self` parameter to one that takes a `&self` parameter.
 fn ref_self1<A, R>(mut f: impl FnMut(A) -> R) -> impl FnMut(&A) -> R
 where
    A: Copy,
@@ -11,6 +13,8 @@ where
    move |x| f(*x)
 }
 
+/// Converts a function that takes a `self` and one arbitrary parameter to one that takes a `&self`
+/// and one arbitrary parameter.
 fn ref_self2<A, B, R>(mut f: impl FnMut(A, B) -> R) -> impl FnMut(&A, B) -> R
 where
    A: Copy,
@@ -34,7 +38,7 @@ impl StandardLibrary for Lib {
    }
 
    fn define_string(&mut self, builder: TypeBuilder<Rc<str>>) -> TypeBuilder<Rc<str>> {
-      builder.add_function("cat", |s: &Rc<str>, t: Rc<str>| format!("{}{}", s, t))
+      string::define(builder)
    }
 }
 

@@ -1,12 +1,16 @@
+use std::any::Any;
 use std::marker::PhantomData;
 use std::rc::Rc;
 
 use mica_language::bytecode::{
    DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
 };
-use mica_language::value::{Closure, Struct, Value};
+use mica_language::value::{Closure, Value};
 
-use crate::{ffvariants, Error, ForeignFunction, RawForeignFunction};
+use crate::userdata::Type;
+use crate::{ffvariants, Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction};
+
+type Constructor<T> = Box<dyn FnOnce(&dyn ObjectConstructor<T>) -> RawForeignFunction>;
 
 /// A descriptor for a dispatch table. Defines which methods are available on the table, as well
 /// as their implementations.
@@ -16,29 +20,38 @@ pub(crate) struct DispatchTableDescriptor {
 }
 
 impl DispatchTableDescriptor {
+   fn add_function_to_dtable(
+      env: &mut Environment,
+      dtable: &mut DispatchTable,
+      signature: FunctionSignature,
+      f: RawForeignFunction,
+   ) -> Result<(), Error> {
+      let function_id = env
+         .create_function(Function {
+            name: Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name)),
+            parameter_count: signature.arity,
+            kind: FunctionKind::Foreign(f),
+         })
+         .map_err(|_| Error::TooManyFunctions)?;
+      let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
+      dtable.set_method(
+         index,
+         Rc::new(Closure {
+            function_id,
+            captures: Vec::new(),
+         }),
+      );
+      Ok(())
+   }
+
    /// Builds a dispatch table from this descriptor.
    pub(crate) fn build_dtable(
       self,
-      // The rc is passed by reference to prevent an unnecessary clone.
       mut dtable: DispatchTable,
       env: &mut Environment,
    ) -> Result<DispatchTable, Error> {
       for (signature, f) in self.methods {
-         let function_id = env
-            .create_function(Function {
-               name: Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name)),
-               parameter_count: signature.arity,
-               kind: FunctionKind::Foreign(f),
-            })
-            .map_err(|_| Error::TooManyFunctions)?;
-         let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
-         dtable.set_method(
-            index,
-            Rc::new(Closure {
-               function_id,
-               captures: Vec::new(),
-            }),
-         );
+         Self::add_function_to_dtable(env, &mut dtable, signature, f)?;
       }
       Ok(dtable)
    }
@@ -52,6 +65,7 @@ where
    type_name: Rc<str>,
    type_dtable: DispatchTableDescriptor,
    instance_dtable: DispatchTableDescriptor,
+   constructors: Vec<(FunctionSignature, Constructor<T>)>,
    _data: PhantomData<T>,
 }
 
@@ -60,11 +74,15 @@ where
    T: ?Sized,
 {
    /// Creates a new `TypeBuilder`.
-   pub fn new(type_name: impl Into<Rc<str>>) -> Self {
+   pub fn new(type_name: impl Into<Rc<str>>) -> Self
+   where
+      T: Any,
+   {
       let type_name = type_name.into();
       Self {
          type_dtable: Default::default(),
          instance_dtable: Default::default(),
+         constructors: Vec::new(),
          type_name,
          _data: PhantomData,
       }
@@ -157,35 +175,77 @@ where
    }
 
    /// Builds the struct builder into its type dtable and instance dtable, respectively.
-   pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType, Error> {
-      let mut type_dtable = Rc::new(
-         self
-            .type_dtable
-            .build_dtable(DispatchTable::new_for_type(Rc::clone(&self.type_name)), env)?,
-      );
+   pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType<T>, Error>
+   where
+      T: Sized,
+   {
+      // Build the dtables.
+      let mut type_dtable = self
+         .type_dtable
+         .build_dtable(DispatchTable::new_for_type(Rc::clone(&self.type_name)), env)?;
       let instance_dtable = Rc::new(self.instance_dtable.build_dtable(
          DispatchTable::new_for_instance(Rc::clone(&self.type_name)),
          env,
       )?);
-      Rc::get_mut(&mut type_dtable).unwrap().instance = Some(Rc::clone(&instance_dtable));
+
+      // The type dtable also contains constructors, so build those while we're at it.
+      // We implement a helper here that fulfills the ObjectConstructor trait.
+
+      struct Instancer<T>
+      where
+         T: Sized,
+      {
+         instance_dtable: Rc<DispatchTable>,
+         _data: PhantomData<T>,
+      }
+
+      impl<T> ObjectConstructor<T> for Instancer<T> {
+         fn construct(&self, instance: T) -> crate::Object<T> {
+            Object::new(Rc::clone(&self.instance_dtable), instance)
+         }
+      }
+
+      let instancer = Instancer {
+         instance_dtable: Rc::clone(&instance_dtable),
+         _data: PhantomData,
+      };
+      for (signature, constructor) in self.constructors {
+         let f = constructor(&instancer);
+         DispatchTableDescriptor::add_function_to_dtable(env, &mut type_dtable, signature, f)?;
+      }
+
+      // Build the instance dtable.
+      type_dtable.instance = Some(Rc::clone(&instance_dtable));
+
+      let type_dtable = Rc::new(type_dtable);
       Ok(BuiltType {
          type_dtable,
          instance_dtable,
          type_name: self.type_name,
+         _data: PhantomData,
       })
    }
 }
 
-/// Dispatch tables for an finished type.
-pub(crate) struct BuiltType {
+/// Dispatch tables for a finished type.
+pub(crate) struct BuiltType<T>
+where
+   T: ?Sized,
+{
    pub(crate) type_name: Rc<str>,
    pub(crate) type_dtable: Rc<DispatchTable>,
    pub(crate) instance_dtable: Rc<DispatchTable>,
+   _data: PhantomData<T>,
 }
 
-impl BuiltType {
-   /// Makes a struct value from the built type.
-   pub(crate) fn make_type_struct(&self) -> Value {
-      Value::Struct(Rc::new(Struct::new_type(Rc::clone(&self.type_dtable))))
+impl<T> BuiltType<T> {
+   /// Makes a `Type<T>` user data value from the built type.
+   pub(crate) fn make_type(&self) -> Value
+   where
+      T: Any,
+   {
+      Value::UserData(Rc::new(Box::new(Type::<T>::new(Rc::clone(
+         &self.type_dtable,
+      )))))
    }
 }

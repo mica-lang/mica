@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -245,14 +246,20 @@ impl Engine {
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
    ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created
-   pub fn add_type<T>(&mut self, builder: TypeBuilder<T>) -> Result<(), Error> {
-      let built = { builder.build(&mut self.env)? };
+   pub fn add_type<T>(&mut self, builder: TypeBuilder<T>) -> Result<(), Error>
+   where
+      T: Any,
+   {
+      let built = builder.build(&mut self.env)?;
       self.set_built_type(&built)?;
       Ok(())
    }
 
-   pub(crate) fn set_built_type(&mut self, typ: &BuiltType) -> Result<(), Error> {
-      self.set(typ.type_name.deref(), typ.make_type_struct())
+   pub(crate) fn set_built_type<T>(&mut self, typ: &BuiltType<T>) -> Result<(), Error>
+   where
+      T: Any,
+   {
+      self.set(typ.type_name.deref(), typ.make_type())
    }
 }
 

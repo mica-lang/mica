@@ -312,7 +312,7 @@ macro_rules! impl_non_varargs {
                   let _n = _n + 1;
                )*
                {
-                  $(let mut $this = $setup;)?
+                  $(let ($this, _guard) = $setup;)?
                   let $result = self $call_args;
                   $map
                }
@@ -405,10 +405,12 @@ macro_rules! impl_non_varargs {
             S: $crate::FromValueSelf;
          (&S, $($types),*);
          base_parameter_count 1;
-         |arguments| (
-            unsafe { $crate::FromValueSelf::from_value_self(arguments.raw_self()) },
-            $($types,)*
-         );
+         let this = {
+            unsafe {
+               $crate::FromValueSelf::from_value_self(arguments.raw_self()).mica_language()?
+            }
+         };
+         |arguments| (this, $($types,)*);
          Result<Ret, Err>;
          |result| result
             .map(|value| value.to_value())
@@ -427,7 +429,7 @@ macro_rules! impl_non_varargs {
          let this = {
             unsafe { S::from_value_self_mut(arguments.raw_self()) }.mica_language()?
          };
-         |arguments| (&mut this, $($types,)*);
+         |arguments| (this, $($types,)*);
          Result<Ret, Err>;
          |result| result
             .map(|value| value.to_value())
@@ -443,10 +445,12 @@ macro_rules! impl_non_varargs {
             S: $crate::FromValueSelf;
          (&S, $($types),*);
          base_parameter_count 1;
-         |arguments| (
-            unsafe { $crate::FromValueSelf::from_value_self(arguments.raw_self()) },
-            $($types,)*
-         );
+         let this = {
+            unsafe {
+               $crate::FromValueSelf::from_value_self(arguments.raw_self()).mica_language()?
+            }
+         };
+         |arguments| (this, $($types,)*);
          Ret;
          |value| Ok(value.to_value());
          $($types),*
@@ -462,7 +466,7 @@ macro_rules! impl_non_varargs {
          let this = {
             unsafe { S::from_value_self_mut(arguments.raw_self()) }.mica_language()?
          };
-         |arguments| (&mut this, $($types,)*);
+         |arguments| (this, $($types,)*);
          Ret;
          |value| Ok(value.to_value());
          $($types),*

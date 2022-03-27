@@ -8,6 +8,7 @@ mod fiber;
 mod function;
 mod stdlib;
 mod types;
+mod userdata;
 mod value;
 
 pub use engine::*;
@@ -16,6 +17,7 @@ pub use fiber::*;
 pub use function::*;
 pub use stdlib::*;
 pub use types::*;
+pub use userdata::*;
 pub use value::*;
 
 pub use mica_language as language;

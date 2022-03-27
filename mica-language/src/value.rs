@@ -2,7 +2,7 @@
 
 use std::any::Any;
 use std::borrow::Cow;
-use std::cell::{Cell, RefCell, UnsafeCell};
+use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
 use std::marker::PhantomPinned;
 use std::pin::Pin;
@@ -21,7 +21,7 @@ pub enum Type {
    String,
    Function,
    Struct(Rc<Struct>),
-   UserData(Rc<UserData>),
+   UserData(Rc<Box<dyn UserData>>),
 }
 
 impl PartialEq for Type {
@@ -45,7 +45,7 @@ impl fmt::Debug for Type {
          Self::String => write!(f, "String"),
          Self::Function => write!(f, "Function"),
          Self::Struct(s) => write!(f, "{}", s.dtable().type_name),
-         Self::UserData(u) => write!(f, "{}", u.dtable.type_name),
+         Self::UserData(u) => write!(f, "{}", u.dtable().type_name),
       }
    }
 }
@@ -74,7 +74,9 @@ pub enum Value {
    /// A struct.
    Struct(Rc<Struct>),
    /// Dynamically-typed user data.
-   UserData(Rc<UserData>),
+   // Box<dyn Trait> is actually a fat pointer, storing both the data and a dispatch table.
+   // Hence why we need to wrap it in an additional Rc.
+   UserData(Rc<Box<dyn UserData>>),
 }
 
 impl Value {
@@ -154,17 +156,15 @@ impl Value {
 
    /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error if
    /// that's not the case.
-   pub fn user_data<T>(&self) -> Result<&Rc<UserData>, ErrorKind>
+   pub fn get_user_data<T>(&self) -> Option<&Rc<Box<dyn UserData>>>
    where
-      T: UserDataInfo,
+      T: UserData,
    {
       if let Value::UserData(u) = self {
-         let user_data = u.data.try_borrow().map_err(|_| ErrorKind::UserDataAlreadyBorrowed)?;
-         if user_data.is::<T>() {
-            return Ok(u);
-         }
+         Some(u)
+      } else {
+         None
       }
-      Err(self.type_error(T::type_name()))
    }
 
    /// Returns whether the value is truthy. All values except `Nil` and `False` are truthy.
@@ -238,7 +238,7 @@ impl fmt::Debug for Value {
          Value::String(s) => write!(f, "{s:?}"),
          Value::Function(_) => write!(f, "<func>"),
          Value::Struct(s) => dtable(f, s.dtable()),
-         Value::UserData(u) => dtable(f, &u.dtable),
+         Value::UserData(u) => dtable(f, u.dtable()),
       }
    }
 }
@@ -327,49 +327,9 @@ impl Struct {
    }
 }
 
-/// The innards of user data.
-///
-/// This contains the RefCell that's used for shared mutation, as well as its dtable.
-pub struct UserData {
-   data: RefCell<Box<dyn Any>>,
-   pub(crate) dtable: Rc<DispatchTable>,
-}
-
-impl UserData {
-   /// Creates a new `UserData`.
-   pub fn new<T>(data: T, dtable: Rc<DispatchTable>) -> Self
-   where
-      T: Any,
-   {
-      Self {
-         data: RefCell::new(Box::new(data)),
-         dtable,
-      }
-   }
-
-   /// Returns the [`RefCell<T>`][`RefCell`] that contains the object.
-   ///
-   /// Note that this method is safe, even though the [`RefCell`] lets you do some sketchy things,
-   /// such as replacing the object inside with one that's incompatible with the user data's dtable.
-   /// This is because the VM doesn't care what you do with the data, and neither does it care
-   /// about what the methods in the dtable do. As far as it's concerned it's all fully safe.
-   ///
-   /// High-level wrappers such as [`mica-hl`](https://crates.io/crates/mica-hl) _can_ do unsafe
-   /// things under the hood (eg. not checking the type of what's in the box), but as long as they
-   /// maintain a safe interface on the surface, everything is OK.
-   pub fn data(&self) -> &RefCell<Box<dyn Any>> {
-      &self.data
-   }
-
-   /// Returns a reference to the user data's dispatch table.
-   pub fn dtable(&self) -> &DispatchTable {
-      &self.dtable
-   }
-}
-
-pub trait UserDataInfo: Any {
-   /// Returns the type name of the user data.
-   fn type_name<'a>() -> &'a str;
+pub trait UserData: Any {
+   /// Returns the user data's dispatch table.
+   fn dtable(&self) -> &DispatchTable;
 }
 
 /// An upvalue captured by a closure.

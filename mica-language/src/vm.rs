@@ -325,6 +325,7 @@ impl Fiber {
          Value::String(_) => &env.builtin_dtables.string,
          Value::Function(_) => &env.builtin_dtables.function,
          Value::Struct(st) => st.dtable(),
+         Value::UserData(u) => u.dtable(),
       }
    }
 

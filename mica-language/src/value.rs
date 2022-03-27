@@ -1,5 +1,6 @@
 //! Dynamically typed values.
 
+use std::any::Any;
 use std::borrow::Cow;
 use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
@@ -12,19 +13,46 @@ use crate::bytecode::{DispatchTable, Opr24};
 use crate::common::ErrorKind;
 
 /// The type of a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone)]
 pub enum Type {
    Nil,
    Boolean,
    Number,
    String,
    Function,
-   Struct,
+   Struct(Rc<Struct>),
+   UserData(Rc<Box<dyn UserData>>),
+}
+
+impl PartialEq for Type {
+   fn eq(&self, other: &Self) -> bool {
+      match (self, other) {
+         (Self::Struct(a), Self::Struct(b)) => Rc::ptr_eq(a, b),
+         (Self::UserData(a), Self::UserData(b)) => Rc::ptr_eq(a, b),
+         _ => std::mem::discriminant(self) == std::mem::discriminant(other),
+      }
+   }
+}
+
+impl Eq for Type {}
+
+impl fmt::Debug for Type {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      match self {
+         Self::Nil => write!(f, "Nil"),
+         Self::Boolean => write!(f, "Boolean"),
+         Self::Number => write!(f, "Number"),
+         Self::String => write!(f, "String"),
+         Self::Function => write!(f, "Function"),
+         Self::Struct(s) => write!(f, "{}", s.dtable().type_name),
+         Self::UserData(u) => write!(f, "{}", u.dtable().type_name),
+      }
+   }
 }
 
 impl fmt::Display for Type {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      write!(f, "{self:?}")
+      fmt::Debug::fmt(&self, f)
    }
 }
 
@@ -45,6 +73,10 @@ pub enum Value {
    Function(Rc<Closure>),
    /// A struct.
    Struct(Rc<Struct>),
+   /// Dynamically-typed user data.
+   // Box<dyn Trait> is actually a fat pointer, storing both the data and a dispatch table.
+   // Hence why we need to wrap it in an additional Rc.
+   UserData(Rc<Box<dyn UserData>>),
 }
 
 impl Value {
@@ -56,7 +88,8 @@ impl Value {
          Value::Number(_) => Type::Number,
          Value::String(_) => Type::String,
          Value::Function(_) => Type::Function,
-         Value::Struct(_) => Type::Struct,
+         Value::Struct(s) => Type::Struct(Rc::clone(s)),
+         Value::UserData(u) => Type::UserData(Rc::clone(u)),
       }
    }
 
@@ -121,6 +154,19 @@ impl Value {
       }
    }
 
+   /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error if
+   /// that's not the case.
+   pub fn get_user_data<T>(&self) -> Option<&Rc<Box<dyn UserData>>>
+   where
+      T: UserData,
+   {
+      if let Value::UserData(u) = self {
+         Some(u)
+      } else {
+         None
+      }
+   }
+
    /// Returns whether the value is truthy. All values except `Nil` and `False` are truthy.
    pub fn is_truthy(&self) -> bool {
       !matches!(self, Value::Nil | Value::False)
@@ -156,6 +202,7 @@ impl Value {
             }
             Self::Function(_) => Ok(None),
             Self::Struct(_) => Ok(None),
+            Self::UserData(_) => Ok(None),
          }
       }
    }
@@ -178,6 +225,11 @@ impl From<bool> for Value {
 
 impl fmt::Debug for Value {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      fn dtable(f: &mut fmt::Formatter, dtable: &DispatchTable) -> fmt::Result {
+         let type_name = &dtable.pretty_name;
+         write!(f, "<[{type_name}]>")
+      }
+
       match self {
          Value::Nil => f.write_str("nil"),
          Value::False => f.write_str("false"),
@@ -185,11 +237,8 @@ impl fmt::Debug for Value {
          Value::Number(x) => write!(f, "{x}"),
          Value::String(s) => write!(f, "{s:?}"),
          Value::Function(_) => write!(f, "<func>"),
-         Value::Struct(s) => {
-            let dispatch_table = s.dtable();
-            let type_name = &dispatch_table.pretty_name;
-            write!(f, "<[{type_name}]>")
-         }
+         Value::Struct(s) => dtable(f, s.dtable()),
+         Value::UserData(u) => dtable(f, u.dtable()),
       }
    }
 }
@@ -276,6 +325,14 @@ impl Struct {
    pub(crate) unsafe fn set_field(&self, index: usize, value: Value) {
       *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
    }
+}
+
+pub trait UserData: Any {
+   /// Returns the user data's dispatch table.
+   fn dtable(&self) -> &DispatchTable;
+
+   /// Converts a reference to `UserData` to `Any`.
+   fn as_any(&self) -> &dyn Any;
 }
 
 /// An upvalue captured by a closure.

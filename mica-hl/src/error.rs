@@ -73,7 +73,7 @@ impl fmt::Display for Error {
                index + 1
             )
          }
-         Self::ReentrantMutableBorrow => write!(f, "method receiver mutation is not reentrant"),
+         Self::ReentrantMutableBorrow => write!(f, "method receiver is in use already"),
          Self::User(error) => write!(f, "{error}"),
       }
    }

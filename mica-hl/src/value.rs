@@ -1,40 +1,41 @@
+use std::any::Any;
 use std::hint::unreachable_unchecked;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::rc::Rc;
 
 use mica_language::common::ErrorKind;
 
-use crate::{Error, Value};
+use crate::{Error, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value};
 
 /// Used for converting types into dynamically typed values.
-pub trait ToValue {
-   fn to_value(&self) -> Value;
+pub trait IntoValue {
+   fn into_value(self) -> Value;
 }
 
-impl ToValue for Value {
-   fn to_value(&self) -> Value {
-      self.clone()
+impl IntoValue for Value {
+   fn into_value(self) -> Value {
+      self
    }
 }
 
 /// The unit type is represented as `nil` inside the VM.
-impl ToValue for () {
-   fn to_value(&self) -> Value {
+impl IntoValue for () {
+   fn into_value(self) -> Value {
       Value::Nil
    }
 }
 
-impl ToValue for bool {
-   fn to_value(&self) -> Value {
-      Value::from(*self)
+impl IntoValue for bool {
+   fn into_value(self) -> Value {
+      Value::from(self)
    }
 }
 
 macro_rules! to_value_numeric {
    ($T:ty) => {
-      impl ToValue for $T {
-         fn to_value(&self) -> Value {
-            Value::Number(*self as f64)
+      impl IntoValue for $T {
+         fn into_value(self) -> Value {
+            Value::Number(self as f64)
          }
       }
    };
@@ -53,30 +54,39 @@ to_value_numeric!(i64);
 to_value_numeric!(f32);
 to_value_numeric!(f64);
 
-impl ToValue for &str {
-   fn to_value(&self) -> Value {
-      Value::String(Rc::from(*self))
+impl IntoValue for &str {
+   fn into_value(self) -> Value {
+      Value::String(Rc::from(self))
    }
 }
 
-impl ToValue for String {
-   fn to_value(&self) -> Value {
-      Value::String(Rc::from(self.as_str()))
+impl IntoValue for String {
+   fn into_value(self) -> Value {
+      Value::String(Rc::from(self))
    }
 }
 
-impl ToValue for Rc<str> {
-   fn to_value(&self) -> Value {
-      Value::String(Rc::clone(self))
+impl IntoValue for Rc<str> {
+   fn into_value(self) -> Value {
+      Value::String(self)
    }
 }
 
-impl<T> ToValue for Option<T>
+impl<T> IntoValue for Option<T>
 where
-   T: ToValue,
+   T: IntoValue,
 {
-   fn to_value(&self) -> Value {
-      self.as_ref().map(|x| x.to_value()).unwrap_or(Value::Nil)
+   fn into_value(self) -> Value {
+      self.map(|x| x.into_value()).unwrap_or(Value::Nil)
+   }
+}
+
+impl<T> IntoValue for Object<T>
+where
+   T: Any,
+{
+   fn into_value(self) -> Value {
+      Value::UserData(Rc::new(Box::new(self)))
    }
 }
 
@@ -166,6 +176,8 @@ where
 ///
 /// This should never be implemented manually unless you know what you're doing.
 pub trait FromValueSelf {
+   type Guard;
+
    /// Returns a shared reference to `Self` **without checking that the value is of the correct
    /// type**.
    ///
@@ -173,39 +185,81 @@ pub trait FromValueSelf {
    ///
    /// This assumes the value is of the correct type. Calling this with a value whose type is not
    /// `Self` results in undefined behavior.
-   unsafe fn from_value_self(value: &Value) -> &Self;
+   ///
+   /// Because GATs aren't stable yet, `Self::Guard` can keep a **raw pointer** to the value
+   /// and as such must not outlive the value.
+   unsafe fn from_value_self(value: &Value) -> Result<(&Self, Self::Guard), Error>;
 }
 
 /// `()` used as `Self` means that the method receiver is `nil`.
 impl FromValueSelf for () {
-   unsafe fn from_value_self(_: &Value) -> &Self {
-      &()
+   type Guard = ();
+
+   unsafe fn from_value_self(_: &Value) -> Result<(&Self, Self::Guard), Error> {
+      Ok((&(), ()))
    }
 }
 
 impl FromValueSelf for bool {
-   unsafe fn from_value_self(v: &Value) -> &Self {
-      match v {
-         Value::False => &false,
-         Value::True => &true,
-         _ => unreachable_unchecked(),
-      }
+   type Guard = ();
+
+   unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {
+      Ok((
+         match v {
+            Value::False => &false,
+            Value::True => &true,
+            _ => unreachable_unchecked(),
+         },
+         (),
+      ))
    }
 }
 
 impl FromValueSelf for f64 {
-   unsafe fn from_value_self(v: &Value) -> &Self {
-      match v {
-         Value::Number(n) => n,
-         _ => unreachable_unchecked(),
-      }
+   type Guard = ();
+
+   unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {
+      Ok((
+         match v {
+            Value::Number(n) => n,
+            _ => unreachable_unchecked(),
+         },
+         (),
+      ))
    }
 }
 
 impl FromValueSelf for Rc<str> {
-   unsafe fn from_value_self(v: &Value) -> &Self {
-      match v {
-         Value::String(s) => s,
+   type Guard = ();
+
+   unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {
+      Ok((
+         match v {
+            Value::String(s) => s,
+            _ => unreachable_unchecked(),
+         },
+         (),
+      ))
+   }
+}
+
+impl<T> FromValueSelf for T
+where
+   T: UserData,
+{
+   type Guard = UnsafeRefGuard<T>;
+
+   unsafe fn from_value_self(value: &Value) -> Result<(&Self, Self::Guard), Error> {
+      match value {
+         Value::UserData(user_data) => {
+            // That <dyn Any> is a bit cursed; I wonder why I couldn't just call downcast_ref on
+            // the Rc<Box<dyn UserData>>.
+            if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
+               object.unsafe_borrow()
+            } else {
+               unreachable_unchecked()
+            }
+         }
          _ => unreachable_unchecked(),
       }
    }
@@ -216,7 +270,7 @@ pub trait FromValueSelfMut
 where
    Self: Sized,
 {
-   type Ref: DerefMut<Target = Self>;
+   type Guard;
 
    /// Returns a mutable reference to `Self` **without checking that the value is of the correct
    /// type**.
@@ -224,12 +278,32 @@ where
    /// This trait is only available for value types with interior mutability, as this function
    /// receives a shared, rather than mutable, reference.
    ///
-   /// This returns an option because a value may already be mutably borrowed as a result of a
-   /// reentrant call into the VM.
-   ///
    /// # Safety
    ///
    /// This assumes the value is of the correct type. Calling this with a value whose type is not
    /// `Self` results in undefined behavior.
-   unsafe fn from_value_self_mut(value: &Value) -> Result<Self::Ref, Error>;
+   ///
+   /// Because GATs aren't stable yet, `Self::Guard` can keep a **raw pointer** to the value
+   /// and as such must not outlive the value.
+   unsafe fn from_value_self_mut(value: &Value) -> Result<(&mut Self, Self::Guard), Error>;
+}
+
+impl<T> FromValueSelfMut for T
+where
+   T: UserData,
+{
+   type Guard = UnsafeMutGuard<T>;
+
+   unsafe fn from_value_self_mut(value: &Value) -> Result<(&mut Self, Self::Guard), Error> {
+      match value {
+         Value::UserData(user_data) => {
+            if let Some(object) = user_data.as_any().downcast_ref::<Object<T>>() {
+               object.unsafe_borrow_mut()
+            } else {
+               unreachable_unchecked()
+            }
+         }
+         _ => unreachable_unchecked(),
+      }
+   }
 }

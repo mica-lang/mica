@@ -1,0 +1,44 @@
+# Tests for string manipulation.
+
+assert("a" == "a")
+assert("b" != "a")
+
+assert("a".cat("b") == "ab")
+
+assert("banana".contains("nan"))
+assert(!("banana".contains("infinity")))
+
+assert("banana".starts_with("ban"))
+assert("banana".ends_with("ana"))
+
+assert("<< hello world >>".strip_prefix("<< ") == "hello world >>")
+assert("<< hello world >>".strip_suffix(" >>") == "<< hello world")
+
+assert("some stuff hello world asdasdsd".find("hello world") == 11)
+assert("some stuff asdasdsd".find("hello world") == nil)
+assert("abc world world end".find("world") == 4)
+assert("abc world world end".rfind("world") == 10)
+assert("abc end".rfind("world") == nil)
+
+assert("abc".byte_at(0) == 97)
+assert("abc".nth_char(1) == "b")
+assert("łąść".nth_char(1) == "ą")
+
+assert("abc".byte_len == 3)
+assert("łąść".byte_len == 8)
+assert("łąść".char_len == 4)
+
+assert(!("abc".is_empty))
+assert("".is_empty)
+
+assert("Zażółć gęślą jaźń.".to_lowercase == "zażółć gęślą jaźń.")
+assert("Zażółć gęślą jaźń.".to_uppercase == "ZAŻÓŁĆ GĘŚLĄ JAŹŃ.")
+
+assert("a".repeat(5) == "aaaaa")
+assert("abc".repeat(5) == "abcabcabcabcabc")
+assert("a".repeat(0) == "")
+assert("".repeat(10) == "")
+
+assert("ninety".replace("nine", "fif") == "fifty")
+assert("hi hi hi".replace("hi", "howdy") == "howdy howdy howdy")
+assert("hi hi hi".replace("hi", "howdy", 2) == "howdy howdy hi")

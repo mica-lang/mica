@@ -6,5 +6,8 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/liquidev/mica"
 
+[features]
+io = []
+
 [dependencies]
 mica-hl = { version = "0.1.0", path = "../mica-hl" }

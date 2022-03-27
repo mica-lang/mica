@@ -1,4 +1,6 @@
 //! I/O facilities such as files.
+//!
+//! This feature is disabled by default as mica-std's I/O facilities are still under construction.
 
 use std::io;
 use std::rc::Rc;

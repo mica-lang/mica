@@ -134,25 +134,34 @@ pub enum Opcode {
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal(Opr24),
+   /// Sinks the value at the top of the stack to a global. The value is consumed.
+   SinkGlobal(Opr24),
    /// Loads a value from a global.
    GetGlobal(Opr24),
    /// Assigns the value at the top of the stack to a local. The value stays on the stack.
    AssignLocal(Opr24),
+   /// Sinks the value at the top of the stack to a local. The value is consumed.
+   SinkLocal(Opr24),
    /// Loads a value from a local.
    GetLocal(Opr24),
    /// Assigns the value at the top of the stack to an upvalue. The value stays on the stack.
    AssignUpvalue(Opr24),
+   /// Sinks the value at the top of the stack to an upvalue. The value is consumed.
+   SinkUpvalue(Opr24),
    /// Loads a value from an upvalue.
    GetUpvalue(Opr24),
    /// Closes a local in its upvalue.
    CloseLocal(Opr24),
-   /// Loads a field from the struct on the top of the stack.
-   /// Assumes the value on top is a struct and not something else.
-   GetField(Opr24),
    /// Assigns to a field in the struct on the top of the stack. The struct is consumed but the
    /// value remains on the stack.
    /// Assumes the second value from top is a struct and not something else.
    AssignField(Opr24),
+   /// Sinks to a field in the struct on the top of the stack. Both the struct and the value are
+   /// consumed.
+   SinkField(Opr24),
+   /// Loads a field from the struct on the top of the stack.
+   /// Assumes the value on top is a struct and not something else.
+   GetField(Opr24),
 
    /// Swaps the two values at the top of the stack.
    Swap,

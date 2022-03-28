@@ -433,6 +433,10 @@ impl Fiber {
                let value = self.stack_top().clone();
                s.globals_mut().set(slot, value);
             }
+            Opcode::SinkGlobal(slot) => {
+               let value = self.pop();
+               s.globals_mut().set(slot, value);
+            }
             Opcode::GetGlobal(slot) => {
                let value = unsafe { s.globals().get_unchecked(slot) };
                self.push(value);
@@ -440,6 +444,11 @@ impl Fiber {
             Opcode::AssignLocal(slot) => {
                let slot = u32::from(slot) as usize;
                let value = self.stack_top().clone();
+               self.stack[self.stack_bottom + slot] = value;
+            }
+            Opcode::SinkLocal(slot) => {
+               let slot = u32::from(slot) as usize;
+               let value = self.pop();
                self.stack[self.stack_bottom + slot] = value;
             }
             Opcode::GetLocal(slot) => {
@@ -451,6 +460,12 @@ impl Fiber {
                let index = u32::from(index) as usize;
                let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
                let value = self.stack_top().clone();
+               unsafe { Upvalue::set(&closure.captures[index], value) }
+            }
+            Opcode::SinkUpvalue(index) => {
+               let index = u32::from(index) as usize;
+               let value = self.pop();
+               let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
                unsafe { Upvalue::set(&closure.captures[index], value) }
             }
             Opcode::GetUpvalue(index) => {
@@ -468,18 +483,24 @@ impl Fiber {
                let (_, upvalue) = self.open_upvalues.remove(index);
                unsafe { upvalue.close() };
             }
-            Opcode::GetField(index) => {
-               let struct_v = self.pop();
-               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
-               let value = unsafe { struct_v.get_field(u32::from(index) as usize) };
-               self.push(value.clone());
-            }
             Opcode::AssignField(index) => {
                let struct_v = self.pop();
                let value = self.pop();
                let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
                self.push(value.clone());
                unsafe { struct_v.set_field(u32::from(index) as usize, value) }
+            }
+            Opcode::SinkField(index) => {
+               let struct_v = self.pop();
+               let value = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               unsafe { struct_v.set_field(u32::from(index) as usize, value) }
+            }
+            Opcode::GetField(index) => {
+               let struct_v = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let value = unsafe { struct_v.get_field(u32::from(index) as usize) };
+               self.push(value.clone());
             }
 
             Opcode::Swap => {

@@ -546,6 +546,7 @@ impl<'e> CodeGenerator<'e> {
    /// Generates code for an `and` infix operator.
    fn generate_and(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (left, right) = ast.node_pair(node);
+      self.push_scope();
       self.generate_node(ast, left)?;
       let jump_past_right = self.chunk.emit(Opcode::Nop);
       self.chunk.emit(Opcode::Discard);
@@ -555,12 +556,14 @@ impl<'e> CodeGenerator<'e> {
          Opcode::jump_forward_if_falsy(jump_past_right, self.chunk.len())
             .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
       );
+      self.pop_scope();
       Ok(())
    }
 
    /// Generates code for an `or` infix operator.
    fn generate_or(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
       let (left, right) = ast.node_pair(node);
+      self.push_scope();
       self.generate_node(ast, left)?;
       let jump_past_right = self.chunk.emit(Opcode::Nop);
       self.chunk.emit(Opcode::Discard);
@@ -570,6 +573,7 @@ impl<'e> CodeGenerator<'e> {
          Opcode::jump_forward_if_truthy(jump_past_right, self.chunk.len())
             .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
       );
+      self.pop_scope();
       Ok(())
    }
 

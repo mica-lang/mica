@@ -1,0 +1,89 @@
+# Tests for Number methods.
+
+func approx_equal(x, y, epsilon)
+   (x - y).abs <= epsilon
+end
+
+assert(Number.nan != Number.nan)
+assert(Number.nan.is_nan)
+assert(Number.infinity.is_infinite)
+assert(!(Number.infinity.is_finite))
+assert(approx_equal(Number.e,  2.71828182, 0.00000001))
+assert(approx_equal(Number.pi, 3.14159265, 0.00000001))
+
+assert(1.5.floor == 1)
+assert((-1.5).floor == -2)
+
+assert(1.5.ceil == 2)
+assert((-1.5).ceil == -1)
+
+assert(1.5.round == 2)
+assert(1.4.round == 1)
+
+assert((-1.5).trunc == -1)
+assert(1.5.trunc == 1)
+
+assert(1.5.fract == 0.5)
+assert((-1.5).fract == -0.5)
+
+assert(1.abs == 1)
+assert((-1).abs == 1)
+
+assert((-5).signum == -1)
+assert(5.signum == 1)
+
+assert(16.div(4) == 4)
+assert(19.div(4) == 4)
+assert(20.div(4) == 5)
+assert(1.div(4) == 0)
+assert((-3).div(4) == -1)
+
+assert(4.mod(4) == 0)
+assert(5.mod(4) == 1)
+assert(6.mod(4) == 2)
+assert(7.mod(4) == 3)
+assert(8.mod(4) == 0)
+assert((-1).mod(4) == 3)
+
+assert(2.pow(8) == 256)
+assert(4.pow(0.5) == 2)
+assert(4.pow(0.5) == 4.sqrt)
+
+assert((-1).sqrt.is_nan)
+
+assert(approx_equal(1.exp.ln, 1, 0.000000001))
+assert(approx_equal(8.exp2, 256, 0.000000001))
+
+assert(approx_equal(25.log(5), 2, 0.000000001))
+assert(approx_equal(256.log2, 8, 0.000000001))
+
+assert(8.cbrt == 2)
+
+assert(3.hypot(4) == 5)
+
+assert(approx_equal((Number.pi / 2).sin, 1, 0.000000001))
+assert(approx_equal((2 * Number.pi).cos, 1, 0.000000001))
+assert(approx_equal(1.tan.atan, 1, 0.000000001))
+assert(approx_equal((Number.pi / 2).sin.asin, Number.pi / 2, 0.000000001))
+assert(approx_equal((Number.pi / 4).cos.acos, Number.pi / 4, 0.000000001))
+assert(approx_equal(0.atan(1), 0, 0.000000001))
+
+assert(approx_equal(2.recip, 0.5, 0.000000001))
+
+assert(approx_equal(Number.pi.to_degrees, 180, 0.000000001))
+assert(approx_equal(180.to_radians, Number.pi, 0.000000001))
+
+assert(1.min(2) == 1)
+assert(1.max(2) == 2)
+assert(1.is_finite)
+
+assert(0.bnot == 4294967295)
+assert(5.band(3) == 1)
+assert(2.bor(1) == 3)
+assert(123.bxor(123) == 0)
+assert(1.shl(3) == 8)
+assert(8.shr(3) == 1)
+
+assert(Number.parse("2") == 2)
+assert(Number.parse(2.to_string) == 2)
+assert(2.to_string == 2.to_debug)

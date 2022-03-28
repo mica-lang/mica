@@ -135,18 +135,23 @@ impl Fiber {
    /// Pushes a value onto the stack.
    fn push(&mut self, value: Value) {
       self.stack.push(value);
+      #[cfg(feature = "trace-vm-stack-ops")]
+      {
+         println!("push | {:?}", &self.stack);
+      }
    }
 
    /// Pops a value off the stack.
    fn pop(&mut self) -> Value {
       #[cfg(debug_assertions)]
-      {
-         self.stack.pop().unwrap()
-      }
+      let value = { self.stack.pop().unwrap() };
       #[cfg(not(debug_assertions))]
-      unsafe {
-         self.stack.pop().unwrap_unchecked()
+      let value = unsafe { self.stack.pop().unwrap_unchecked() };
+      #[cfg(feature = "trace-vm-stack-ops")]
+      {
+         println!("pop  | {:?} -> {:?}", &self.stack, value);
       }
+      value
    }
 
    /// Returns a reference to the value at the top of the stack.
@@ -260,6 +265,9 @@ impl Fiber {
                   return Err(self.error_outside_function_call(Some(closure), s.env_mut(), kind));
                }
             };
+            for _ in 0..argument_count {
+               self.pop();
+            }
             self.push(result);
          }
       }
@@ -353,7 +361,15 @@ impl Fiber {
       self.allocate_chunk_storage_slots(self.chunk.preallocate_stack_slots as usize);
 
       loop {
+         #[cfg(feature = "trace-vm-opcodes")]
+         {
+            print!("op   @ {:06x} ", self.pc);
+         }
          let opcode = unsafe { self.chunk.read_opcode(&mut self.pc) };
+         #[cfg(feature = "trace-vm-opcodes")]
+         {
+            println!("{:?}", opcode);
+         }
 
          macro_rules! wrap_error {
             ($exp:expr) => {{

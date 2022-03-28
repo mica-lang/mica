@@ -45,14 +45,22 @@ to_value_numeric!(u8);
 to_value_numeric!(u16);
 to_value_numeric!(u32);
 to_value_numeric!(u64);
+to_value_numeric!(usize);
 
 to_value_numeric!(i8);
 to_value_numeric!(i16);
 to_value_numeric!(i32);
 to_value_numeric!(i64);
+to_value_numeric!(isize);
 
 to_value_numeric!(f32);
 to_value_numeric!(f64);
+
+impl IntoValue for char {
+   fn into_value(self) -> Value {
+      Value::String(Rc::from(self.to_string()))
+   }
+}
 
 impl IntoValue for &str {
    fn into_value(self) -> Value {
@@ -138,11 +146,13 @@ try_from_value_numeric!(u8);
 try_from_value_numeric!(u16);
 try_from_value_numeric!(u32);
 try_from_value_numeric!(u64);
+try_from_value_numeric!(usize);
 
 try_from_value_numeric!(i8);
 try_from_value_numeric!(i16);
 try_from_value_numeric!(i32);
 try_from_value_numeric!(i64);
+try_from_value_numeric!(isize);
 
 try_from_value_numeric!(f32);
 try_from_value_numeric!(f64);

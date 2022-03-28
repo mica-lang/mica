@@ -142,7 +142,7 @@ impl Value {
    }
 
    /// Ensures the value is a `Nil`, returning a type mismatch error if that's not the case.
-   pub fn nil(&self) -> Result<(), ErrorKind> {
+   pub fn ensure_nil(&self) -> Result<(), ErrorKind> {
       if self.0.kind() == ValueKind::Nil {
          Ok(())
       } else {
@@ -151,7 +151,7 @@ impl Value {
    }
 
    /// Ensures the value is a `Boolean`, returning a type mismatch error if that's not the case.
-   pub fn boolean(&self) -> Result<bool, ErrorKind> {
+   pub fn ensure_boolean(&self) -> Result<bool, ErrorKind> {
       if self.0.kind() == ValueKind::Boolean {
          Ok(unsafe { self.0.get_boolean_unchecked() })
       } else {
@@ -160,7 +160,7 @@ impl Value {
    }
 
    /// Ensures the value is a `Number`, returning a type mismatch error if that's not the case.
-   pub fn number(&self) -> Result<f64, ErrorKind> {
+   pub fn ensure_number(&self) -> Result<f64, ErrorKind> {
       if self.0.kind() == ValueKind::Number {
          Ok(unsafe { *self.0.get_number_unchecked() })
       } else {
@@ -169,7 +169,7 @@ impl Value {
    }
 
    /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.
-   pub fn string(&self) -> Result<&Rc<str>, ErrorKind> {
+   pub fn ensure_string(&self) -> Result<&Rc<str>, ErrorKind> {
       if self.0.kind() == ValueKind::String {
          Ok(unsafe { self.0.get_string_unchecked() })
       } else {
@@ -187,7 +187,7 @@ impl Value {
    }
 
    /// Ensures the value is a `Struct`, returning a type mismatch error if that's not the case.
-   pub fn struct_v(&self) -> Result<&Rc<Struct>, ErrorKind> {
+   pub fn ensure_struct(&self) -> Result<&Rc<Struct>, ErrorKind> {
       if self.0.kind() == ValueKind::Struct {
          Ok(unsafe { self.0.get_struct_unchecked() })
       } else {

@@ -386,8 +386,8 @@ impl Fiber {
 
          macro_rules! binary_operator {
             ($op:tt) => {{
-               let right = wrap_error!(self.pop().number());
-               let left = wrap_error!(self.stack_top().number());
+               let right = wrap_error!(self.pop().ensure_number());
+               let left = wrap_error!(self.stack_top().ensure_number());
                *self.stack_top_mut() = Value::from(left $op right);
             }};
          }
@@ -423,7 +423,7 @@ impl Fiber {
                //  - Thus, the only types that can be implemented are user-defined types.
                //  - And each user-defined type is a struct.
                //  - `Opcode::Implement` aborts execution if it isn't.
-               let type_struct = unsafe { self.pop().struct_v().cloned().unwrap_unchecked() };
+               let type_struct = unsafe { self.pop().ensure_struct().cloned().unwrap_unchecked() };
                let field_count = u32::from(operand) as usize;
                let instance = Rc::new(unsafe { type_struct.new_instance(field_count) });
                self.push(Value::from(instance));
@@ -486,19 +486,19 @@ impl Fiber {
             Opcode::AssignField => {
                let struct_v = self.pop();
                let value = self.pop();
-               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let struct_v = unsafe { struct_v.ensure_struct().unwrap_unchecked() };
                self.push(value.clone());
                unsafe { struct_v.set_field(u32::from(operand) as usize, value) }
             }
             Opcode::SinkField => {
                let struct_v = self.pop();
                let value = self.pop();
-               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let struct_v = unsafe { struct_v.ensure_struct().unwrap_unchecked() };
                unsafe { struct_v.set_field(u32::from(operand) as usize, value) }
             }
             Opcode::GetField => {
                let struct_v = self.pop();
-               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let struct_v = unsafe { struct_v.ensure_struct().unwrap_unchecked() };
                let value = unsafe { struct_v.get_field(u32::from(operand) as usize) };
                self.push(value.clone());
             }
@@ -589,7 +589,7 @@ impl Fiber {
             }
 
             Opcode::Implement => {
-               let st = wrap_error!(self.stack_top_mut().struct_v());
+               let st = wrap_error!(self.stack_top_mut().ensure_struct());
                let type_name = Rc::clone(&st.dtable().type_name);
                let proto = unsafe { s.env_mut().take_prototype_unchecked(operand) };
 
@@ -614,14 +614,14 @@ impl Fiber {
                unsafe {
                   // Need to borrow here a second time. By this point we know that the unwrap
                   // will succeed so it's safe to use unwrap_unchecked.
-                  let st = self.stack_top_mut().struct_v().unwrap_unchecked();
+                  let st = self.stack_top_mut().ensure_struct().unwrap_unchecked();
                   st.implement(type_dtable)
                      .map_err(|kind| self.error_outside_function_call(None, s.env_mut(), kind))?;
                }
             }
 
             Opcode::Negate => {
-               let number = wrap_error!(self.pop().number());
+               let number = wrap_error!(self.pop().ensure_number());
                self.push(Value::from(-number))
             }
             Opcode::Add => binary_operator!(+),

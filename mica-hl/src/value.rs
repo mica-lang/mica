@@ -128,13 +128,13 @@ impl TryFromValue for Value {
 
 impl TryFromValue for () {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
-      value.nil().map_err(convert_type_mismatch)
+      value.ensure_nil().map_err(convert_type_mismatch)
    }
 }
 
 impl TryFromValue for bool {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
-      value.boolean().map_err(convert_type_mismatch)
+      value.ensure_boolean().map_err(convert_type_mismatch)
    }
 }
 
@@ -142,7 +142,7 @@ macro_rules! try_from_value_numeric {
    ($T:ty) => {
       impl TryFromValue for $T {
          fn try_from_value(value: &Value) -> Result<Self, Error> {
-            Ok(value.number().map_err(convert_type_mismatch)? as $T)
+            Ok(value.ensure_number().map_err(convert_type_mismatch)? as $T)
          }
       }
    };
@@ -165,13 +165,13 @@ try_from_value_numeric!(f64);
 
 impl TryFromValue for Rc<str> {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
-      value.string().cloned().map_err(convert_type_mismatch)
+      value.ensure_string().cloned().map_err(convert_type_mismatch)
    }
 }
 
 impl TryFromValue for String {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
-      value.string().map(|s| s.deref().to_owned()).map_err(convert_type_mismatch)
+      value.ensure_string().map(|s| s.deref().to_owned()).map_err(convert_type_mismatch)
    }
 }
 

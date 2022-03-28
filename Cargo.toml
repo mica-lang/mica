@@ -23,7 +23,7 @@ default = []
 std-io = ["mica-std/io"]
 
 [dependencies]
-mica-hl = { version = "0.1.0", path = "mica-hl" }
+mica-hl = { version = "0.2.0", path = "mica-hl" }
 mica-std = { version = "0.1.0", path = "mica-std" }
 
 [profile.release]

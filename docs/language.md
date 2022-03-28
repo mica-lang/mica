@@ -163,7 +163,7 @@ operand, the right operand will not be evaluated and instead the left one will b
 
 `and` and `or` introduce a new [scope](#scope), which means that although you can declare variables
 inside them, you will not be able to refer to them outside:
-```
+```mica
 > (a = 1) and (b = 2)
 < 2
 
@@ -172,6 +172,35 @@ inside them, you will not be able to refer to them outside:
 > b
 (repl):1:1: error: variable 'b' does not exist
 ```
+
+#### Function calls
+
+The `()` infix operator is used for calling [functions](#function-definitions). The left-hand side
+of the operator is the function that should be called, and the right hand side is the list of
+arguments to pass to the function. Inside the called function, each argument is bound to a
+variable named after the parameter at the same position.
+
+`print` is a built-in function that echoes its arguments to stdout:
+```mica
+> print("Hello!")
+Hello
+< nil
+```
+
+The `.` infix operator is used for calling functions that are bound to values. The left hand side
+of the operator is the _receiver_, and the right-hand side is the name of the function to call.
+Additional arguments may be provided by following the name of the function up with `()` containing
+a list of arguments.
+
+```mica
+> 4.sqrt      # Call without arguments
+< 2
+
+> 3.hypot(4)  # Call with one argument
+< 4
+```
+
+See [implementations](#implementations) for information on how to declare functions bound to values.
 
 ### Variables
 

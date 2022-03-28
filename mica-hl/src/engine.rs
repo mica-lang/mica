@@ -186,7 +186,7 @@ impl Engine {
       if let Some(id) = id.try_to_global_id(&self.env) {
          T::try_from_value(&self.globals.get(id.0))
       } else {
-         T::try_from_value(&Value::Nil)
+         T::try_from_value(&Value::from(()))
       }
    }
 
@@ -220,7 +220,7 @@ impl Engine {
             kind: FunctionKind::Foreign(f),
          })
          .map_err(|_| Error::TooManyFunctions)?;
-      let function = Value::Function(Rc::new(Closure {
+      let function = Value::from(Rc::new(Closure {
          function_id,
          captures: Vec::new(),
       }));

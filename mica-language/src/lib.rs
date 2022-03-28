@@ -2,6 +2,8 @@
 //! you usually want to use the high-level API from [`mica-hl`](https://crates.io/crates/mica-hl)
 //! instead.
 
+#![allow(clippy::or_fun_call)]
+
 pub mod ast;
 pub mod bytecode;
 pub mod codegen;

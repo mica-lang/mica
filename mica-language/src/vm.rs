@@ -8,7 +8,7 @@ use crate::bytecode::{
    CaptureKind, Chunk, DispatchTable, Environment, FunctionKind, FunctionSignature, Opcode, Opr24,
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
-use crate::value::{Closure, Struct, Upvalue, Value};
+use crate::value::{Closure, Struct, Upvalue, Value, ValueKind};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl Globals {
    pub fn set(&mut self, slot: Opr24, value: Value) {
       let slot = u32::from(slot) as usize;
       if slot >= self.values.len() {
-         self.values.resize(slot + 1, Value::Nil);
+         self.values.resize(slot + 1, ().into());
       }
       // Safety: the vec has just been extended to have the correct size so `slot` is in bounds.
       unsafe {
@@ -37,7 +37,7 @@ impl Globals {
    /// Returns the global in the given slot, or `Nil` if there's no global there.
    pub fn get(&self, slot: Opr24) -> Value {
       let slot = u32::from(slot) as usize;
-      self.values.get(slot).cloned().unwrap_or(Value::Nil)
+      self.values.get(slot).cloned().unwrap_or(().into())
    }
 
    /// Returns the global in the given slot without performing bounds checks.
@@ -235,7 +235,7 @@ impl Fiber {
 
    /// Allocates `n` storage slots for local variables.
    fn allocate_chunk_storage_slots(&mut self, n: usize) {
-      self.stack.extend(std::iter::repeat_with(|| Value::Nil).take(n));
+      self.stack.extend(std::iter::repeat_with(|| ().into()).take(n));
    }
 
    /// Calls a function. For bytecode functions this saves the stack and begins executing the
@@ -326,14 +326,14 @@ impl Fiber {
 
    /// Returns the dispatch table of the given value.
    fn get_dispatch_table<'v>(value: &'v Value, env: &'v Environment) -> &'v DispatchTable {
-      match value {
-         Value::Nil => &env.builtin_dtables.nil,
-         Value::False | Value::True => &env.builtin_dtables.boolean,
-         Value::Number(_) => &env.builtin_dtables.number,
-         Value::String(_) => &env.builtin_dtables.string,
-         Value::Function(_) => &env.builtin_dtables.function,
-         Value::Struct(st) => st.dtable(),
-         Value::UserData(u) => u.dtable(),
+      match value.kind() {
+         ValueKind::Nil => &env.builtin_dtables.nil,
+         ValueKind::Boolean => &env.builtin_dtables.boolean,
+         ValueKind::Number => &env.builtin_dtables.number,
+         ValueKind::String => &env.builtin_dtables.string,
+         ValueKind::Function => &env.builtin_dtables.function,
+         ValueKind::Struct => unsafe { value.get_struct_unchecked() }.dtable(),
+         ValueKind::UserData => unsafe { value.get_user_data_unchecked() }.dtable(),
       }
    }
 
@@ -388,33 +388,33 @@ impl Fiber {
             ($op:tt) => {{
                let right = wrap_error!(self.pop().number());
                let left = wrap_error!(self.stack_top().number());
-               *self.stack_top_mut() = Value::Number(left $op right);
+               *self.stack_top_mut() = Value::from(left $op right);
             }};
          }
 
          match opcode {
             Opcode::Nop => (),
 
-            Opcode::PushNil => self.push(Value::Nil),
-            Opcode::PushTrue => self.push(Value::True),
-            Opcode::PushFalse => self.push(Value::False),
+            Opcode::PushNil => self.push(Value::from(())),
+            Opcode::PushTrue => self.push(Value::from(true)),
+            Opcode::PushFalse => self.push(Value::from(false)),
             Opcode::PushNumber => {
                let number = unsafe { self.chunk.read_number(&mut self.pc) };
-               self.push(Value::Number(number));
+               self.push(Value::from(number));
             }
             Opcode::PushString => {
-               let string = Rc::from(unsafe { self.chunk.read_string(&mut self.pc) });
-               self.push(Value::String(string));
+               let string: Rc<str> = Rc::from(unsafe { self.chunk.read_string(&mut self.pc) });
+               self.push(Value::from(string));
             }
             Opcode::CreateClosure => {
                let closure = self.create_closure(s.env_mut(), operand);
-               self.push(Value::Function(closure));
+               self.push(Value::from(closure));
             }
             Opcode::CreateType => {
                let name = unsafe { self.chunk.read_string(&mut self.pc) };
                let dispatch_table = DispatchTable::new_for_type(name);
                let struct_v = Struct::new_type(Rc::new(dispatch_table));
-               self.stack.push(Value::Struct(Rc::new(struct_v)));
+               self.stack.push(Value::from(Rc::new(struct_v)));
             }
             Opcode::CreateStruct => {
                // SAFETY: It's ok to use `unwrap_unchecked` because we're guaranteed the value on
@@ -426,7 +426,7 @@ impl Fiber {
                let type_struct = unsafe { self.pop().struct_v().cloned().unwrap_unchecked() };
                let field_count = u32::from(operand) as usize;
                let instance = Rc::new(unsafe { type_struct.new_instance(field_count) });
-               self.push(Value::Struct(instance));
+               self.push(Value::from(instance));
             }
 
             Opcode::AssignGlobal => {
@@ -622,7 +622,7 @@ impl Fiber {
 
             Opcode::Negate => {
                let number = wrap_error!(self.pop().number());
-               self.push(Value::Number(-number))
+               self.push(Value::from(-number))
             }
             Opcode::Add => binary_operator!(+),
             Opcode::Subtract => binary_operator!(-),
@@ -670,7 +670,7 @@ impl Fiber {
 
       self.stack.resize(
          self.stack.len() - self.chunk.preallocate_stack_slots as usize,
-         Value::Nil,
+         Value::from(()),
       );
 
       Ok(result)

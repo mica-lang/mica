@@ -4,6 +4,15 @@
 assert(!true == false)
 assert(!false == true)
 
+# `nil` and `false` are the only falsy values.
+assert(!!nil == false)
+assert(!!false == false)
+assert(!!1 == true)
+assert(!!"" == true)
+assert(!!func () end == true)
+struct S
+assert(!!S == true)
+
 # Relation between numbers
 assert(1 == 1)
 assert(1 != 2)

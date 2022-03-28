@@ -4,6 +4,8 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 use mica_language::common::ErrorKind;
+use mica_language::value;
+use mica_language::value::ValueKind;
 
 use crate::{Error, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value};
 
@@ -21,7 +23,7 @@ impl IntoValue for Value {
 /// The unit type is represented as `nil` inside the VM.
 impl IntoValue for () {
    fn into_value(self) -> Value {
-      Value::Nil
+      Value::from(self)
    }
 }
 
@@ -35,7 +37,7 @@ macro_rules! to_value_numeric {
    ($T:ty) => {
       impl IntoValue for $T {
          fn into_value(self) -> Value {
-            Value::Number(self as f64)
+            Value::from(self as f64)
          }
       }
    };
@@ -58,25 +60,28 @@ to_value_numeric!(f64);
 
 impl IntoValue for char {
    fn into_value(self) -> Value {
-      Value::String(Rc::from(self.to_string()))
+      let s: Rc<str> = Rc::from(self.to_string());
+      Value::from(s)
    }
 }
 
 impl IntoValue for &str {
    fn into_value(self) -> Value {
-      Value::String(Rc::from(self))
+      let s: Rc<str> = Rc::from(self);
+      Value::from(s)
    }
 }
 
 impl IntoValue for String {
    fn into_value(self) -> Value {
-      Value::String(Rc::from(self))
+      let s: Rc<str> = Rc::from(self);
+      Value::from(s)
    }
 }
 
 impl IntoValue for Rc<str> {
    fn into_value(self) -> Value {
-      Value::String(self)
+      Value::from(self)
    }
 }
 
@@ -85,7 +90,7 @@ where
    T: IntoValue,
 {
    fn into_value(self) -> Value {
-      self.map(|x| x.into_value()).unwrap_or(Value::Nil)
+      self.map(|x| x.into_value()).unwrap_or(Value::from(()))
    }
 }
 
@@ -94,7 +99,8 @@ where
    T: Any,
 {
    fn into_value(self) -> Value {
-      Value::UserData(Rc::new(Box::new(self)))
+      let object: Rc<Box<dyn value::UserData>> = Rc::new(Box::new(self));
+      Value::from(object)
    }
 }
 
@@ -174,7 +180,7 @@ where
    T: TryFromValue,
 {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
-      if let Value::Nil = value {
+      if value.kind() == ValueKind::Nil {
          Ok(None)
       } else {
          Ok(Some(T::try_from_value(value)?))
@@ -215,10 +221,10 @@ impl FromValueSelf for bool {
 
    unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {
       Ok((
-         match v {
-            Value::False => &false,
-            Value::True => &true,
-            _ => unreachable_unchecked(),
+         match v.get_boolean_unchecked() {
+            // I mean… if it works…??
+            true => &true,
+            false => &false,
          },
          (),
       ))
@@ -229,13 +235,7 @@ impl FromValueSelf for f64 {
    type Guard = ();
 
    unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {
-      Ok((
-         match v {
-            Value::Number(n) => n,
-            _ => unreachable_unchecked(),
-         },
-         (),
-      ))
+      Ok((v.get_number_unchecked(), ()))
    }
 }
 
@@ -243,13 +243,7 @@ impl FromValueSelf for Rc<str> {
    type Guard = ();
 
    unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {
-      Ok((
-         match v {
-            Value::String(s) => s,
-            _ => unreachable_unchecked(),
-         },
-         (),
-      ))
+      Ok((v.get_string_unchecked(), ()))
    }
 }
 
@@ -260,17 +254,11 @@ where
    type Guard = UnsafeRefGuard<T>;
 
    unsafe fn from_value_self(value: &Value) -> Result<(&Self, Self::Guard), Error> {
-      match value {
-         Value::UserData(user_data) => {
-            // That <dyn Any> is a bit cursed; I wonder why I couldn't just call downcast_ref on
-            // the Rc<Box<dyn UserData>>.
-            if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
-               object.unsafe_borrow()
-            } else {
-               unreachable_unchecked()
-            }
-         }
-         _ => unreachable_unchecked(),
+      let user_data = value.get_user_data_unchecked();
+      if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
+         object.unsafe_borrow()
+      } else {
+         unreachable_unchecked()
       }
    }
 }
@@ -305,15 +293,11 @@ where
    type Guard = UnsafeMutGuard<T>;
 
    unsafe fn from_value_self_mut(value: &Value) -> Result<(&mut Self, Self::Guard), Error> {
-      match value {
-         Value::UserData(user_data) => {
-            if let Some(object) = user_data.as_any().downcast_ref::<Object<T>>() {
-               object.unsafe_borrow_mut()
-            } else {
-               unreachable_unchecked()
-            }
-         }
-         _ => unreachable_unchecked(),
+      let user_data = value.get_user_data_unchecked();
+      if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
+         object.unsafe_borrow_mut()
+      } else {
+         unreachable_unchecked()
       }
    }
 }

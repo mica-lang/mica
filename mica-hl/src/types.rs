@@ -5,7 +5,7 @@ use std::rc::Rc;
 use mica_language::bytecode::{
    DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
 };
-use mica_language::value::{Closure, Value};
+use mica_language::value::{self, Closure, Value};
 
 use crate::userdata::Type;
 use crate::{ffvariants, Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction};
@@ -291,8 +291,8 @@ impl<T> BuiltType<T> {
    where
       T: Any,
    {
-      Value::UserData(Rc::new(Box::new(Type::<T>::new(Rc::clone(
-         &self.type_dtable,
-      )))))
+      let user_data: Rc<Box<dyn value::UserData>> =
+         Rc::new(Box::new(Type::<T>::new(Rc::clone(&self.type_dtable))));
+      Value::from(user_data)
    }
 }

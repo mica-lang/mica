@@ -608,33 +608,33 @@ impl Fiber {
             Opcode::Divide => binary_operator!(/),
 
             Opcode::Not => {
-               let value = self.pop();
-               self.push(Value::from(!value.is_truthy()));
+               let value = self.stack_top();
+               *self.stack_top_mut() = Value::from(!value.is_truthy());
             }
             Opcode::Equal => {
                let right = self.pop();
-               let left = self.pop();
-               self.push(Value::from(left == right));
+               let left = self.stack_top();
+               *self.stack_top_mut() = Value::from(left.eq(&right));
             }
             Opcode::Less => {
                let right = self.pop();
-               let left = self.pop();
+               let left = self.stack_top();
                let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right)) {
                   ordering.is_lt()
                } else {
                   false
                };
-               self.push(Value::from(is_less));
+               *self.stack_top_mut() = Value::from(is_less);
             }
             Opcode::LessEqual => {
                let right = self.pop();
-               let left = self.pop();
+               let left = self.stack_top();
                let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right)) {
                   ordering.is_le()
                } else {
                   false
                };
-               self.push(Value::from(is_less));
+               *self.stack_top_mut() = Value::from(is_less);
             }
 
             Opcode::Halt => {

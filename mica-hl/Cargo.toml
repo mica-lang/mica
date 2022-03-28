@@ -7,4 +7,4 @@ license = "MIT"
 repository = "https://github.com/liquidev/mica"
 
 [dependencies]
-mica-language = { version = "0.1.0", path = "../mica-language" }
+mica-language = { version = "0.2.0", path = "../mica-language" }

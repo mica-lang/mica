@@ -5,8 +5,6 @@ use std::fmt::{self, Debug};
 use std::mem::size_of;
 use std::rc::Rc;
 
-use bytemuck::{Pod, Zeroable};
-
 use crate::common::{ErrorKind, Location};
 use crate::value::{Closure, Value};
 
@@ -81,9 +79,6 @@ impl std::fmt::Display for Opr24 {
    }
 }
 
-unsafe impl Zeroable for Opr24 {}
-unsafe impl Pod for Opr24 {}
-
 pub trait PackableToOpr24 {
    fn pack_to_opr24(self) -> Opr24;
    fn unpack_from_opr24(opr: Opr24) -> Self;
@@ -124,44 +119,44 @@ pub enum Opcode {
    /// Pushes a string onto the stack. Must be followed by a string.
    PushString,
    /// Creates a closure from the function with the given ID and pushes it onto the stack.
-   CreateClosure(Opr24),
+   CreateClosure,
    /// Creates a unique type that can be later implemented. Must be followed by a string indicating
    /// the type's name.
    CreateType,
    /// Creates a struct instance from the type at the top of the stack, with the specified amount
    /// of fields.
-   CreateStruct(Opr24),
+   CreateStruct,
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
-   AssignGlobal(Opr24),
+   AssignGlobal,
    /// Sinks the value at the top of the stack to a global. The value is consumed.
-   SinkGlobal(Opr24),
+   SinkGlobal,
    /// Loads a value from a global.
-   GetGlobal(Opr24),
+   GetGlobal,
    /// Assigns the value at the top of the stack to a local. The value stays on the stack.
-   AssignLocal(Opr24),
+   AssignLocal,
    /// Sinks the value at the top of the stack to a local. The value is consumed.
-   SinkLocal(Opr24),
+   SinkLocal,
    /// Loads a value from a local.
-   GetLocal(Opr24),
+   GetLocal,
    /// Assigns the value at the top of the stack to an upvalue. The value stays on the stack.
-   AssignUpvalue(Opr24),
+   AssignUpvalue,
    /// Sinks the value at the top of the stack to an upvalue. The value is consumed.
-   SinkUpvalue(Opr24),
+   SinkUpvalue,
    /// Loads a value from an upvalue.
-   GetUpvalue(Opr24),
+   GetUpvalue,
    /// Closes a local in its upvalue.
-   CloseLocal(Opr24),
+   CloseLocal,
    /// Assigns to a field in the struct on the top of the stack. The struct is consumed but the
    /// value remains on the stack.
    /// Assumes the second value from top is a struct and not something else.
-   AssignField(Opr24),
+   AssignField,
    /// Sinks to a field in the struct on the top of the stack. Both the struct and the value are
    /// consumed.
-   SinkField(Opr24),
+   SinkField,
    /// Loads a field from the struct on the top of the stack.
    /// Assumes the value on top is a struct and not something else.
-   GetField(Opr24),
+   GetField,
 
    /// Swaps the two values at the top of the stack.
    Swap,
@@ -172,32 +167,32 @@ pub enum Opcode {
    // 4 bytes were jumped over implicitly (the actual number of bytes that is jumped over is
    // `operand + 4`).
    /// Jumps the program counter forward by an amount of bytes.
-   JumpForward(Opr24),
+   JumpForward,
    /// Jumps the program counter forward by an amount of bytes if the value at the top of the stack
    /// is falsy.
-   JumpForwardIfFalsy(Opr24),
+   JumpForwardIfFalsy,
    /// Jumps the program counter forward by an amount of bytes if the value at the top of the stack
    /// is truthy.
-   JumpForwardIfTruthy(Opr24),
+   JumpForwardIfTruthy,
    /// Jumps the program counter backward by an amount of bytes.
    /// Due to how the VM increments the program counter, the actual amount is `operand - 4`.
-   JumpBackward(Opr24),
+   JumpBackward,
    /// Enters a breakable block by pushing the break sentinel value onto the stack.
    EnterBreakableBlock,
    /// Exits the n-th breakable block (counted from innermost) by popping values off the stack
    /// until `.0` sentinels are removed.
-   ExitBreakableBlock(u16),
+   ExitBreakableBlock,
 
    /// Calls a function with `.0` arguments.
-   Call(u16),
+   Call,
    /// Calls the `n`th method with `a` arguments, where `a` is encoded in the lower 8 bits, and
    /// `n` is encoded in the upper 16 bits of `.0`.
-   CallMethod(Opr24),
+   CallMethod,
    /// Returns to the calling function.
    Return,
 
    /// Implements a struct according to a prototype identified by the operand.
-   Implement(Opr24),
+   Implement,
 
    /// Negates a number (prefix `-`).
    Negate,
@@ -221,10 +216,6 @@ pub enum Opcode {
 
    /// Halts the interpreter loop.
    Halt,
-
-   /// Padding value, used to make sure the enum is 4 bytes large.
-   #[doc(hidden)]
-   __Padding([u8; 3]),
 }
 
 /// A jump was constructed whose offset stretched too far.
@@ -232,22 +223,13 @@ pub enum Opcode {
 pub struct JumpTooFar(());
 
 impl Opcode {
-   /// The size of an opcode.
-   pub const SIZE: usize = {
-      let size = std::mem::size_of::<Self>();
-      assert!(size == 4);
-      size
-   };
-
-   /// Converts the opcode to a byte slice.
-   pub fn as_bytes(&self) -> &[u8] {
-      bytemuck::bytes_of(self)
-   }
+   /// The size of an instruction (1 byte opcode + 3 bytes operand).
+   pub const INSTRUCTION_SIZE: usize = 4;
 
    /// Returns the offset of a forward jump instruction.
    fn forward_jump_offset(from: usize, to: usize) -> Result<Opr24, JumpTooFar> {
       assert!(to >= from);
-      let offset = to - from - Self::SIZE;
+      let offset = to - from - Self::INSTRUCTION_SIZE;
       if u32::try_from(offset).is_err() {
          return Err(JumpTooFar(()));
       }
@@ -255,27 +237,27 @@ impl Opcode {
    }
 
    /// Constructs a `JumpForward` instruction.
-   pub fn jump_forward(from: usize, to: usize) -> Result<Self, JumpTooFar> {
+   pub fn jump_forward(from: usize, to: usize) -> Result<(Self, Opr24), JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
-      Ok(Self::JumpForward(offset))
+      Ok((Self::JumpForward, offset))
    }
 
    /// Constructs a `JumpForwardIfFalsy` instruction.
-   pub fn jump_forward_if_falsy(from: usize, to: usize) -> Result<Self, JumpTooFar> {
+   pub fn jump_forward_if_falsy(from: usize, to: usize) -> Result<(Self, Opr24), JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
-      Ok(Self::JumpForwardIfFalsy(offset))
+      Ok((Self::JumpForwardIfFalsy, offset))
    }
 
    /// Constructs a `JumpForwardIfTruthy` instruction.
-   pub fn jump_forward_if_truthy(from: usize, to: usize) -> Result<Self, JumpTooFar> {
+   pub fn jump_forward_if_truthy(from: usize, to: usize) -> Result<(Self, Opr24), JumpTooFar> {
       let offset = Self::forward_jump_offset(from, to)?;
-      Ok(Self::JumpForwardIfTruthy(offset))
+      Ok((Self::JumpForwardIfTruthy, offset))
    }
 
    /// Returns the offset of a backward jump instruction.
    fn backward_jump_offset(from: usize, to: usize) -> Result<Opr24, JumpTooFar> {
       assert!(to <= from);
-      let offset = from - to + Self::SIZE;
+      let offset = from - to + Self::INSTRUCTION_SIZE;
       if u32::try_from(offset).is_err() {
          return Err(JumpTooFar(()));
       }
@@ -283,14 +265,11 @@ impl Opcode {
    }
 
    /// Constructs a `JumpBackward` instruction.
-   pub fn jump_backward(from: usize, to: usize) -> Result<Self, JumpTooFar> {
+   pub fn jump_backward(from: usize, to: usize) -> Result<(Self, Opr24), JumpTooFar> {
       let offset = Self::backward_jump_offset(from, to)?;
-      Ok(Self::JumpBackward(offset))
+      Ok((Self::JumpBackward, offset))
    }
 }
-
-unsafe impl Zeroable for Opcode {}
-unsafe impl Pod for Opcode {}
 
 /// A chunk of bytecode.
 pub struct Chunk {
@@ -298,7 +277,7 @@ pub struct Chunk {
    pub module_name: Rc<str>,
    /// The actual bytecode.
    bytes: Vec<u8>,
-   /// Locations. These are placed at multiples of four bytes (Opcode::SIZE).
+   /// Locations. These are placed at multiples of four bytes (Opcode::INSTRUCTION_SIZE).
    locations: Vec<Location>,
    /// The location emitted for each quad-byte on calls to `push`.
    pub codegen_location: Location,
@@ -318,11 +297,17 @@ impl Chunk {
       }
    }
 
-   /// Pushes an opcode into the chunk. Returns where the opcode is located.
-   pub fn emit(&mut self, opcode: Opcode) -> usize {
+   /// Pushes an encodable piece of data into the chunk. Returns where it's located.
+   pub fn emit(&mut self, what: impl EncodeInstruction) -> usize {
       let position = self.bytes.len();
-      self.bytes.extend_from_slice(opcode.as_bytes());
-      self.locations.push(self.codegen_location);
+      let mut bytes = [0; 4];
+      what.encode_instruction(&mut bytes);
+      self.bytes.extend_from_slice(&bytes);
+      let end = self.bytes.len();
+      let emitted = end - position;
+      for _ in 0..emitted / 4 {
+         self.locations.push(self.codegen_location);
+      }
       position
    }
 
@@ -360,20 +345,26 @@ impl Chunk {
    }
 
    /// Patches the instruction at the given position.
-   pub fn patch(&mut self, position: usize, opcode: Opcode) {
-      let bytes = bytemuck::bytes_of(&opcode);
-      self.bytes[position..position + Opcode::SIZE].copy_from_slice(bytes);
+   pub fn patch(&mut self, position: usize, instruction: impl EncodeInstruction) {
+      let mut bytes = [0; 4];
+      instruction.encode_instruction(&mut bytes);
+      self.bytes[position..position + Opcode::INSTRUCTION_SIZE].copy_from_slice(&bytes);
    }
 
-   /// Reads an opcode.
+   /// Reads an instruction.
    ///
    /// # Safety
    /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
-   pub unsafe fn read_opcode(&self, pc: &mut usize) -> Opcode {
-      let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::SIZE);
-      let opcode = *bytemuck::from_bytes(bytes);
-      *pc += Opcode::SIZE;
-      opcode
+   pub unsafe fn read_instruction(&self, pc: &mut usize) -> (Opcode, Opr24) {
+      let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::INSTRUCTION_SIZE);
+      let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap_unchecked();
+      let opcode = std::mem::transmute(bytes[0]);
+      bytes[0] = 0;
+      let operand = Opr24 {
+         bytes: [bytes[1], bytes[2], bytes[3]],
+      };
+      *pc += Opcode::INSTRUCTION_SIZE;
+      (opcode, operand)
    }
 
    /// Reads a number.
@@ -437,8 +428,9 @@ impl Debug for Chunk {
       let mut pc = 0;
       while !self.at_end(pc) {
          let location = self.location(pc);
-         let opcode = unsafe { self.read_opcode(&mut pc) };
-         write!(f, "{pc:06x} {} {opcode:?} ", location)?;
+         let show_pc = pc;
+         let (opcode, operand) = unsafe { self.read_instruction(&mut pc) };
+         write!(f, "{show_pc:06x} {} {opcode:?}({operand:?}) ", location)?;
 
          #[allow(clippy::single_match)]
          match opcode {
@@ -446,26 +438,24 @@ impl Debug for Chunk {
             Opcode::PushString | Opcode::CreateType => {
                write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?
             }
-            | Opcode::JumpForward(amount)
-            | Opcode::JumpForwardIfFalsy(amount)
-            | Opcode::JumpForwardIfTruthy(amount) => {
+            | Opcode::JumpForward | Opcode::JumpForwardIfFalsy | Opcode::JumpForwardIfTruthy => {
                write!(
                   f,
                   "-> {:06x}",
-                  pc + u32::from(amount) as usize + Opcode::SIZE
+                  pc + u32::from(operand) as usize + Opcode::INSTRUCTION_SIZE
                )?;
             }
-            Opcode::JumpBackward(amount) => {
+            Opcode::JumpBackward => {
                write!(
                   f,
                   "-> {:06x}",
-                  pc - u32::from(amount) as usize + Opcode::SIZE
+                  pc - u32::from(operand) as usize + Opcode::INSTRUCTION_SIZE
                )?;
             }
-            Opcode::CallMethod(arg) => {
-               let (method_index, argument_count) = arg.unpack();
-               let arg = u32::from(arg);
-               write!(f, "{arg:06x}:[mi={method_index}, ac={argument_count}]")?;
+            Opcode::CallMethod => {
+               let (method_index, argument_count) = operand.unpack();
+               let operand = u32::from(operand);
+               write!(f, "{operand:06x}:[mi={method_index}, ac={argument_count}]")?;
             }
             _ => (),
          }
@@ -473,6 +463,36 @@ impl Debug for Chunk {
          writeln!(f)?;
       }
       Ok(())
+   }
+}
+
+/// Types that can be encoded into bytecode.
+pub trait EncodeInstruction {
+   fn encode_instruction(&self, bytes: &mut [u8; Opcode::INSTRUCTION_SIZE]);
+}
+
+impl EncodeInstruction for (Opcode, Opr24) {
+   fn encode_instruction(&self, bytes: &mut [u8; Opcode::INSTRUCTION_SIZE]) {
+      bytes[0] = self.0 as u8;
+      bytes[1] = self.1.bytes[0];
+      bytes[2] = self.1.bytes[1];
+      bytes[3] = self.1.bytes[2];
+   }
+}
+
+impl EncodeInstruction for (Opcode, u16) {
+   fn encode_instruction(&self, bytes: &mut [u8; Opcode::INSTRUCTION_SIZE]) {
+      bytes[0] = self.0 as u8;
+      let ubytes = self.1.to_le_bytes();
+      bytes[1] = ubytes[0];
+      bytes[2] = ubytes[1];
+      bytes[3] = 0;
+   }
+}
+
+impl EncodeInstruction for Opcode {
+   fn encode_instruction(&self, bytes: &mut [u8; Opcode::INSTRUCTION_SIZE]) {
+      (*self, Opr24 { bytes: [0, 0, 0] }).encode_instruction(bytes)
    }
 }
 

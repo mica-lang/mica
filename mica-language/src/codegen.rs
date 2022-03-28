@@ -257,7 +257,7 @@ impl<'e> CodeGenerator<'e> {
       let scope = self.locals.pop_scope();
       for variable in scope.variables_by_name.into_values() {
          if variable.is_captured {
-            self.chunk.emit(Opcode::CloseLocal(variable.stack_slot));
+            self.chunk.emit((Opcode::CloseLocal, variable.stack_slot));
          }
       }
    }
@@ -265,27 +265,27 @@ impl<'e> CodeGenerator<'e> {
    /// Generates a variable load instruction (GetLocal, GetGlobal, GetUpvalue).
    fn generate_variable_load(&mut self, variable: VariablePlace) {
       self.chunk.emit(match variable {
-         VariablePlace::Global(slot) => Opcode::GetGlobal(slot),
-         VariablePlace::Local(slot) => Opcode::GetLocal(slot),
-         VariablePlace::Upvalue(slot) => Opcode::GetUpvalue(slot),
+         VariablePlace::Global(slot) => (Opcode::GetGlobal, slot),
+         VariablePlace::Local(slot) => (Opcode::GetLocal, slot),
+         VariablePlace::Upvalue(slot) => (Opcode::GetUpvalue, slot),
       });
    }
 
    /// Generates a variable assign instruction (AssignLocal, AssignGlobal, AssignUpvalue).
    fn generate_variable_assign(&mut self, variable: VariablePlace) {
       self.chunk.emit(match variable {
-         VariablePlace::Global(slot) => Opcode::AssignGlobal(slot),
-         VariablePlace::Local(slot) => Opcode::AssignLocal(slot),
-         VariablePlace::Upvalue(slot) => Opcode::AssignUpvalue(slot),
+         VariablePlace::Global(slot) => (Opcode::AssignGlobal, slot),
+         VariablePlace::Local(slot) => (Opcode::AssignLocal, slot),
+         VariablePlace::Upvalue(slot) => (Opcode::AssignUpvalue, slot),
       });
    }
 
    /// Generates a variable sink instruction (SinkLocal, SinkGlobal, SinkUpvalue).
    fn generate_variable_sink(&mut self, variable: VariablePlace) {
       self.chunk.emit(match variable {
-         VariablePlace::Global(slot) => Opcode::SinkGlobal(slot),
-         VariablePlace::Local(slot) => Opcode::SinkLocal(slot),
-         VariablePlace::Upvalue(slot) => Opcode::SinkUpvalue(slot),
+         VariablePlace::Global(slot) => (Opcode::SinkGlobal, slot),
+         VariablePlace::Local(slot) => (Opcode::SinkLocal, slot),
+         VariablePlace::Upvalue(slot) => (Opcode::SinkUpvalue, slot),
       });
    }
 
@@ -308,7 +308,7 @@ impl<'e> CodeGenerator<'e> {
             // before `pop_breakable_block` was called.
             self.chunk.patch(jump, Opcode::jump_forward(jump, self.chunk.len()).unwrap());
          }
-         self.chunk.emit(Opcode::ExitBreakableBlock(1));
+         self.chunk.emit((Opcode::ExitBreakableBlock, 1));
       }
    }
 
@@ -438,7 +438,7 @@ impl<'e> CodeGenerator<'e> {
       // code generation.
       let receiver = struct_data.receiver.unwrap();
       self.generate_variable_load(receiver);
-      self.chunk.emit(Opcode::GetField(field_id));
+      self.chunk.emit((Opcode::GetField, field_id));
       Ok(ExpressionResult::Present)
    }
 
@@ -485,8 +485,8 @@ impl<'e> CodeGenerator<'e> {
                let receiver = struct_data.receiver.unwrap();
                self.generate_variable_load(receiver);
                self.chunk.emit(match result {
-                  Expression::Used => Opcode::AssignField(field),
-                  Expression::Discarded => Opcode::SinkField(field),
+                  Expression::Used => (Opcode::AssignField, field),
+                  Expression::Discarded => (Opcode::SinkField, field),
                });
             } else {
                return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
@@ -699,7 +699,7 @@ impl<'e> CodeGenerator<'e> {
             };
             let method_index =
                self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
-            self.chunk.emit(Opcode::CallMethod(Opr24::pack((method_index, arity))));
+            self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, arity))));
          }
          _ => {
             self.generate_node(ast, function, Expression::Used)?;
@@ -707,10 +707,9 @@ impl<'e> CodeGenerator<'e> {
             for &argument in arguments {
                self.generate_node(ast, argument, Expression::Used)?;
             }
-            self.chunk.emit(Opcode::Call(
-               arguments
-                  .len()
-                  .try_into()
+            self.chunk.emit((
+               Opcode::Call,
+               Opr24::try_from(arguments.len())
                   .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
             ));
          }
@@ -732,7 +731,7 @@ impl<'e> CodeGenerator<'e> {
       };
       let method_index =
          self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
-      self.chunk.emit(Opcode::CallMethod(Opr24::pack((method_index, 1))));
+      self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, 1))));
 
       Ok(ExpressionResult::Present)
    }
@@ -800,7 +799,7 @@ impl<'e> CodeGenerator<'e> {
          let field_count = generator.struct_data.as_ref().unwrap().fields.len();
          let field_count = Opr24::try_from(field_count)
             .map_err(|_| ast.error(ast.node_pair(parameters).0, ErrorKind::TooManyFields))?;
-         generator.chunk.patch(create_struct, Opcode::CreateStruct(field_count));
+         generator.chunk.patch(create_struct, (Opcode::CreateStruct, field_count));
          // We also have to discard whatever was at the top of the stack at the moment and
          // return the struct we constructed.
          generator.chunk.emit(Opcode::Discard);
@@ -880,7 +879,7 @@ impl<'e> CodeGenerator<'e> {
          },
       )?;
 
-      self.chunk.emit(Opcode::CreateClosure(function.id));
+      self.chunk.emit((Opcode::CreateClosure, function.id));
       self.generate_variable_sink(variable);
 
       Ok(ExpressionResult::Absent)
@@ -907,7 +906,7 @@ impl<'e> CodeGenerator<'e> {
             call_conv: FunctionCallConv::Bare,
          },
       )?;
-      self.chunk.emit(Opcode::CreateClosure(function.id));
+      self.chunk.emit((Opcode::CreateClosure, function.id));
       Ok(ExpressionResult::Present)
    }
 
@@ -1008,7 +1007,7 @@ impl<'e> CodeGenerator<'e> {
 
       let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
       self.generate_node(ast, implementee, Expression::Used)?;
-      self.chunk.emit(Opcode::Implement(proto_id));
+      self.chunk.emit((Opcode::Implement, proto_id));
 
       self.struct_data = None;
 

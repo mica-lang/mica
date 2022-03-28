@@ -7,7 +7,7 @@ end
 assert(Number.nan != Number.nan)
 assert(Number.nan.is_nan)
 assert(Number.infinity.is_infinite)
-assert(!(Number.infinity.is_finite))
+assert(!Number.infinity.is_finite)
 assert(approx_equal(Number.e,  2.71828182, 0.00000001))
 assert(approx_equal(Number.pi, 3.14159265, 0.00000001))
 

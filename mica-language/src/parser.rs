@@ -55,9 +55,9 @@ impl Parser {
       })
    }
 
-   /// Returns the precedence level of the given token.
-   fn precedence(token: &Token) -> i8 {
-      match token.kind {
+   /// Returns the precedence level of the given token kind.
+   fn precedence(kind: &TokenKind) -> i8 {
+      match kind {
          TokenKind::Or => 1,
          TokenKind::And => 2,
          TokenKind::Assign => 3,
@@ -74,9 +74,9 @@ impl Parser {
       }
    }
 
-   /// Returns the associativity of the given token.
-   fn associativity(token: &Token) -> Associativity {
-      match token.kind {
+   /// Returns the associativity of the given token kind.
+   fn associativity(kind: &TokenKind) -> Associativity {
+      match kind {
          TokenKind::Assign => Associativity::Right,
          _ => Associativity::Left,
       }
@@ -130,10 +130,9 @@ impl Parser {
       }
    }
 
-   /// Parses a unary operator. Any unary operator can be followed by a prefix token.
+   /// Parses a unary operator.
    fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
-      let next_token = self.lexer.next_token()?;
-      let right = self.parse_prefix(next_token)?;
+      let right = self.parse_expression(Self::precedence(&TokenKind::Star))?;
       Ok(self.ast.build_node(kind, right).with_location(token.location).done())
    }
 
@@ -368,8 +367,8 @@ impl Parser {
       token: Token,
       kind: NodeKind,
    ) -> Result<NodeId, Error> {
-      let precedence =
-         Self::precedence(&token) - (Self::associativity(&token) == Associativity::Right) as i8;
+      let precedence = Self::precedence(&token.kind)
+         - (Self::associativity(&token.kind) == Associativity::Right) as i8;
       let right = self.parse_expression(precedence)?;
       Ok(self.ast.build_node(kind, (left, right)).with_location(token.location).done())
    }
@@ -424,7 +423,7 @@ impl Parser {
       let mut token = self.lexer.next_token()?;
       let mut left = self.parse_prefix(token)?;
 
-      while precedence < Self::precedence(&self.lexer.peek_token()?) {
+      while precedence < Self::precedence(&self.lexer.peek_token()?.kind) {
          let next_token = self.lexer.peek_token()?;
          if Self::is_invalid_continuation_token(&next_token.kind)
             && next_token.location.line > self.ast.location(left).line

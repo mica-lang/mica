@@ -34,6 +34,12 @@ false
 "\"hi\""
 ```
 
+#### Strings
+
+Strings begin and end with double quotes, and can contain the following escape sequences:
+- `\\` - literal backslash `\`
+- `\"` - literal double quote `"`
+
 ### Identifiers
 
 Identifiers allow for referring to existing, named values.
@@ -59,8 +65,9 @@ language syntax and cannot be used as ordinary values.
 
 Mica defines the following operators, grouped by precedence (largest to smallest):
 ```
+@ (prefix)
+. ()
 ! (prefix)  - (prefix)
-()
 *  /
 +  -
 ==  !=  <  >  <=  >=
@@ -89,6 +96,11 @@ addition, subtraction, multiplication, and division respectively.
 ```
 
 The prefix `-` can be used to negate numbers.
+
+```
+> -(1 + 2)
+< -3
+```
 
 #### Relation
 
@@ -148,6 +160,18 @@ performing a conversion.
 The REPL log above shows a property of the `and` and `or` operators, which is called
 _short-circuiting_. If the result of an operation can be deduced from only evaluating the left
 operand, the right operand will not be evaluated and instead the left one will be returned.
+
+`and` and `or` introduce a new [scope](#scope), which means that although you can declare variables
+inside them, you will not be able to refer to them outside:
+```
+> (a = 1) and (b = 2)
+< 2
+
+> a
+(repl):1:1: error: variable 'a' does not exist
+> b
+(repl):1:1: error: variable 'b' does not exist
+```
 
 ### Variables
 
@@ -237,7 +261,8 @@ evaluated, the return value is `nil`.
 
 More branches can be specified by using the `elif` keyword:
 ```mica
-x = Number.from_string(readline())
+# readline function provided by host program
+x = Number.parse(readline())
 if x == 1 do
    "one!"
 elif x == 2 do
@@ -252,6 +277,16 @@ if readline() == "yes" do
    print("Continuing.")
 else
    print("Cancelling...")
+end
+```
+
+Each `if` expression branch introduces a new scope that begins on the keyword that begins the
+branch. This means that variables can be declared inside the branch, which allows for easy `nil`
+checks.
+```
+if value = do_some_stuff() do
+   # value is guaranteed to be non-nil
+   value.do_something(123)
 end
 ```
 
@@ -275,6 +310,15 @@ i = 1
 while i <= 10 do
    print(i)
    i = i + 1
+end
+```
+
+Just like in `if`, `while` introduces a new scope on the `while` keyword. This allows for creating
+"iterators":
+```
+iterator = get_iterator_from_somewhere()
+while i = iterator.next do
+   print(i)
 end
 ```
 
@@ -320,13 +364,13 @@ The top level of a script, as well as any block such as `do..end`, is comprised 
 ### Function definitions
 
 A function definition creates a new function and assigns it to a variable. The syntax is:
-```
+```mica
 func name(param1, param2, param3)
    # body
 end
 ```
 This syntax is almost exactly the same as:
-```
+```mica
 # Introduce the variable into scope first, so that the function can be called recursively.
 name = nil
 name = func (param1, param2, param3)
@@ -335,3 +379,115 @@ end
 ```
 However, the `func name() end` form is preferred as it assigns a name to the function, which is
 visible in stack traces. Anonymous functions have the name `<anonymous>`.
+
+### Struct definitions
+
+A struct definition creates a new user-defined _type_.
+```mica
+struct Example
+print(Example)  #> <[type Example]>
+```
+Every declared type is unique, and equal only to itself:
+```mica
+struct Example
+struct Another
+assert(Example == Example)
+assert(Another == Another)
+assert(Example != Another)
+```
+
+### Implementations
+
+Implementations, or `impl` blocks, can be used to attach data and behavior to types.
+```mica
+impl SomeStructType
+   # functions
+end
+```
+An `impl` block can contain three types of functions: _static_ functions, _constructors_, and
+_instance_ functions.
+
+A static function is created by adding the `static` keyword after function parameters. Static
+functions can be used as a way of putting functions into namespaces.
+```mica
+struct Greetings
+
+impl Greetings
+   func get(for_whom) static
+      "Hello, ".cat(for_whom).cat("!")
+   end
+end
+
+assert(Greetings.get("world") == "Hello, world!")
+```
+
+A constructor is created by adding the `constructor` keyword after function parameters.
+The role of a constructor is to create an _instance_ of a type. Unlike the type itself, each
+instance can have data attached to it, by using _fields_. Fields work very much like variables,
+albeit they use different syntax: each field is comprised of the `@` symbol, followed by the field's
+name, eg. `@greeting`.
+
+The first declared constructor is the only place where new fields can be declared. Any additional
+constructors or functions afterwards must only ever refer to fields declared in the first
+constructor. Additionally, each constructor after the first one must assign to all fields that were
+declared in the first one.
+
+```mica
+struct Vector
+
+impl Vector
+   func new(x, y) constructor
+      # Declare fields that will store the X/Y coordinates of the vector.
+      @x = x
+      @y = y
+   end
+
+   func zero() constructor
+      # Additional constructors must assign to the same set of fields as the first constructor.
+      @x = 0
+      @y = 0
+   end
+
+   # Now we can declare functions that operate on instances of the type.
+
+   func len2()
+      @x * @x + @y * @y
+   end
+
+   func len()
+      # The `self` variable may be used to refer to the instance the function was called on, ie.
+      # the left-hand side of the dot.
+      self.len2.sqrt
+   end
+end
+
+v = Vector.new(3, 4)
+assert(v.len == 5)
+```
+
+As previously mentioned, there's a `self` variable in instance functions; the same variable is also
+available in constructors and static functions, albeit with different meanings:
+- In constructors, `self` refers to the newly created instance of the type.
+- In instance functions, `self` refers to the _receiver_, that is, the instance the function was
+  called on.
+- In static functions, `self` refers to the type itself.
+
+After `impl` is used on a type, that type becomes _sealed_, which means that it cannot be
+implemented anymore. This prevents monkey-patching foreign types, which is often considered bad
+programming practice, though the actual reason behind sealing has more to do with how dynamic
+Mica's `impl` blocks are.
+
+The implemented struct can be any expression, so nothing prevents you from doing this:
+```mica
+struct S
+function obtain_struct()
+   S
+end
+
+impl obtain_struct()
+   # ...
+end
+```
+If multiple `impl`s per type were allowed, the compiler would somehow need to keep track of what
+fields each `impl` declares, which is impossible to do in a straightforward way due to the dynamic
+type system.

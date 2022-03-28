@@ -354,11 +354,11 @@ impl Chunk {
    /// Reads an instruction.
    ///
    /// # Safety
-   /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
+   /// Assumes that `pc` is within the chunk's bounds and that the opcode at `pc` is valid.
    pub unsafe fn read_instruction(&self, pc: &mut usize) -> (Opcode, Opr24) {
       let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::INSTRUCTION_SIZE);
       let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap_unchecked();
-      let opcode = std::mem::transmute(bytes[0]);
+      let opcode: Opcode = std::mem::transmute(bytes[0]);
       bytes[0] = 0;
       let operand = Opr24 {
          bytes: [bytes[1], bytes[2], bytes[3]],

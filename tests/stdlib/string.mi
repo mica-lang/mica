@@ -6,7 +6,7 @@ assert("b" != "a")
 assert("a".cat("b") == "ab")
 
 assert("banana".contains("nan"))
-assert(!("banana".contains("infinity")))
+assert(!"banana".contains("infinity"))
 
 assert("banana".starts_with("ban"))
 assert("banana".ends_with("ana"))
@@ -28,7 +28,7 @@ assert("abc".byte_len == 3)
 assert("łąść".byte_len == 8)
 assert("łąść".char_len == 4)
 
-assert(!("abc".is_empty))
+assert(!"abc".is_empty)
 assert("".is_empty)
 
 assert("Zażółć gęślą jaźń.".to_lowercase == "zażółć gęślą jaźń.")

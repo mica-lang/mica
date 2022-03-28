@@ -257,26 +257,35 @@ impl<'e> CodeGenerator<'e> {
       let scope = self.locals.pop_scope();
       for variable in scope.variables_by_name.into_values() {
          if variable.is_captured {
-            self.chunk.emit(Opcode::CloseLocal(variable.stack_slot));
+            self.chunk.emit((Opcode::CloseLocal, variable.stack_slot));
          }
       }
    }
 
-   /// Generates a variable load instruction (GetLocal or GetGlobal).
+   /// Generates a variable load instruction (GetLocal, GetGlobal, GetUpvalue).
    fn generate_variable_load(&mut self, variable: VariablePlace) {
       self.chunk.emit(match variable {
-         VariablePlace::Global(slot) => Opcode::GetGlobal(slot),
-         VariablePlace::Local(slot) => Opcode::GetLocal(slot),
-         VariablePlace::Upvalue(slot) => Opcode::GetUpvalue(slot),
+         VariablePlace::Global(slot) => (Opcode::GetGlobal, slot),
+         VariablePlace::Local(slot) => (Opcode::GetLocal, slot),
+         VariablePlace::Upvalue(slot) => (Opcode::GetUpvalue, slot),
       });
    }
 
-   /// Generates a variable assign instruction (AssignLocal or AssignGlobal).
+   /// Generates a variable assign instruction (AssignLocal, AssignGlobal, AssignUpvalue).
    fn generate_variable_assign(&mut self, variable: VariablePlace) {
       self.chunk.emit(match variable {
-         VariablePlace::Global(slot) => Opcode::AssignGlobal(slot),
-         VariablePlace::Local(slot) => Opcode::AssignLocal(slot),
-         VariablePlace::Upvalue(slot) => Opcode::AssignUpvalue(slot),
+         VariablePlace::Global(slot) => (Opcode::AssignGlobal, slot),
+         VariablePlace::Local(slot) => (Opcode::AssignLocal, slot),
+         VariablePlace::Upvalue(slot) => (Opcode::AssignUpvalue, slot),
+      });
+   }
+
+   /// Generates a variable sink instruction (SinkLocal, SinkGlobal, SinkUpvalue).
+   fn generate_variable_sink(&mut self, variable: VariablePlace) {
+      self.chunk.emit(match variable {
+         VariablePlace::Global(slot) => (Opcode::SinkGlobal, slot),
+         VariablePlace::Local(slot) => (Opcode::SinkLocal, slot),
+         VariablePlace::Upvalue(slot) => (Opcode::SinkUpvalue, slot),
       });
    }
 
@@ -299,7 +308,7 @@ impl<'e> CodeGenerator<'e> {
             // before `pop_breakable_block` was called.
             self.chunk.patch(jump, Opcode::jump_forward(jump, self.chunk.len()).unwrap());
          }
-         self.chunk.emit(Opcode::ExitBreakableBlock(1));
+         self.chunk.emit((Opcode::ExitBreakableBlock, 1));
       }
    }
 
@@ -308,63 +317,72 @@ impl<'e> CodeGenerator<'e> {
    /// If there are no nodes in the list, this is equivalent to a `nil` literal.
    fn generate_node_list(&mut self, ast: &Ast, nodes: &[NodeId]) -> Result<(), Error> {
       if nodes.is_empty() {
-         self.generate_nil();
+         let _ = self.generate_nil();
       } else {
          for (i, &node) in nodes.iter().enumerate() {
-            self.generate_node(ast, node)?;
-            if i != nodes.len() - 1 {
-               self.chunk.emit(Opcode::Discard);
-            }
+            self.generate_node(
+               ast,
+               node,
+               if i != nodes.len() - 1 {
+                  Expression::Discarded
+               } else {
+                  Expression::Used
+               },
+            )?;
          }
       }
       Ok(())
    }
 
    /// Generates code for a nil literal.
-   fn generate_nil(&mut self) {
+   fn generate_nil(&mut self) -> ExpressionResult {
       self.chunk.emit(Opcode::PushNil);
+      ExpressionResult::Present
    }
 
    /// Generates code for a boolean literal.
-   fn generate_boolean(&mut self, ast: &Ast, node: NodeId) {
+   fn generate_boolean(&mut self, ast: &Ast, node: NodeId) -> ExpressionResult {
       self.chunk.emit(match ast.kind(node) {
          NodeKind::True => Opcode::PushTrue,
          NodeKind::False => Opcode::PushFalse,
          _ => unreachable!(),
       });
+      ExpressionResult::Present
    }
 
    /// Generates code for a number literal.
-   fn generate_number(&mut self, ast: &Ast, node: NodeId) {
+   fn generate_number(&mut self, ast: &Ast, node: NodeId) -> ExpressionResult {
       self.chunk.emit(Opcode::PushNumber);
       let number = ast.number(node).unwrap();
       self.chunk.emit_number(number);
+      ExpressionResult::Present
    }
 
    /// Generates code for a string literal.
-   fn generate_string(&mut self, ast: &Ast, node: NodeId) {
+   fn generate_string(&mut self, ast: &Ast, node: NodeId) -> ExpressionResult {
       self.chunk.emit(Opcode::PushString);
       let string = ast.string(node).unwrap();
       self.chunk.emit_string(string);
+      ExpressionResult::Present
    }
 
    /// Generates code for a unary operator.
-   fn generate_unary(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_unary(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (left, _) = ast.node_pair(node);
-      self.generate_node(ast, left)?;
+      self.generate_node(ast, left, Expression::Used)?;
       match ast.kind(node) {
          NodeKind::Negate => self.chunk.emit(Opcode::Negate),
          NodeKind::Not => self.chunk.emit(Opcode::Not),
          _ => unreachable!(),
       };
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for a binary operator.
-   fn generate_binary(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_binary(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (left, right) = ast.node_pair(node);
-      self.generate_node(ast, left)?;
-      self.generate_node(ast, right)?;
+      self.generate_node(ast, left, Expression::Used)?;
+      self.generate_node(ast, right, Expression::Used)?;
       match ast.kind(node) {
          NodeKind::Negate => self.chunk.emit(Opcode::Negate),
 
@@ -390,22 +408,22 @@ impl<'e> CodeGenerator<'e> {
          }
          _ => unreachable!(),
       };
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for a variable lookup.
-   fn generate_variable(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_variable(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let name = ast.string(node).unwrap();
       if let Some(variable) = self.lookup_variable(name).map_err(|kind| ast.error(node, kind))? {
          self.generate_variable_load(variable);
-         Ok(())
+         Ok(ExpressionResult::Present)
       } else {
          Err(ast.error(node, ErrorKind::VariableDoesNotExist(name.to_owned())))
       }
    }
 
    /// Generates code for a field lookup.
-   fn generate_field(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_field(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (name, _) = ast.node_pair(node);
       let name = ast.string(name).unwrap();
       let struct_data = self
@@ -420,14 +438,19 @@ impl<'e> CodeGenerator<'e> {
       // code generation.
       let receiver = struct_data.receiver.unwrap();
       self.generate_variable_load(receiver);
-      self.chunk.emit(Opcode::GetField(field_id));
-      Ok(())
+      self.chunk.emit((Opcode::GetField, field_id));
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for an assignment.
-   fn generate_assignment(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_assignment(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      result: Expression,
+   ) -> Result<ExpressionResult, Error> {
       let (target, value) = ast.node_pair(node);
-      self.generate_node(ast, value)?;
+      self.generate_node(ast, value, Expression::Used)?;
 
       match ast.kind(target) {
          NodeKind::Identifier => {
@@ -441,7 +464,10 @@ impl<'e> CodeGenerator<'e> {
                   .create_variable(name, VariableAllocation::Allocate)
                   .map_err(|kind| ast.error(node, kind))?
             };
-            self.generate_variable_assign(variable);
+            match result {
+               Expression::Used => self.generate_variable_assign(variable),
+               Expression::Discarded => self.generate_variable_sink(variable),
+            }
          }
          NodeKind::Field => {
             let (name, _) = ast.node_pair(target);
@@ -458,7 +484,10 @@ impl<'e> CodeGenerator<'e> {
                // in an `impl` block.
                let receiver = struct_data.receiver.unwrap();
                self.generate_variable_load(receiver);
-               self.chunk.emit(Opcode::AssignField(field));
+               self.chunk.emit(match result {
+                  Expression::Used => (Opcode::AssignField, field),
+                  Expression::Discarded => (Opcode::SinkField, field),
+               });
             } else {
                return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
             }
@@ -471,20 +500,23 @@ impl<'e> CodeGenerator<'e> {
          _ => return Err(ast.error(target, ErrorKind::InvalidAssignment)),
       }
 
-      Ok(())
+      Ok(match result {
+         Expression::Discarded => ExpressionResult::Absent,
+         Expression::Used => ExpressionResult::Present,
+      })
    }
 
    /// Generates code for a `do..end` expression.
-   fn generate_do(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_do(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let children = ast.children(node).unwrap();
       self.push_scope();
       self.generate_node_list(ast, children)?;
       self.pop_scope();
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for an `if..elif..else..end` expression.
-   fn generate_if(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_if(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let branches = ast.children(node).unwrap();
       let mut jumps_to_end = Vec::new();
 
@@ -500,7 +532,7 @@ impl<'e> CodeGenerator<'e> {
                // Generate the condition.
                let (condition, _) = ast.node_pair(branch);
                self.push_scope();
-               self.generate_node(ast, condition)?;
+               self.generate_node(ast, condition, Expression::Used)?;
                // Generate a Nop that is later backpatched with a ConditionalJumpForward.
                let jump = self.chunk.emit(Opcode::Nop);
                self.chunk.emit(Opcode::Discard); // The condition has to be discarded.
@@ -540,45 +572,45 @@ impl<'e> CodeGenerator<'e> {
          );
       }
 
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for an `and` infix operator.
-   fn generate_and(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_and(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (left, right) = ast.node_pair(node);
       self.push_scope();
-      self.generate_node(ast, left)?;
+      self.generate_node(ast, left, Expression::Used)?;
       let jump_past_right = self.chunk.emit(Opcode::Nop);
       self.chunk.emit(Opcode::Discard);
-      self.generate_node(ast, right)?;
+      self.generate_node(ast, right, Expression::Used)?;
       self.chunk.patch(
          jump_past_right,
          Opcode::jump_forward_if_falsy(jump_past_right, self.chunk.len())
             .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
       );
       self.pop_scope();
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for an `or` infix operator.
-   fn generate_or(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_or(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (left, right) = ast.node_pair(node);
       self.push_scope();
-      self.generate_node(ast, left)?;
+      self.generate_node(ast, left, Expression::Used)?;
       let jump_past_right = self.chunk.emit(Opcode::Nop);
       self.chunk.emit(Opcode::Discard);
-      self.generate_node(ast, right)?;
+      self.generate_node(ast, right, Expression::Used)?;
       self.chunk.patch(
          jump_past_right,
          Opcode::jump_forward_if_truthy(jump_past_right, self.chunk.len())
             .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
       );
       self.pop_scope();
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for a `while..do..end` loop.
-   fn generate_while(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_while(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (condition, _) = ast.node_pair(node);
       let body = ast.children(node).unwrap();
 
@@ -588,7 +620,7 @@ impl<'e> CodeGenerator<'e> {
       self.push_breakable_block();
 
       let start = self.chunk.len();
-      self.generate_node(ast, condition)?;
+      self.generate_node(ast, condition, Expression::Used)?;
       let jump_to_end = self.chunk.emit(Opcode::Nop);
       // Discard the condition if it's true.
       self.chunk.emit(Opcode::Discard);
@@ -617,16 +649,16 @@ impl<'e> CodeGenerator<'e> {
       self.pop_breakable_block();
       self.pop_scope();
 
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates a `break` expression.
-   fn generate_break(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_break(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (right, _) = ast.node_pair(node);
       if right != NodeId::EMPTY {
-         self.generate_node(ast, right)?;
+         self.generate_node(ast, right, Expression::Used)?;
       } else {
-         self.generate_nil();
+         let _ = self.generate_nil();
       }
       let jump = self.chunk.emit(Opcode::Nop);
       if let Some(block) = self.breakable_blocks.last_mut() {
@@ -634,11 +666,11 @@ impl<'e> CodeGenerator<'e> {
       } else {
          return Err(ast.error(node, ErrorKind::BreakOutsideOfLoop));
       }
-      Ok(())
+      Ok(ExpressionResult::NoReturn)
    }
 
    /// Generates code for a function call.
-   fn generate_call(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_call(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (function, _) = ast.node_pair(node);
       match ast.kind(function) {
          // Method calls need special treatment.
@@ -650,10 +682,10 @@ impl<'e> CodeGenerator<'e> {
             let name = ast.string(name).unwrap();
 
             // Generate the receiver and arguments.
-            self.generate_node(ast, receiver)?;
+            self.generate_node(ast, receiver, Expression::Used)?;
             let arguments = ast.children(node).unwrap();
             for &argument in arguments {
-               self.generate_node(ast, argument)?;
+               self.generate_node(ast, argument, Expression::Used)?;
             }
 
             // Construct the call.
@@ -667,29 +699,28 @@ impl<'e> CodeGenerator<'e> {
             };
             let method_index =
                self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
-            self.chunk.emit(Opcode::CallMethod(Opr24::pack((method_index, arity))));
+            self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, arity))));
          }
          _ => {
-            self.generate_node(ast, function)?;
+            self.generate_node(ast, function, Expression::Used)?;
             let arguments = ast.children(node).unwrap();
             for &argument in arguments {
-               self.generate_node(ast, argument)?;
+               self.generate_node(ast, argument, Expression::Used)?;
             }
-            self.chunk.emit(Opcode::Call(
-               arguments
-                  .len()
-                  .try_into()
+            self.chunk.emit((
+               Opcode::Call,
+               Opr24::try_from(arguments.len())
                   .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
             ));
          }
       }
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for a bare dot call (without parentheses).
-   fn generate_dot(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_dot(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (left, method) = ast.node_pair(node);
-      self.generate_node(ast, left)?;
+      self.generate_node(ast, left, Expression::Used)?;
 
       if ast.kind(method) != NodeKind::Identifier {
          return Err(ast.error(method, ErrorKind::InvalidMethodName));
@@ -700,9 +731,9 @@ impl<'e> CodeGenerator<'e> {
       };
       let method_index =
          self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
-      self.chunk.emit(Opcode::CallMethod(Opr24::pack((method_index, 1))));
+      self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, 1))));
 
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    fn generate_function(
@@ -768,7 +799,7 @@ impl<'e> CodeGenerator<'e> {
          let field_count = generator.struct_data.as_ref().unwrap().fields.len();
          let field_count = Opr24::try_from(field_count)
             .map_err(|_| ast.error(ast.node_pair(parameters).0, ErrorKind::TooManyFields))?;
-         generator.chunk.patch(create_struct, Opcode::CreateStruct(field_count));
+         generator.chunk.patch(create_struct, (Opcode::CreateStruct, field_count));
          // We also have to discard whatever was at the top of the stack at the moment and
          // return the struct we constructed.
          generator.chunk.emit(Opcode::Discard);
@@ -819,7 +850,11 @@ impl<'e> CodeGenerator<'e> {
    }
 
    /// Generates code for a bare function declaration.
-   fn generate_function_declaration(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_function_declaration(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+   ) -> Result<ExpressionResult, Error> {
       let (name_node, parameters) = ast.node_pair(node);
       let name = ast.string(name_node).unwrap();
 
@@ -844,16 +879,18 @@ impl<'e> CodeGenerator<'e> {
          },
       )?;
 
-      self.chunk.emit(Opcode::CreateClosure(function.id));
-      self.generate_variable_assign(variable);
-      self.chunk.emit(Opcode::Discard);
-      self.generate_nil();
+      self.chunk.emit((Opcode::CreateClosure, function.id));
+      self.generate_variable_sink(variable);
 
-      Ok(())
+      Ok(ExpressionResult::Absent)
    }
 
    /// Generates code for a function expression.
-   fn generate_function_expression(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_function_expression(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+   ) -> Result<ExpressionResult, Error> {
       let (_, parameters) = ast.node_pair(node);
       if ast.node_pair(parameters).0 != NodeId::EMPTY {
          return Err(ast.error(
@@ -869,26 +906,26 @@ impl<'e> CodeGenerator<'e> {
             call_conv: FunctionCallConv::Bare,
          },
       )?;
-      self.chunk.emit(Opcode::CreateClosure(function.id));
-      Ok(())
+      self.chunk.emit((Opcode::CreateClosure, function.id));
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for a `return` expression.
-   fn generate_return(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_return(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (value, _) = ast.node_pair(node);
       // Unlike breaking out of a loop, returning is super simple, as it implies that all locals
       // are taken off the stack.
       if value == NodeId::EMPTY {
-         self.generate_nil();
+         let _ = self.generate_nil();
       } else {
-         self.generate_node(ast, value)?;
+         self.generate_node(ast, value, Expression::Used)?;
       }
       self.chunk.emit(Opcode::Return);
-      Ok(())
+      Ok(ExpressionResult::NoReturn)
    }
 
    /// Generates code for a struct declaration.
-   fn generate_struct(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_struct(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (name, _) = ast.node_pair(node);
       let name = ast.string(name).unwrap();
 
@@ -897,15 +934,13 @@ impl<'e> CodeGenerator<'e> {
       let variable = self
          .create_variable(name, VariableAllocation::Allocate)
          .map_err(|kind| ast.error(node, kind))?;
-      self.generate_variable_assign(variable);
-      self.chunk.emit(Opcode::Discard);
-      self.generate_nil();
+      self.generate_variable_sink(variable);
 
-      Ok(())
+      Ok(ExpressionResult::Absent)
    }
 
    /// Generates code for an `impl` block.
-   fn generate_impl(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_impl(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (implementee, _) = ast.node_pair(node);
       let items = ast.children(node).unwrap();
 
@@ -971,19 +1006,19 @@ impl<'e> CodeGenerator<'e> {
       }
 
       let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
-      self.generate_node(ast, implementee)?;
-      self.chunk.emit(Opcode::Implement(proto_id));
+      self.generate_node(ast, implementee, Expression::Used)?;
+      self.chunk.emit((Opcode::Implement, proto_id));
 
       self.struct_data = None;
 
-      Ok(())
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for a single node.
-   fn generate_node(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+   fn generate_node(&mut self, ast: &Ast, node: NodeId, expr: Expression) -> Result<(), Error> {
       let previous_codegen_location = self.chunk.codegen_location;
       self.chunk.codegen_location = ast.location(node);
-      match ast.kind(node) {
+      let result = match ast.kind(node) {
          NodeKind::Empty => panic!("empty nodes must never be generated"),
 
          NodeKind::Nil => self.generate_nil(),
@@ -1009,11 +1044,14 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::And => self.generate_and(ast, node)?,
          NodeKind::Or => self.generate_or(ast, node)?,
 
-         NodeKind::Assign => self.generate_assignment(ast, node)?,
+         NodeKind::Assign => self.generate_assignment(ast, node, expr)?,
          NodeKind::Dot => self.generate_dot(ast, node)?,
          NodeKind::Field => self.generate_field(ast, node)?,
 
-         NodeKind::Main => self.generate_node_list(ast, ast.children(node).unwrap())?,
+         NodeKind::Main => {
+            self.generate_node_list(ast, ast.children(node).unwrap())?;
+            ExpressionResult::Present
+         }
 
          NodeKind::Do => self.generate_do(ast, node)?,
          NodeKind::If => self.generate_if(ast, node)?,
@@ -1022,9 +1060,9 @@ impl<'e> CodeGenerator<'e> {
 
          NodeKind::Func => {
             if ast.node_pair(node).0 != NodeId::EMPTY {
-               self.generate_function_declaration(ast, node)?;
+               self.generate_function_declaration(ast, node)?
             } else {
-               self.generate_function_expression(ast, node)?;
+               self.generate_function_expression(ast, node)?
             }
          }
          NodeKind::Call => self.generate_call(ast, node)?,
@@ -1040,6 +1078,15 @@ impl<'e> CodeGenerator<'e> {
          | NodeKind::Constructor => {
             unreachable!("AST implementation detail")
          }
+      };
+      match (result, expr) {
+         (ExpressionResult::Absent, Expression::Used) => {
+            let _ = self.generate_nil();
+         }
+         (ExpressionResult::Present, Expression::Discarded) => {
+            let _ = self.chunk.emit(Opcode::Discard);
+         }
+         _ => (),
       }
       self.chunk.codegen_location = previous_codegen_location;
       Ok(())
@@ -1047,7 +1094,7 @@ impl<'e> CodeGenerator<'e> {
 
    /// Generates code for the given AST.
    pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Rc<Chunk>, Error> {
-      self.generate_node(ast, root_node)?;
+      self.generate_node(ast, root_node, Expression::Used)?;
       self.chunk.emit(Opcode::Halt);
       Ok(Rc::new(self.chunk))
    }
@@ -1099,4 +1146,24 @@ struct GenerateFunctionOptions {
 struct GeneratedFunction {
    id: Opr24,
    parameter_count: u16,
+}
+
+/// What kind of expression to generate in this place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Expression {
+   /// Discard the result.
+   Discarded,
+   /// Use the result.
+   Used,
+}
+
+#[must_use]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExpressionResult {
+   /// The result is still on the stack.
+   Present,
+   /// The result was discarded previously.
+   Absent,
+   /// The expression does not return to the original place and unwinds the stack.
+   NoReturn,
 }

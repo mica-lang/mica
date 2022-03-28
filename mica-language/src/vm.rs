@@ -123,7 +123,7 @@ impl Fiber {
                   Rc::from("<FFI>")
                },
                location: if let Some(chunk) = &return_point.chunk {
-                  chunk.location(return_point.pc - Opcode::SIZE)
+                  chunk.location(return_point.pc - Opcode::INSTRUCTION_SIZE)
                } else {
                   Location::UNINIT
                },
@@ -365,7 +365,7 @@ impl Fiber {
          {
             print!("op   @ {:06x} ", self.pc);
          }
-         let opcode = unsafe { self.chunk.read_opcode(&mut self.pc) };
+         let (opcode, operand) = unsafe { self.chunk.read_instruction(&mut self.pc) };
          #[cfg(feature = "trace-vm-opcodes")]
          {
             println!("{:?}", opcode);
@@ -406,8 +406,8 @@ impl Fiber {
                let string = Rc::from(unsafe { self.chunk.read_string(&mut self.pc) });
                self.push(Value::String(string));
             }
-            Opcode::CreateClosure(function_id) => {
-               let closure = self.create_closure(s.env_mut(), function_id);
+            Opcode::CreateClosure => {
+               let closure = self.create_closure(s.env_mut(), operand);
                self.push(Value::Function(closure));
             }
             Opcode::CreateType => {
@@ -416,7 +416,7 @@ impl Fiber {
                let struct_v = Struct::new_type(Rc::new(dispatch_table));
                self.stack.push(Value::Struct(Rc::new(struct_v)));
             }
-            Opcode::CreateStruct(field_count) => {
+            Opcode::CreateStruct => {
                // SAFETY: It's ok to use `unwrap_unchecked` because we're guaranteed the value on
                // top is a struct.
                //  - Constructors can only be created on types that weren't implemented yet.
@@ -424,43 +424,58 @@ impl Fiber {
                //  - And each user-defined type is a struct.
                //  - `Opcode::Implement` aborts execution if it isn't.
                let type_struct = unsafe { self.pop().struct_v().cloned().unwrap_unchecked() };
-               let field_count = u32::from(field_count) as usize;
+               let field_count = u32::from(operand) as usize;
                let instance = Rc::new(unsafe { type_struct.new_instance(field_count) });
                self.push(Value::Struct(instance));
             }
 
-            Opcode::AssignGlobal(slot) => {
+            Opcode::AssignGlobal => {
                let value = self.stack_top().clone();
-               s.globals_mut().set(slot, value);
+               s.globals_mut().set(operand, value);
             }
-            Opcode::GetGlobal(slot) => {
-               let value = unsafe { s.globals().get_unchecked(slot) };
+            Opcode::SinkGlobal => {
+               let value = self.pop();
+               s.globals_mut().set(operand, value);
+            }
+            Opcode::GetGlobal => {
+               let value = unsafe { s.globals().get_unchecked(operand) };
                self.push(value);
             }
-            Opcode::AssignLocal(slot) => {
-               let slot = u32::from(slot) as usize;
+            Opcode::AssignLocal => {
+               let slot = u32::from(operand) as usize;
                let value = self.stack_top().clone();
                self.stack[self.stack_bottom + slot] = value;
             }
-            Opcode::GetLocal(slot) => {
-               let slot = u32::from(slot) as usize;
+            Opcode::SinkLocal => {
+               let slot = u32::from(operand) as usize;
+               let value = self.pop();
+               self.stack[self.stack_bottom + slot] = value;
+            }
+            Opcode::GetLocal => {
+               let slot = u32::from(operand) as usize;
                let value = self.stack[self.stack_bottom + slot].clone();
                self.push(value);
             }
-            Opcode::AssignUpvalue(index) => {
-               let index = u32::from(index) as usize;
+            Opcode::AssignUpvalue => {
+               let index = u32::from(operand) as usize;
                let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
                let value = self.stack_top().clone();
                unsafe { Upvalue::set(&closure.captures[index], value) }
             }
-            Opcode::GetUpvalue(index) => {
-               let index = u32::from(index) as usize;
+            Opcode::SinkUpvalue => {
+               let index = u32::from(operand) as usize;
+               let value = self.pop();
+               let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
+               unsafe { Upvalue::set(&closure.captures[index], value) }
+            }
+            Opcode::GetUpvalue => {
+               let index = u32::from(operand) as usize;
                let closure = unsafe { self.closure.as_ref().unwrap_unchecked() };
                let value = unsafe { closure.captures[index].get() }.clone();
                self.push(value);
             }
-            Opcode::CloseLocal(stack_slot) => {
-               let stack_slot = self.stack_bottom as u32 + u32::from(stack_slot);
+            Opcode::CloseLocal => {
+               let stack_slot = self.stack_bottom as u32 + u32::from(operand);
                // This is O(n) and I can't say I'm a fan of that, but I haven't benchmarked the
                // performance impact this makes yet.
                let index =
@@ -468,18 +483,24 @@ impl Fiber {
                let (_, upvalue) = self.open_upvalues.remove(index);
                unsafe { upvalue.close() };
             }
-            Opcode::GetField(index) => {
-               let struct_v = self.pop();
-               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
-               let value = unsafe { struct_v.get_field(u32::from(index) as usize) };
-               self.push(value.clone());
-            }
-            Opcode::AssignField(index) => {
+            Opcode::AssignField => {
                let struct_v = self.pop();
                let value = self.pop();
                let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
                self.push(value.clone());
-               unsafe { struct_v.set_field(u32::from(index) as usize, value) }
+               unsafe { struct_v.set_field(u32::from(operand) as usize, value) }
+            }
+            Opcode::SinkField => {
+               let struct_v = self.pop();
+               let value = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               unsafe { struct_v.set_field(u32::from(operand) as usize, value) }
+            }
+            Opcode::GetField => {
+               let struct_v = self.pop();
+               let struct_v = unsafe { struct_v.struct_v().unwrap_unchecked() };
+               let value = unsafe { struct_v.get_field(u32::from(operand) as usize) };
+               self.push(value.clone());
             }
 
             Opcode::Swap => {
@@ -490,32 +511,33 @@ impl Fiber {
                self.pop();
             }
 
-            Opcode::JumpForward(amount) => {
-               let amount = u32::from(amount) as usize;
+            Opcode::JumpForward => {
+               let amount = u32::from(operand) as usize;
                self.pc += amount;
             }
-            Opcode::JumpForwardIfFalsy(amount) => {
-               let amount = u32::from(amount) as usize;
+            Opcode::JumpForwardIfFalsy => {
+               let amount = u32::from(operand) as usize;
                if self.stack_top().is_falsy() {
                   self.pc += amount;
                }
             }
-            Opcode::JumpForwardIfTruthy(amount) => {
-               let amount = u32::from(amount) as usize;
+            Opcode::JumpForwardIfTruthy => {
+               let amount = u32::from(operand) as usize;
                if self.stack_top().is_truthy() {
                   self.pc += amount;
                }
             }
-            Opcode::JumpBackward(amount) => {
-               let amount = u32::from(amount) as usize;
+            Opcode::JumpBackward => {
+               let amount = u32::from(operand) as usize;
                self.pc -= amount;
             }
 
             Opcode::EnterBreakableBlock => {
                self.breakable_block_stack.push(self.stack.len());
             }
-            Opcode::ExitBreakableBlock(n) => {
+            Opcode::ExitBreakableBlock => {
                let result = self.pop();
+               let n = u32::from(operand);
                for _ in 0..n {
                   unsafe {
                      let top = self.breakable_block_stack.pop().unwrap_unchecked();
@@ -527,15 +549,15 @@ impl Fiber {
                self.push(result);
             }
 
-            Opcode::Call(argument_count) => {
+            Opcode::Call => {
                // Add 1 to count in the called function itself, which is treated like an argument.
-               let argument_count = argument_count as usize + 1;
+               let argument_count = u32::from(operand) as usize + 1;
                let function = self.nth_from_top(argument_count);
                let closure = Rc::clone(wrap_error!(function.function()));
                self.enter_function(&mut s, closure, argument_count)?;
             }
-            Opcode::CallMethod(arg) => {
-               let (method_index, argument_count) = arg.unpack();
+            Opcode::CallMethod => {
+               let (method_index, argument_count) = operand.unpack();
                let receiver = self.nth_from_top(argument_count as usize);
                let dtable = Self::get_dispatch_table(receiver, s.env());
                if let Some(closure) = dtable.get_method(method_index) {
@@ -566,10 +588,10 @@ impl Fiber {
                self.push(result);
             }
 
-            Opcode::Implement(proto_id) => {
+            Opcode::Implement => {
                let st = wrap_error!(self.stack_top_mut().struct_v());
                let type_name = Rc::clone(&st.dtable().type_name);
-               let proto = unsafe { s.env_mut().take_prototype_unchecked(proto_id) };
+               let proto = unsafe { s.env_mut().take_prototype_unchecked(operand) };
 
                let mut type_dtable = DispatchTable::new_for_type(Rc::clone(&type_name));
                self.initialize_dtable(
@@ -608,41 +630,39 @@ impl Fiber {
             Opcode::Divide => binary_operator!(/),
 
             Opcode::Not => {
-               let value = self.pop();
-               self.push(Value::from(!value.is_truthy()));
+               let value = self.stack_top();
+               *self.stack_top_mut() = Value::from(!value.is_truthy());
             }
             Opcode::Equal => {
                let right = self.pop();
-               let left = self.pop();
-               self.push(Value::from(left == right));
+               let left = self.stack_top();
+               *self.stack_top_mut() = Value::from(left.eq(&right));
             }
             Opcode::Less => {
                let right = self.pop();
-               let left = self.pop();
+               let left = self.stack_top();
                let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right)) {
                   ordering.is_lt()
                } else {
                   false
                };
-               self.push(Value::from(is_less));
+               *self.stack_top_mut() = Value::from(is_less);
             }
             Opcode::LessEqual => {
                let right = self.pop();
-               let left = self.pop();
+               let left = self.stack_top();
                let is_less = if let Some(ordering) = wrap_error!(left.try_partial_cmp(&right)) {
                   ordering.is_le()
                } else {
                   false
                };
-               self.push(Value::from(is_less));
+               *self.stack_top_mut() = Value::from(is_less);
             }
 
             Opcode::Halt => {
                self.halted = true;
                break;
             }
-
-            Opcode::__Padding(_) => unreachable!(),
          }
       }
 

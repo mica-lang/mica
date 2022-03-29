@@ -19,6 +19,9 @@ use std::{fmt, mem, ptr};
 use crate::bytecode::{DispatchTable, Opr24};
 use crate::common::ErrorKind;
 
+#[cfg(mica_enable_nan_boxing)]
+use nanbox::ValueImpl;
+#[cfg(not(mica_enable_nan_boxing))]
 use portable::ValueImpl;
 
 /// The kind of a value.
@@ -54,13 +57,9 @@ trait ValueCommon: Clone + PartialEq {
    unsafe fn get_user_data_unchecked(&self) -> &Rc<Box<dyn UserData>>;
 }
 
-fn _value_impl_must_implement_value_common() {
-   fn check<T>()
-   where
-      T: ValueCommon,
-   {
-   }
-   check::<ValueImpl>();
+fn _check_implementations() {
+   fn check_value<T: ValueCommon>() {}
+   check_value::<ValueImpl>();
 }
 
 /// A dynamically-typed value.
@@ -170,6 +169,17 @@ impl Value {
       } else {
          Err(self.type_error("Number"))
       }
+   }
+
+   /// Same as [`ensure_number`][`Self::ensure_number`] but consumes the value. This is more
+   /// efficient than obtaining a temporary value and calling `ensure_number` on it because it does
+   /// not run the destructor, which does not need to do anything in case of numbers.
+   pub fn try_into_number(self) -> Result<f64, ErrorKind> {
+      let number = self.ensure_number()?;
+      // Prevent the destructor from being run. This avoids unnecessary branching that would
+      // otherwise occur around numeric operations.
+      std::mem::forget(self);
+      Ok(number)
    }
 
    /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.

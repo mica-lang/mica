@@ -386,9 +386,9 @@ impl Fiber {
 
          macro_rules! binary_operator {
             ($op:tt) => {{
-               let right = wrap_error!(self.pop().ensure_number());
-               let left = wrap_error!(self.stack_top().ensure_number());
-               *self.stack_top_mut() = Value::from(left $op right);
+               let right = wrap_error!(self.pop().try_into_number());
+               let left = wrap_error!(self.pop().try_into_number());
+               self.stack.push(Value::from(left $op right));
             }};
          }
 
@@ -615,15 +615,15 @@ impl Fiber {
                unsafe {
                   // Need to borrow here a second time. By this point we know that the unwrap
                   // will succeed so it's safe to use unwrap_unchecked.
-                  let st = self.stack_top_mut().ensure_struct().unwrap_unchecked();
+                  let st = self.stack_top_mut().get_struct_unchecked();
                   st.implement(type_dtable)
                      .map_err(|kind| self.error_outside_function_call(None, s.env_mut(), kind))?;
                }
             }
 
             Opcode::Negate => {
-               let number = wrap_error!(self.pop().ensure_number());
-               self.push(Value::from(-number))
+               let number = wrap_error!(self.pop().try_into_number());
+               self.push(Value::from(-number));
             }
             Opcode::Add => binary_operator!(+),
             Opcode::Subtract => binary_operator!(-),

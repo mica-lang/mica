@@ -259,7 +259,6 @@ impl Clone for ValueImpl {
 
 impl Drop for ValueImpl {
    fn drop(&mut self) {
-      // println!("dropping {:p}", self);
       if self.is_object() {
          unsafe {
             match self.object_tag() {

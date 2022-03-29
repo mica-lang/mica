@@ -17,5 +17,5 @@ pub trait StandardLibrary {
    fn define_number(&mut self, builder: TypeBuilder<f64>) -> TypeBuilder<f64>;
 
    /// Defines the `String` type using the given type builder.
-   fn define_string(&mut self, builder: TypeBuilder<Rc<str>>) -> TypeBuilder<Rc<str>>;
+   fn define_string(&mut self, builder: TypeBuilder<Rc<String>>) -> TypeBuilder<Rc<String>>;
 }

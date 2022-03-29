@@ -403,8 +403,9 @@ impl Fiber {
                self.push(Value::from(number));
             }
             Opcode::PushString => {
-               let string: Rc<str> = Rc::from(unsafe { self.chunk.read_string(&mut self.pc) });
-               self.push(Value::from(string));
+               let string = unsafe { self.chunk.read_string(&mut self.pc) }.to_owned();
+               let rc = Rc::new(string);
+               self.push(Value::from(rc));
             }
             Opcode::CreateClosure => {
                let closure = self.create_closure(s.env_mut(), operand);

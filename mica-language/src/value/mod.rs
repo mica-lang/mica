@@ -2,6 +2,8 @@
 //!
 //! This module abstracts platform specifics such as NaN boxing away into a common interface.
 
+#[cfg(mica_enable_nan_boxing)]
+mod nanbox;
 mod portable;
 
 use std::any::Any;
@@ -36,7 +38,7 @@ trait ValueCommon: Clone + PartialEq {
    fn new_nil() -> Self;
    fn new_boolean(b: bool) -> Self;
    fn new_number(n: f64) -> Self;
-   fn new_string(s: Rc<str>) -> Self;
+   fn new_string(s: Rc<String>) -> Self;
    fn new_function(f: Rc<Closure>) -> Self;
    fn new_struct(s: Rc<Struct>) -> Self;
    fn new_user_data(u: Rc<Box<dyn UserData>>) -> Self;
@@ -46,7 +48,7 @@ trait ValueCommon: Clone + PartialEq {
    unsafe fn get_boolean_unchecked(&self) -> bool;
    // This returns a reference such that mica-hl can use `f64` as a `self` parameter in methods.
    unsafe fn get_number_unchecked(&self) -> &f64;
-   unsafe fn get_string_unchecked(&self) -> &Rc<str>;
+   unsafe fn get_string_unchecked(&self) -> &Rc<String>;
    unsafe fn get_function_unchecked(&self) -> &Rc<Closure>;
    unsafe fn get_struct_unchecked(&self) -> &Rc<Struct>;
    unsafe fn get_user_data_unchecked(&self) -> &Rc<Box<dyn UserData>>;
@@ -61,7 +63,9 @@ fn _value_impl_must_implement_value_common() {
    check::<ValueImpl>();
 }
 
+/// A dynamically-typed value.
 #[derive(Clone, PartialEq)]
+#[repr(transparent)]
 pub struct Value(ValueImpl);
 
 impl Value {
@@ -113,7 +117,7 @@ impl Value {
    ///
    /// # Safety
    /// Calling this on a value that isn't known to be a string is undefined behavior.
-   pub unsafe fn get_string_unchecked(&self) -> &Rc<str> {
+   pub unsafe fn get_string_unchecked(&self) -> &Rc<String> {
       self.0.get_string_unchecked()
    }
 
@@ -169,7 +173,7 @@ impl Value {
    }
 
    /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.
-   pub fn ensure_string(&self) -> Result<&Rc<str>, ErrorKind> {
+   pub fn ensure_string(&self) -> Result<&Rc<String>, ErrorKind> {
       if self.0.kind() == ValueKind::String {
          Ok(unsafe { self.0.get_string_unchecked() })
       } else {
@@ -278,8 +282,8 @@ impl From<f64> for Value {
    }
 }
 
-impl From<Rc<str>> for Value {
-   fn from(s: Rc<str>) -> Self {
+impl From<Rc<String>> for Value {
+   fn from(s: Rc<String>) -> Self {
       Self(ValueImpl::new_string(s))
    }
 }
@@ -338,6 +342,7 @@ impl fmt::Display for Value {
 ///
 /// Note that both types and actual constructed structs use the same representation. The difference
 /// is that types do not contain associated fields (Mica does not have static fields.)
+#[repr(align(8))]
 pub struct Struct {
    /// The disptach table of the struct. This may only be set once, and setting it seals the
    /// struct.
@@ -469,6 +474,7 @@ impl Upvalue {
 
 /// The runtime representation of a function.
 #[derive(Debug)]
+#[repr(align(8))]
 pub struct Closure {
    pub function_id: Opr24,
    pub captures: Vec<Pin<Rc<Upvalue>>>,

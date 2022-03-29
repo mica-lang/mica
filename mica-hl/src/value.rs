@@ -60,26 +60,23 @@ to_value_numeric!(f64);
 
 impl IntoValue for char {
    fn into_value(self) -> Value {
-      let s: Rc<str> = Rc::from(self.to_string());
-      Value::from(s)
+      Value::from(Rc::new(self.to_string()))
    }
 }
 
 impl IntoValue for &str {
    fn into_value(self) -> Value {
-      let s: Rc<str> = Rc::from(self);
-      Value::from(s)
+      Value::from(Rc::new(self.to_owned()))
    }
 }
 
 impl IntoValue for String {
    fn into_value(self) -> Value {
-      let s: Rc<str> = Rc::from(self);
-      Value::from(s)
+      Value::from(Rc::new(self))
    }
 }
 
-impl IntoValue for Rc<str> {
+impl IntoValue for Rc<String> {
    fn into_value(self) -> Value {
       Value::from(self)
    }
@@ -163,7 +160,7 @@ try_from_value_numeric!(isize);
 try_from_value_numeric!(f32);
 try_from_value_numeric!(f64);
 
-impl TryFromValue for Rc<str> {
+impl TryFromValue for Rc<String> {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
       value.ensure_string().cloned().map_err(convert_type_mismatch)
    }
@@ -171,7 +168,7 @@ impl TryFromValue for Rc<str> {
 
 impl TryFromValue for String {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
-      value.ensure_string().map(|s| s.deref().to_owned()).map_err(convert_type_mismatch)
+      value.ensure_string().map(|s| s.deref().deref().to_owned()).map_err(convert_type_mismatch)
    }
 }
 
@@ -239,7 +236,7 @@ impl FromValueSelf for f64 {
    }
 }
 
-impl FromValueSelf for Rc<str> {
+impl FromValueSelf for Rc<String> {
    type Guard = ();
 
    unsafe fn from_value_self(v: &Value) -> Result<(&Self, Self::Guard), Error> {

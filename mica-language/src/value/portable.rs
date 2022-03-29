@@ -1,3 +1,6 @@
+//! Portable implementation of values. Uses a regular `enum`, which isn't very cache efficient,
+//! but is supported on most platforms.
+
 use std::hint::unreachable_unchecked;
 use std::mem;
 use std::rc::Rc;
@@ -16,7 +19,7 @@ pub enum ValueImpl {
    /// A double-precision floating point number.
    Number(f64),
    /// A string.
-   String(Rc<str>),
+   String(Rc<String>),
    /// A function.
    Function(Rc<Closure>),
    /// A struct.
@@ -43,7 +46,7 @@ impl ValueCommon for ValueImpl {
       Self::Number(n)
    }
 
-   fn new_string(s: Rc<str>) -> Self {
+   fn new_string(s: Rc<String>) -> Self {
       Self::String(s)
    }
 
@@ -87,7 +90,7 @@ impl ValueCommon for ValueImpl {
       }
    }
 
-   unsafe fn get_string_unchecked(&self) -> &Rc<str> {
+   unsafe fn get_string_unchecked(&self) -> &Rc<String> {
       if let Self::String(s) = self {
          s
       } else {

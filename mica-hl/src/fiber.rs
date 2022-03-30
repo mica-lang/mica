@@ -1,6 +1,5 @@
-use mica_language::bytecode::Environment;
 use mica_language::value::Value;
-use mica_language::vm::{self, Globals};
+use mica_language::vm;
 
 use crate::{Engine, Error, TryFromValue};
 
@@ -19,7 +18,7 @@ impl<'e> Fiber<'e> {
       if self.inner.halted() {
          Ok(None)
       } else {
-         let result = self.inner.interpret(&mut *self.engine)?;
+         let result = self.inner.interpret(&mut self.engine.env, &mut self.engine.globals)?;
          Ok(Some(T::try_from_value(&result)?))
       }
    }
@@ -37,23 +36,5 @@ impl<'e> Fiber<'e> {
          result = v;
       }
       T::try_from_value(&result)
-   }
-}
-
-impl vm::UserState for &mut Engine {
-   fn env(&self) -> &Environment {
-      &self.env
-   }
-
-   fn globals(&self) -> &Globals {
-      &self.globals
-   }
-
-   fn env_mut(&mut self) -> &mut Environment {
-      &mut self.env
-   }
-
-   fn globals_mut(&mut self) -> &mut Globals {
-      &mut self.globals
    }
 }

@@ -70,7 +70,7 @@ impl<'a> Arguments<'a> {
    where
       T: TryFromValue,
    {
-      let value = self.inner.get(n).cloned().unwrap_or(Value::Nil);
+      let value = self.inner.get(n).cloned().unwrap_or(Value::from(()));
       T::try_from_value(&value).map_err(|error| {
          if let Error::TypeMismatch { expected, got } = error {
             Error::ArgumentTypeMismatch {

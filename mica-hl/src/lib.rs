@@ -2,6 +2,8 @@
 //!
 //! This crate exposes a safe, high-level API akin to Rhai.
 
+#![allow(clippy::or_fun_call)]
+
 mod engine;
 mod error;
 mod fiber;
@@ -21,4 +23,4 @@ pub use userdata::*;
 pub use value::*;
 
 pub use mica_language as language;
-pub use mica_language::value::{Type, Value};
+pub use mica_language::value::{Value, ValueKind};

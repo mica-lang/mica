@@ -72,7 +72,7 @@ pub(super) fn define(builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
          Ok(((*x as u32).checked_shr(y as u32).ok_or(ShiftOverflow)?) as f64)
       })
       // Strings
-      .add_static("parse", |s: Rc<str>| -> Result<f64, _> { s.parse() })
+      .add_static("parse", |s: Rc<String>| -> Result<f64, _> { s.parse() })
       .add_function("to_string", |x: &f64| x.to_string())
       .add_function("to_debug", |x: &f64| x.to_string())
 }

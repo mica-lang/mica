@@ -208,8 +208,8 @@ impl PartialEq for ValueImpl {
       {
          unsafe {
             if self.object_tag() == Self::OBJECT_STRING {
-               let a = self.as_gc::<String>();
-               let b = other.as_gc::<String>();
+               let a = self.as_gc::<String>().get();
+               let b = other.as_gc::<String>().get();
                return a == b;
             }
          }

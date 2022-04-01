@@ -4,6 +4,8 @@
 use std::hint::unreachable_unchecked;
 use std::rc::Rc;
 
+use crate::gc::{GcMem, GcRaw};
+
 use super::{Closure, Struct, UserData, ValueCommon, ValueKind};
 
 fn _size_and_alignment_checks() {
@@ -17,6 +19,7 @@ fn _size_and_alignment_checks() {
 }
 
 /// The NaN-boxed implementation of values.
+#[derive(Clone, Copy)]
 pub struct ValueImpl(u64);
 
 impl ValueImpl {
@@ -79,14 +82,11 @@ impl ValueImpl {
       Self::nan_bits(Self::SIGN_ENUM, payload)
    }
 
-   /// Creates a new object NaN with a type tag from an `Rc`.
-   unsafe fn new_object_nan<T>(tag: u64, rc: Rc<T>) -> Self {
-      // This is a terrible thing we need to do to be able to get a valid reference to an Rc out
-      // of the value.
-      let outer = Rc::new(rc);
+   /// Creates a new object NaN with a type tag from a `GcRaw`.
+   unsafe fn new_object_nan<T>(tag: u64, gc: GcRaw<T>) -> Self {
       // This cast is fine because `_size_and_alignment_checks` ensures that the size of
       // a usize == size of u64 (8 bytes).
-      let pointer = Rc::into_raw(outer) as usize as u64;
+      let pointer = gc.get_raw() as usize as u64;
       Self::new_nan(Self::SIGN_OBJECT, pointer | tag)
    }
 
@@ -136,9 +136,9 @@ impl ValueImpl {
       std::mem::transmute(&self.0)
    }
 
-   unsafe fn as_rc<T>(&self) -> &Rc<T> {
-      let pointer: *const Rc<T> = self.object_pointer();
-      &*pointer
+   unsafe fn as_gc<T>(&self) -> GcRaw<T> {
+      let pointer: *const GcMem<T> = self.object_pointer();
+      GcRaw::from_raw(pointer)
    }
 }
 
@@ -158,19 +158,19 @@ impl ValueCommon for ValueImpl {
       Self::from_float(n)
    }
 
-   fn new_string(s: Rc<String>) -> Self {
+   fn new_string(s: GcRaw<String>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_STRING, s) }
    }
 
-   fn new_function(f: Rc<Closure>) -> Self {
+   fn new_function(f: GcRaw<Closure>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_FUNCTION, f) }
    }
 
-   fn new_struct(s: Rc<Struct>) -> Self {
+   fn new_struct(s: GcRaw<Struct>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_STRUCT, s) }
    }
 
-   fn new_user_data(u: Rc<Box<dyn UserData>>) -> Self {
+   fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_USER_DATA, u) }
    }
 
@@ -200,20 +200,20 @@ impl ValueCommon for ValueImpl {
       self.as_float()
    }
 
-   unsafe fn get_string_unchecked(&self) -> &Rc<String> {
-      self.as_rc()
+   unsafe fn get_raw_string_unchecked(&self) -> GcRaw<String> {
+      self.as_gc()
    }
 
-   unsafe fn get_function_unchecked(&self) -> &Rc<Closure> {
-      self.as_rc()
+   unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure> {
+      self.as_gc()
    }
 
-   unsafe fn get_struct_unchecked(&self) -> &Rc<Struct> {
-      self.as_rc()
+   unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
+      self.as_gc()
    }
 
-   unsafe fn get_user_data_unchecked(&self) -> &Rc<Box<dyn UserData>> {
-      self.as_rc()
+   unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>> {
+      self.as_gc()
    }
 }
 
@@ -228,48 +228,12 @@ impl PartialEq for ValueImpl {
       {
          unsafe {
             if self.object_tag() == Self::OBJECT_STRING {
-               let a = self.as_rc::<String>();
-               let b = other.as_rc::<String>();
+               let a = self.as_gc::<String>();
+               let b = other.as_gc::<String>();
                return a == b;
             }
          }
       }
       self.0 == other.0
-   }
-}
-
-impl Clone for ValueImpl {
-   fn clone(&self) -> Self {
-      if self.is_object() {
-         unsafe {
-            match self.object_tag() {
-               // RCs inside need special treatment as we need to increment their reference count.
-               // Also see comment inside of `increment_strong_count`.
-               Self::OBJECT_STRING => self.increment_strong_count::<String>(),
-               Self::OBJECT_FUNCTION => self.increment_strong_count::<Closure>(),
-               Self::OBJECT_STRUCT => self.increment_strong_count::<Struct>(),
-               Self::OBJECT_USER_DATA => self.increment_strong_count::<Box<dyn UserData>>(),
-               _ => unreachable_unchecked(),
-            }
-         }
-      }
-      Self(self.0)
-   }
-}
-
-impl Drop for ValueImpl {
-   fn drop(&mut self) {
-      if self.is_object() {
-         unsafe {
-            match self.object_tag() {
-               // Remember to drop RCs. Also see comment inside of `drop_object`.
-               Self::OBJECT_STRING => self.drop_object::<String>(),
-               Self::OBJECT_FUNCTION => self.drop_object::<Closure>(),
-               Self::OBJECT_STRUCT => self.drop_object::<Struct>(),
-               Self::OBJECT_USER_DATA => self.drop_object::<Box<dyn UserData>>(),
-               _ => unreachable_unchecked(),
-            }
-         }
-      }
    }
 }

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::TypeBuilder;
 
 /// Definitions of basic types provided by a standard library.
@@ -17,5 +15,5 @@ pub trait StandardLibrary {
    fn define_number(&mut self, builder: TypeBuilder<f64>) -> TypeBuilder<f64>;
 
    /// Defines the `String` type using the given type builder.
-   fn define_string(&mut self, builder: TypeBuilder<Rc<String>>) -> TypeBuilder<Rc<String>>;
+   fn define_string(&mut self, builder: TypeBuilder<String>) -> TypeBuilder<String>;
 }

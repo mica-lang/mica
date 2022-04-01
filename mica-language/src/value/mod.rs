@@ -18,6 +18,7 @@ use std::{fmt, mem, ptr};
 
 use crate::bytecode::{DispatchTable, Opr24};
 use crate::common::ErrorKind;
+use crate::gc::GcRaw;
 
 #[cfg(mica_enable_nan_boxing)]
 use nanbox::ValueImpl;
@@ -41,20 +42,20 @@ trait ValueCommon: Clone + PartialEq {
    fn new_nil() -> Self;
    fn new_boolean(b: bool) -> Self;
    fn new_number(n: f64) -> Self;
-   fn new_string(s: Rc<String>) -> Self;
-   fn new_function(f: Rc<Closure>) -> Self;
-   fn new_struct(s: Rc<Struct>) -> Self;
-   fn new_user_data(u: Rc<Box<dyn UserData>>) -> Self;
+   fn new_string(s: GcRaw<String>) -> Self;
+   fn new_function(f: GcRaw<Closure>) -> Self;
+   fn new_struct(s: GcRaw<Struct>) -> Self;
+   fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self;
 
    fn kind(&self) -> ValueKind;
 
    unsafe fn get_boolean_unchecked(&self) -> bool;
    // This returns a reference such that mica-hl can use `f64` as a `self` parameter in methods.
    unsafe fn get_number_unchecked(&self) -> &f64;
-   unsafe fn get_string_unchecked(&self) -> &Rc<String>;
-   unsafe fn get_function_unchecked(&self) -> &Rc<Closure>;
-   unsafe fn get_struct_unchecked(&self) -> &Rc<Struct>;
-   unsafe fn get_user_data_unchecked(&self) -> &Rc<Box<dyn UserData>>;
+   unsafe fn get_raw_string_unchecked(&self) -> GcRaw<String>;
+   unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure>;
+   unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct>;
+   unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>>;
 }
 
 fn _check_implementations() {
@@ -62,12 +63,12 @@ fn _check_implementations() {
    check_value::<ValueImpl>();
 }
 
-/// A dynamically-typed value.
-#[derive(Clone, PartialEq)]
+/// A dynamically-typed, raw value. Does not provide **any** safety guarantees.
+#[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
-pub struct Value(ValueImpl);
+pub struct RawValue(ValueImpl);
 
-impl Value {
+impl RawValue {
    /// Returns the kind of value stored.
    pub fn kind(&self) -> ValueKind {
       self.0.kind()
@@ -80,12 +81,17 @@ impl Value {
          ValueKind::Number => "Number".into(),
          ValueKind::String => "String".into(),
          ValueKind::Function => "Function".into(),
-         ValueKind::Struct => {
-            unsafe { self.0.get_struct_unchecked() }.dtable().type_name.deref().to_owned().into()
-         }
-         ValueKind::UserData => {
-            unsafe { self.0.get_user_data_unchecked() }.dtable().type_name.deref().to_owned().into()
-         }
+         ValueKind::Struct => unsafe { self.0.get_raw_struct_unchecked().get().dtable() }
+            .type_name
+            .deref()
+            .to_owned()
+            .into(),
+         ValueKind::UserData => unsafe { self.0.get_raw_user_data_unchecked().get() }
+            .dtable()
+            .type_name
+            .deref()
+            .to_owned()
+            .into(),
       }
    }
 
@@ -116,32 +122,32 @@ impl Value {
    ///
    /// # Safety
    /// Calling this on a value that isn't known to be a string is undefined behavior.
-   pub unsafe fn get_string_unchecked(&self) -> &Rc<String> {
-      self.0.get_string_unchecked()
+   pub unsafe fn get_raw_string_unchecked(&self) -> GcRaw<String> {
+      self.0.get_raw_string_unchecked()
    }
 
    /// Returns a function value without performing any checks.
    ///
    /// # Safety
    /// Calling this on a value that isn't known to be a function is undefined behavior.
-   pub unsafe fn get_function_unchecked(&self) -> &Rc<Closure> {
-      self.0.get_function_unchecked()
+   pub unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure> {
+      self.0.get_raw_function_unchecked()
    }
 
    /// Returns a struct value without performing any checks.
    ///
    /// # Safety
    /// Calling this on a value that isn't known to be a struct is undefined behavior.
-   pub unsafe fn get_struct_unchecked(&self) -> &Rc<Struct> {
-      self.0.get_struct_unchecked()
+   pub unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
+      self.0.get_raw_struct_unchecked()
    }
 
    /// Returns a user data value without performing any checks.
    ///
    /// # Safety
    /// Calling this on a value that isn't known to be a user data is undefined behavior.
-   pub unsafe fn get_user_data_unchecked(&self) -> &Rc<Box<dyn UserData>> {
-      self.0.get_user_data_unchecked()
+   pub unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>> {
+      self.0.get_raw_user_data_unchecked()
    }
 
    /// Ensures the value is a `Nil`, returning a type mismatch error if that's not the case.
@@ -171,39 +177,28 @@ impl Value {
       }
    }
 
-   /// Same as [`ensure_number`][`Self::ensure_number`] but consumes the value. This is more
-   /// efficient than obtaining a temporary value and calling `ensure_number` on it because it does
-   /// not run the destructor, which does not need to do anything in case of numbers.
-   pub fn try_into_number(self) -> Result<f64, ErrorKind> {
-      let number = self.ensure_number()?;
-      // Prevent the destructor from being run. This avoids unnecessary branching that would
-      // otherwise occur around numeric operations.
-      std::mem::forget(self);
-      Ok(number)
-   }
-
    /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.
-   pub fn ensure_string(&self) -> Result<&Rc<String>, ErrorKind> {
+   pub fn ensure_raw_string(&self) -> Result<GcRaw<String>, ErrorKind> {
       if self.0.kind() == ValueKind::String {
-         Ok(unsafe { self.0.get_string_unchecked() })
+         Ok(unsafe { self.0.get_raw_string_unchecked() })
       } else {
          Err(self.type_error("String"))
       }
    }
 
    /// Ensures the value is a `Function`, returning a type mismatch error if that's not the case.
-   pub fn function(&self) -> Result<&Rc<Closure>, ErrorKind> {
+   pub fn ensure_raw_function(&self) -> Result<GcRaw<Closure>, ErrorKind> {
       if self.0.kind() == ValueKind::Function {
-         Ok(unsafe { self.0.get_function_unchecked() })
+         Ok(unsafe { self.0.get_raw_function_unchecked() })
       } else {
          Err(self.type_error("Function"))
       }
    }
 
    /// Ensures the value is a `Struct`, returning a type mismatch error if that's not the case.
-   pub fn ensure_struct(&self) -> Result<&Rc<Struct>, ErrorKind> {
+   pub fn ensure_raw_struct(&self) -> Result<GcRaw<Struct>, ErrorKind> {
       if self.0.kind() == ValueKind::Struct {
-         Ok(unsafe { self.0.get_struct_unchecked() })
+         Ok(unsafe { self.0.get_raw_struct_unchecked() })
       } else {
          Err(self.type_error("(any struct)"))
       }
@@ -211,12 +206,12 @@ impl Value {
 
    /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error
    /// that's not the case.
-   pub fn get_user_data<T>(&self) -> Option<&Rc<Box<dyn UserData>>>
+   pub fn get_raw_user_data<T>(&self) -> Option<GcRaw<Box<dyn UserData>>>
    where
       T: UserData,
    {
       if self.0.kind() == ValueKind::UserData {
-         Some(unsafe { self.0.get_user_data_unchecked() })
+         Some(unsafe { self.0.get_raw_user_data_unchecked() })
       } else {
          None
       }
@@ -255,11 +250,11 @@ impl Value {
                let b = unsafe { other.0.get_number_unchecked() };
                Ok(a.partial_cmp(b))
             }
-            ValueKind::String => {
-               let a = unsafe { self.0.get_string_unchecked() };
-               let b = unsafe { other.0.get_string_unchecked() };
-               Ok(Some(a.cmp(b)))
-            }
+            ValueKind::String => unsafe {
+               let a = self.0.get_raw_string_unchecked();
+               let b = other.0.get_raw_string_unchecked();
+               Ok(Some(a.get().cmp(b.get())))
+            },
             ValueKind::Function => Ok(None),
             ValueKind::Struct => Ok(None),
             ValueKind::UserData => Ok(None),
@@ -268,55 +263,55 @@ impl Value {
    }
 }
 
-impl Default for Value {
+impl Default for RawValue {
    fn default() -> Self {
       Self(ValueImpl::new_nil())
    }
 }
 
-impl From<()> for Value {
+impl From<()> for RawValue {
    fn from(_: ()) -> Self {
       Self(ValueImpl::new_nil())
    }
 }
 
-impl From<bool> for Value {
+impl From<bool> for RawValue {
    fn from(b: bool) -> Self {
       Self(ValueImpl::new_boolean(b))
    }
 }
 
-impl From<f64> for Value {
+impl From<f64> for RawValue {
    fn from(x: f64) -> Self {
       Self(ValueImpl::new_number(x))
    }
 }
 
-impl From<Rc<String>> for Value {
-   fn from(s: Rc<String>) -> Self {
+impl From<GcRaw<String>> for RawValue {
+   fn from(s: GcRaw<String>) -> Self {
       Self(ValueImpl::new_string(s))
    }
 }
 
-impl From<Rc<Closure>> for Value {
-   fn from(f: Rc<Closure>) -> Self {
+impl From<GcRaw<Closure>> for RawValue {
+   fn from(f: GcRaw<Closure>) -> Self {
       Self(ValueImpl::new_function(f))
    }
 }
 
-impl From<Rc<Struct>> for Value {
-   fn from(s: Rc<Struct>) -> Self {
+impl From<GcRaw<Struct>> for RawValue {
+   fn from(s: GcRaw<Struct>) -> Self {
       Self(ValueImpl::new_struct(s))
    }
 }
 
-impl From<Rc<Box<dyn UserData>>> for Value {
-   fn from(u: Rc<Box<dyn UserData>>) -> Self {
+impl From<GcRaw<Box<dyn UserData>>> for RawValue {
+   fn from(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self(ValueImpl::new_user_data(u))
    }
 }
 
-impl fmt::Debug for Value {
+impl fmt::Debug for RawValue {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       fn dtable(f: &mut fmt::Formatter, dtable: &DispatchTable) -> fmt::Result {
          let type_name = &dtable.pretty_name;
@@ -328,20 +323,20 @@ impl fmt::Debug for Value {
             ValueKind::Nil => f.write_str("nil"),
             ValueKind::Boolean => write!(f, "{}", self.0.get_boolean_unchecked()),
             ValueKind::Number => write!(f, "{}", self.0.get_number_unchecked()),
-            ValueKind::String => write!(f, "{:?}", self.0.get_string_unchecked().deref()),
+            ValueKind::String => write!(f, "{:?}", self.0.get_raw_string_unchecked().get().deref()),
             ValueKind::Function => write!(f, "<func>"),
-            ValueKind::Struct => dtable(f, self.0.get_struct_unchecked().dtable()),
-            ValueKind::UserData => dtable(f, self.0.get_user_data_unchecked().dtable()),
+            ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
+            ValueKind::UserData => dtable(f, self.0.get_raw_user_data_unchecked().get().dtable()),
          }
       }
    }
 }
 
-impl fmt::Display for Value {
+impl fmt::Display for RawValue {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       unsafe {
          match self.0.kind() {
-            ValueKind::String => write!(f, "{}", self.0.get_string_unchecked()),
+            ValueKind::String => write!(f, "{}", self.0.get_raw_string_unchecked().get()),
             _ => fmt::Debug::fmt(&self, f),
          }
       }
@@ -356,14 +351,14 @@ impl fmt::Display for Value {
 pub struct Struct {
    /// The disptach table of the struct. This may only be set once, and setting it seals the
    /// struct.
-   pub(crate) dtable: UnsafeCell<Rc<DispatchTable>>,
+   pub(crate) dtable: UnsafeCell<GcRaw<DispatchTable>>,
    sealed: Cell<bool>,
-   fields: UnsafeCell<Vec<Value>>,
+   fields: UnsafeCell<Vec<RawValue>>,
 }
 
 impl Struct {
    /// Creates a new `Struct` representing a type.
-   pub fn new_type(dtable: Rc<DispatchTable>) -> Self {
+   pub fn new_type(dtable: GcRaw<DispatchTable>) -> Self {
       Self {
          dtable: UnsafeCell::new(dtable),
          sealed: Cell::new(false),
@@ -374,19 +369,27 @@ impl Struct {
    /// Creates a new instance of this struct type.
    pub(crate) unsafe fn new_instance(&self, field_count: usize) -> Self {
       Self {
-         dtable: UnsafeCell::new(self.dtable().instance.clone().unwrap_unchecked()),
+         dtable: UnsafeCell::new(self.dtable().instance.unwrap_unchecked()),
          sealed: Cell::new(true),
-         fields: UnsafeCell::new(std::iter::repeat(Value::from(())).take(field_count).collect()),
+         fields: UnsafeCell::new(std::iter::repeat(RawValue::from(())).take(field_count).collect()),
       }
    }
 
    /// Returns a reference to the dispatch table of the struct.
-   pub fn dtable(&self) -> &DispatchTable {
-      unsafe { self.dtable.get().as_ref().unwrap_unchecked() }
+   ///
+   /// # Safety
+   ///
+   /// Note that the reference's lifetime does not match the struct's. This is because the reference
+   /// actually comes from the GC, but `Struct` does not have a lifetime parameter that would
+   /// signify that.
+   ///
+   /// Because the lifetime of the reference is not tracked, this function is unsafe.
+   pub unsafe fn dtable<'a>(&self) -> &'a DispatchTable {
+      self.dtable.get().as_ref().unwrap_unchecked().get()
    }
 
    /// Implements the struct with the given dispatch table.
-   pub(crate) fn implement(&self, dtable: Rc<DispatchTable>) -> Result<(), ErrorKind> {
+   pub(crate) fn implement(&self, dtable: GcRaw<DispatchTable>) -> Result<(), ErrorKind> {
       if self.sealed.get() {
          return Err(ErrorKind::StructAlreadyImplemented);
       }
@@ -399,16 +402,20 @@ impl Struct {
    ///
    /// # Safety
    /// This does not perform any borrow checks or bounds checks.
-   pub(crate) unsafe fn get_field(&self, index: usize) -> &Value {
-      (&*self.fields.get()).get_unchecked(index)
+   pub(crate) unsafe fn get_field(&self, index: usize) -> RawValue {
+      *(&*self.fields.get()).get_unchecked(index)
    }
 
    /// Sets the value of a field.
    ///
    /// # Safety
    /// This does not perform any borrow checks or bounds checks.
-   pub(crate) unsafe fn set_field(&self, index: usize, value: Value) {
+   pub(crate) unsafe fn set_field(&self, index: usize, value: RawValue) {
       *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
+   }
+
+   pub(crate) unsafe fn fields(&self) -> impl Iterator<Item = RawValue> + '_ {
+      (&*self.fields.get()).iter().copied()
    }
 }
 
@@ -423,9 +430,9 @@ pub trait UserData: Any {
 /// An upvalue captured by a closure.
 pub struct Upvalue {
    /// A writable pointer to the variable captured by this upvalue.
-   pub(crate) ptr: UnsafeCell<ptr::NonNull<Value>>,
+   pub(crate) ptr: UnsafeCell<ptr::NonNull<RawValue>>,
    /// Storage for a closed upvalue.
-   closed: UnsafeCell<Value>,
+   closed: UnsafeCell<RawValue>,
 
    _pinned: PhantomPinned,
 }
@@ -441,10 +448,10 @@ impl fmt::Debug for Upvalue {
 
 impl Upvalue {
    /// Creates a new upvalue pointing to a live variable.
-   pub(crate) fn new(var: ptr::NonNull<Value>) -> Pin<Rc<Upvalue>> {
+   pub(crate) fn new(var: ptr::NonNull<RawValue>) -> Pin<Rc<Upvalue>> {
       Rc::pin(Upvalue {
          ptr: UnsafeCell::new(var),
-         closed: UnsafeCell::new(Value::from(())),
+         closed: UnsafeCell::new(RawValue::from(())),
          _pinned: PhantomPinned,
       })
    }
@@ -468,8 +475,8 @@ impl Upvalue {
    /// # Safety
    /// The caller must ensure there are no mutable references to the source variable at the time
    /// of calling this.
-   pub(crate) unsafe fn get(&self) -> &Value {
-      (*self.ptr.get()).as_ref()
+   pub(crate) unsafe fn get(&self) -> RawValue {
+      *(*self.ptr.get()).as_ptr()
    }
 
    /// Writes to the variable pointed to by this upvalue.
@@ -477,7 +484,7 @@ impl Upvalue {
    /// # Safety
    /// The caller must ensure there are no mutable references to the source variable at the time
    /// of calling this.
-   pub(crate) unsafe fn set(&self, value: Value) {
+   pub(crate) unsafe fn set(&self, value: RawValue) {
       *(*self.ptr.get()).as_ptr() = value;
    }
 }

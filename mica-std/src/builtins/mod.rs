@@ -37,7 +37,7 @@ impl StandardLibrary for Lib {
       number::define(builder)
    }
 
-   fn define_string(&mut self, builder: TypeBuilder<Rc<String>>) -> TypeBuilder<Rc<String>> {
+   fn define_string(&mut self, builder: TypeBuilder<String>) -> TypeBuilder<String> {
       string::define(builder)
    }
 }

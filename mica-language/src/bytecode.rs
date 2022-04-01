@@ -6,7 +6,8 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use crate::common::{ErrorKind, Location};
-use crate::value::{Closure, Value};
+use crate::gc::{GcRaw, Memory};
+use crate::value::{Closure, RawValue};
 
 /// A 24-bit integer encoding an instruction operand.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -506,7 +507,7 @@ pub enum CaptureKind {
 }
 
 /// The ABI of a raw foreign function.
-pub type ForeignFunction = Box<dyn FnMut(&[Value]) -> Result<Value, ErrorKind>>;
+pub type ForeignFunction = Box<dyn FnMut(&mut Memory, &[RawValue]) -> Result<RawValue, ErrorKind>>;
 
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
@@ -680,9 +681,9 @@ pub struct DispatchTable {
    pub pretty_name: Rc<str>,
    pub type_name: Rc<str>,
    /// The "child" dispatch table that holds instance methods.
-   pub instance: Option<Rc<DispatchTable>>,
+   pub instance: Option<GcRaw<DispatchTable>>,
    /// The functions in this dispatch table.
-   methods: Vec<Option<Rc<Closure>>>,
+   methods: Vec<Option<GcRaw<Closure>>>,
 }
 
 impl DispatchTable {
@@ -709,12 +710,12 @@ impl DispatchTable {
    }
 
    /// Returns a reference to the method at the given index.
-   pub fn get_method(&self, index: u16) -> Option<&Rc<Closure>> {
-      self.methods.get(index as usize).into_iter().flatten().next()
+   pub fn get_method(&self, index: u16) -> Option<GcRaw<Closure>> {
+      self.methods.get(index as usize).into_iter().flatten().copied().next()
    }
 
    /// Adds a method into the dispatch table.
-   pub fn set_method(&mut self, index: u16, closure: Rc<Closure>) {
+   pub fn set_method(&mut self, index: u16, closure: GcRaw<Closure>) {
       let index = index as usize;
       if index >= self.methods.len() {
          self.methods.resize(index + 1, None);
@@ -727,22 +728,22 @@ impl DispatchTable {
 /// library.
 #[derive(Debug)]
 pub struct BuiltinDispatchTables {
-   pub nil: Rc<DispatchTable>,
-   pub boolean: Rc<DispatchTable>,
-   pub number: Rc<DispatchTable>,
-   pub string: Rc<DispatchTable>,
-   pub function: Rc<DispatchTable>,
+   pub nil: GcRaw<DispatchTable>,
+   pub boolean: GcRaw<DispatchTable>,
+   pub number: GcRaw<DispatchTable>,
+   pub string: GcRaw<DispatchTable>,
+   pub function: GcRaw<DispatchTable>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
-impl Default for BuiltinDispatchTables {
-   fn default() -> Self {
+impl BuiltinDispatchTables {
+   pub fn empty(gc: &mut Memory) -> Self {
       Self {
-         nil: Rc::new(DispatchTable::new("Nil", "Nil")),
-         boolean: Rc::new(DispatchTable::new("Boolean", "Boolean")),
-         number: Rc::new(DispatchTable::new("Number", "Boolean")),
-         string: Rc::new(DispatchTable::new("String", "String")),
-         function: Rc::new(DispatchTable::new("Function", "Function")),
+         nil: gc.allocate(DispatchTable::new("Nil", "Nil")),
+         boolean: gc.allocate(DispatchTable::new("Boolean", "Boolean")),
+         number: gc.allocate(DispatchTable::new("Number", "Boolean")),
+         string: gc.allocate(DispatchTable::new("String", "String")),
+         function: gc.allocate(DispatchTable::new("Function", "Function")),
       }
    }
 }

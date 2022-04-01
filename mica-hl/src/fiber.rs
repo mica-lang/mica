@@ -1,7 +1,7 @@
-use mica_language::value::Value;
+use mica_language::value::RawValue;
 use mica_language::vm;
 
-use crate::{Engine, Error, TryFromValue};
+use crate::{Engine, Error, TryFromValue, Value};
 
 /// A fiber represents an independent, pausable thread of code execution.
 pub struct Fiber<'e> {
@@ -18,8 +18,11 @@ impl<'e> Fiber<'e> {
       if self.inner.halted() {
          Ok(None)
       } else {
-         let result = self.inner.interpret(&mut self.engine.env, &mut self.engine.globals)?;
-         Ok(Some(T::try_from_value(&result)?))
+         let Engine {
+            env, globals, gc, ..
+         } = &mut self.engine;
+         let result = self.inner.interpret(env, globals, gc)?;
+         Ok(Some(T::try_from_value(&Value::from_raw(result))?))
       }
    }
 

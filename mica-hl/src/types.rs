@@ -5,10 +5,13 @@ use std::rc::Rc;
 use mica_language::bytecode::{
    DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
 };
-use mica_language::value::{self, Closure, Value};
+use mica_language::gc::{Gc, GcRaw, Memory};
+use mica_language::value::{self, Closure, RawValue};
 
 use crate::userdata::Type;
-use crate::{ffvariants, Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction};
+use crate::{
+   ffvariants, Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction, Value,
+};
 
 type Constructor<T> = Box<dyn FnOnce(Rc<dyn ObjectConstructor<T>>) -> RawForeignFunction>;
 
@@ -22,6 +25,7 @@ pub(crate) struct DispatchTableDescriptor {
 impl DispatchTableDescriptor {
    fn add_function_to_dtable(
       env: &mut Environment,
+      gc: &mut Memory,
       dtable: &mut DispatchTable,
       signature: FunctionSignature,
       f: RawForeignFunction,
@@ -36,7 +40,7 @@ impl DispatchTableDescriptor {
       let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
       dtable.set_method(
          index,
-         Rc::new(Closure {
+         gc.allocate(Closure {
             function_id,
             captures: Vec::new(),
          }),
@@ -49,9 +53,10 @@ impl DispatchTableDescriptor {
       self,
       mut dtable: DispatchTable,
       env: &mut Environment,
+      gc: &mut Memory,
    ) -> Result<DispatchTable, Error> {
       for (signature, f) in self.methods {
-         Self::add_function_to_dtable(env, &mut dtable, signature, f)?;
+         Self::add_function_to_dtable(env, gc, &mut dtable, signature, f)?;
       }
       Ok(dtable)
    }
@@ -222,18 +227,22 @@ where
    }
 
    /// Builds the struct builder into its type dtable and instance dtable, respectively.
-   pub(crate) fn build(self, env: &mut Environment) -> Result<BuiltType<T>, Error>
+   pub(crate) fn build(self, env: &mut Environment, gc: &mut Memory) -> Result<BuiltType<T>, Error>
    where
       T: Any + Sized,
    {
       // Build the dtables.
-      let mut type_dtable = self
-         .type_dtable
-         .build_dtable(DispatchTable::new_for_type(Rc::clone(&self.type_name)), env)?;
-      let instance_dtable = Rc::new(self.instance_dtable.build_dtable(
+      let mut type_dtable = self.type_dtable.build_dtable(
+         DispatchTable::new_for_type(Rc::clone(&self.type_name)),
+         env,
+         gc,
+      )?;
+      let instance_dtable = self.instance_dtable.build_dtable(
          DispatchTable::new_for_instance(Rc::clone(&self.type_name)),
          env,
-      )?);
+         gc,
+      )?;
+      let instance_dtable = Gc::new(instance_dtable);
 
       // The type dtable also contains constructors, so build those while we're at it.
       // We implement a helper here that fulfills the ObjectConstructor trait.
@@ -242,29 +251,29 @@ where
       where
          T: Sized,
       {
-         instance_dtable: Rc<DispatchTable>,
+         instance_dtable: Gc<DispatchTable>,
          _data: PhantomData<T>,
       }
 
       impl<T> ObjectConstructor<T> for Instancer<T> {
          fn construct(&self, instance: T) -> crate::Object<T> {
-            Object::new(Rc::clone(&self.instance_dtable), instance)
+            Object::new(Gc::as_raw(&self.instance_dtable), instance)
          }
       }
 
       let instancer: Rc<dyn ObjectConstructor<T>> = Rc::new(Instancer {
-         instance_dtable: Rc::clone(&instance_dtable),
+         instance_dtable: Gc::clone(&instance_dtable),
          _data: PhantomData,
       });
       for (signature, constructor) in self.constructors {
          let f = constructor(Rc::clone(&instancer));
-         DispatchTableDescriptor::add_function_to_dtable(env, &mut type_dtable, signature, f)?;
+         DispatchTableDescriptor::add_function_to_dtable(env, gc, &mut type_dtable, signature, f)?;
       }
 
       // Build the instance dtable.
-      type_dtable.instance = Some(Rc::clone(&instance_dtable));
+      type_dtable.instance = Some(Gc::as_raw(&instance_dtable));
 
-      let type_dtable = Rc::new(type_dtable);
+      let type_dtable = Gc::new(type_dtable);
       Ok(BuiltType {
          type_dtable,
          instance_dtable,
@@ -280,19 +289,19 @@ where
    T: ?Sized,
 {
    pub(crate) type_name: Rc<str>,
-   pub(crate) type_dtable: Rc<DispatchTable>,
-   pub(crate) instance_dtable: Rc<DispatchTable>,
+   pub(crate) type_dtable: Gc<DispatchTable>,
+   pub(crate) instance_dtable: Gc<DispatchTable>,
    _data: PhantomData<T>,
 }
 
 impl<T> BuiltType<T> {
    /// Makes a `Type<T>` user data value from the built type.
-   pub(crate) fn make_type(&self) -> Value
+   pub(crate) fn make_type(&self, gc: &mut Memory) -> Value
    where
       T: Any,
    {
-      let user_data: Rc<Box<dyn value::UserData>> =
-         Rc::new(Box::new(Type::<T>::new(Rc::clone(&self.type_dtable))));
-      Value::from(user_data)
+      let user_data: Box<dyn value::UserData> =
+         Box::new(Type::<T>::new(Gc::clone(&self.type_dtable)));
+      Value::UserData(Gc::new(user_data))
    }
 }

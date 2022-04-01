@@ -3,12 +3,13 @@
 
 use std::hint::unreachable_unchecked;
 use std::mem;
-use std::rc::Rc;
+
+use crate::gc::GcRaw;
 
 use super::{Closure, Struct, UserData, ValueCommon, ValueKind};
 
 /// A portable implementation of values.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum ValueImpl {
    /// Nil denotes the lack of a value.
    Nil,
@@ -19,15 +20,13 @@ pub enum ValueImpl {
    /// A double-precision floating point number.
    Number(f64),
    /// A string.
-   String(Rc<String>),
+   String(GcRaw<String>),
    /// A function.
-   Function(Rc<Closure>),
+   Function(GcRaw<Closure>),
    /// A struct.
-   Struct(Rc<Struct>),
+   Struct(GcRaw<Struct>),
    /// Dynamically-typed user data.
-   // Box<dyn Trait> is actually a fat pointer, storing both the data and a dispatch table.
-   // Hence why we need to wrap it in an additional Rc.
-   UserData(Rc<Box<dyn UserData>>),
+   UserData(GcRaw<Box<dyn UserData>>),
 }
 
 impl ValueCommon for ValueImpl {
@@ -46,19 +45,19 @@ impl ValueCommon for ValueImpl {
       Self::Number(n)
    }
 
-   fn new_string(s: Rc<String>) -> Self {
+   fn new_string(s: GcRaw<String>) -> Self {
       Self::String(s)
    }
 
-   fn new_function(f: Rc<Closure>) -> Self {
+   fn new_function(f: GcRaw<Closure>) -> Self {
       Self::Function(f)
    }
 
-   fn new_struct(s: Rc<Struct>) -> Self {
+   fn new_struct(s: GcRaw<Struct>) -> Self {
       Self::Struct(s)
    }
 
-   fn new_user_data(u: Rc<Box<dyn UserData>>) -> Self {
+   fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self::UserData(u)
    }
 
@@ -90,33 +89,33 @@ impl ValueCommon for ValueImpl {
       }
    }
 
-   unsafe fn get_string_unchecked(&self) -> &Rc<String> {
+   unsafe fn get_raw_string_unchecked(&self) -> GcRaw<String> {
       if let Self::String(s) = self {
-         s
+         *s
       } else {
          unreachable_unchecked()
       }
    }
 
-   unsafe fn get_function_unchecked(&self) -> &Rc<Closure> {
+   unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure> {
       if let Self::Function(f) = self {
-         f
+         *f
       } else {
          unreachable_unchecked()
       }
    }
 
-   unsafe fn get_struct_unchecked(&self) -> &Rc<Struct> {
+   unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
       if let Self::Struct(s) = self {
-         s
+         *s
       } else {
          unreachable_unchecked()
       }
    }
 
-   unsafe fn get_user_data_unchecked(&self) -> &Rc<Box<dyn UserData>> {
+   unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>> {
       if let Self::UserData(u) = self {
-         u
+         *u
       } else {
          unreachable_unchecked()
       }
@@ -127,9 +126,9 @@ impl PartialEq for ValueImpl {
    fn eq(&self, other: &Self) -> bool {
       match (self, other) {
          (Self::Number(l), Self::Number(r)) => l == r,
-         (Self::String(l), Self::String(r)) => l == r,
-         (Self::Function(l), Self::Function(r)) => Rc::ptr_eq(l, r),
-         (Self::Struct(l), Self::Struct(r)) => Rc::ptr_eq(l, r),
+         (Self::String(l), Self::String(r)) => unsafe { l.get() == r.get() },
+         (Self::Function(l), Self::Function(r)) => l == r,
+         (Self::Struct(l), Self::Struct(r)) => l == r,
          _ => mem::discriminant(self) == mem::discriminant(other),
       }
    }

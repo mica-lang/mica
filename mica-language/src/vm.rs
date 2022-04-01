@@ -343,8 +343,7 @@ impl Fiber {
             ValueKind::String => env.builtin_dtables.string.get(),
             ValueKind::Function => env.builtin_dtables.function.get(),
             ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
-            // ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
-            _ => todo!(),
+            ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
          }
       }
    }

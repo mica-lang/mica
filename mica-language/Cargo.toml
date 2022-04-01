@@ -8,6 +8,7 @@ repository = "https://github.com/liquidev/mica"
 
 [features]
 default = []
+# default = ["trace-vm-opcodes", "trace-vm-stack-ops"]
 
 # Compile with this feature to dump all opcodes executed by the VM.
 trace-vm-opcodes = []

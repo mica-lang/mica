@@ -228,11 +228,6 @@ impl<T> GcMem<T> {
          GcMem::deallocate(memory);
       }
    }
-
-   /// Returns whether the value can still be reached, either inside the VM or outside of it.
-   fn is_reachable(&self) -> bool {
-      self.reachable.get() || self.rc.get() > 0
-   }
 }
 
 /// An unmanaged reference to GC memory.

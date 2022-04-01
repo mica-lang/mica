@@ -33,6 +33,8 @@ pub struct DebugOptions {
 pub struct Engine {
    pub(crate) env: Environment,
    pub(crate) globals: Globals,
+   // This field is needed to keep all builtin dispatch tables alive for longer than `gc`.
+   _builtin_refs: BuiltinRefs,
    pub(crate) gc: Memory,
    debug_options: DebugOptions,
 }
@@ -98,6 +100,7 @@ impl Engine {
       let mut engine = Self {
          env,
          globals: Globals::new(),
+         _builtin_refs: refs,
          gc,
          debug_options,
       };

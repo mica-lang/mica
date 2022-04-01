@@ -2,14 +2,12 @@ mod raw;
 
 use std::any::Any;
 use std::borrow::Cow;
-use std::convert::Infallible;
 use std::fmt;
-use std::hint::unreachable_unchecked;
 
 use mica_language::gc::Gc;
 use mica_language::value::{self, Closure, Struct, UserData};
 
-use crate::{Error, Object, UnsafeMutGuard, UnsafeRefGuard};
+use crate::{Error, Object};
 
 pub use raw::*;
 

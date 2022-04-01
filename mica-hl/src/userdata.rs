@@ -1,7 +1,6 @@
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 use mica_language::bytecode::DispatchTable;
 use mica_language::gc::{Gc, GcRaw};

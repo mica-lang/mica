@@ -5,8 +5,8 @@ use std::rc::Rc;
 use mica_language::bytecode::{
    DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
 };
-use mica_language::gc::{Gc, GcRaw, Memory};
-use mica_language::value::{self, Closure, RawValue};
+use mica_language::gc::{Gc, Memory};
+use mica_language::value::{self, Closure};
 
 use crate::userdata::Type;
 use crate::{
@@ -296,7 +296,7 @@ where
 
 impl<T> BuiltType<T> {
    /// Makes a `Type<T>` user data value from the built type.
-   pub(crate) fn make_type(&self, gc: &mut Memory) -> Value
+   pub(crate) fn make_type(&self) -> Value
    where
       T: Any,
    {

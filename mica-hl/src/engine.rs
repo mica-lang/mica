@@ -14,8 +14,8 @@ use mica_language::value::{Closure, RawValue};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, TypeBuilder, UserData,
-   Value,
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, TryFromValue,
+   TypeBuilder, UserData, Value,
 };
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
@@ -202,14 +202,13 @@ impl Engine {
    pub fn get<G, T>(&self, id: G) -> Result<T, Error>
    where
       G: TryToGlobalId,
-      // T: TryFromValue,
+      T: TryFromValue,
    {
-      todo!()
-      // if let Some(id) = id.try_to_global_id(&self.env) {
-      //    T::try_from_value(&self.globals.get(id.0))
-      // } else {
-      //    T::try_from_value(&RawValue::from(()))
-      // }
+      if let Some(id) = id.try_to_global_id(&self.env) {
+         T::try_from_value(&Value::from_raw(self.globals.get(id.0)))
+      } else {
+         T::try_from_value(&Value::from_raw(RawValue::from(())))
+      }
    }
 
    /// Declares a "raw" function in the global scope. Raw functions do not perform any type checks
@@ -281,7 +280,7 @@ impl Engine {
    where
       T: Any,
    {
-      let value = typ.make_type(&mut self.gc);
+      let value = typ.make_type();
       self.set(typ.type_name.deref(), value)
    }
 }

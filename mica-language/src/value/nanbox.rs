@@ -2,7 +2,6 @@
 //! takes up half as much space (8 bytes vs 16 bytes).
 
 use std::hint::unreachable_unchecked;
-use std::rc::Rc;
 
 use crate::gc::{GcMem, GcRaw};
 
@@ -108,25 +107,6 @@ impl ValueImpl {
    /// Returns the object pointer. Assumes the value is an object.
    unsafe fn object_pointer<T>(&self) -> *const T {
       (self.0 & Self::OBJECT_POINTER_BITS) as usize as *const T
-   }
-
-   /// Disposes of the RC inside the value. Assumes the value is an object of the correct type.
-   unsafe fn drop_object<T>(&self) {
-      // Do note that we need to know the type of RC we're dropping. This is because the outer
-      // RC may be the last reachable reference to the inner RC, and in that case when the outer
-      // RC drops, the inner RC also drops, and the inner RC drops the value inside.
-      let pointer: *const Rc<T> = self.object_pointer();
-      let _rc = Rc::from_raw(pointer);
-   }
-
-   /// Increments the strong count of the RC inside the value. Assumes the value is an object of the
-   /// correct type.
-   unsafe fn increment_strong_count<T>(&self) {
-      // Again, we need to know the type of RC we're incrementing. This time it's because Rust is
-      // free to rearrange struct fields, so it may choose to arrange them one way for one T,
-      // and another way for another T.
-      let pointer: *const Rc<T> = self.object_pointer();
-      Rc::increment_strong_count(pointer);
    }
 
    // The functions below do not perform any checks on what's inside, they just blindly

@@ -1,8 +1,6 @@
 mod number;
 mod string;
 
-use std::rc::Rc;
-
 use mica_hl::{StandardLibrary, TypeBuilder};
 
 /// Converts a function that takes a `self` parameter to one that takes a `&self` parameter.

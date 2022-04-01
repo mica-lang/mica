@@ -1,4 +1,3 @@
-use mica_language::value::RawValue;
 use mica_language::vm;
 
 use crate::{Engine, Error, TryFromValue, Value};

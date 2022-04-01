@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use mica::{Engine, Error, LanguageError, LanguageErrorKind, RawValue, Value};
+use mica::{Engine, Error, LanguageError, LanguageErrorKind, Value};
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;

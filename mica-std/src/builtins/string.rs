@@ -1,5 +1,4 @@
 use std::ops::Deref;
-use std::rc::Rc;
 
 use mica_hl::language::gc::Gc;
 use mica_hl::TypeBuilder;

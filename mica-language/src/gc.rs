@@ -254,7 +254,11 @@ impl<T> GcMem<T> {
       unsafe { ptr::write(allocation, mem) }
       #[cfg(feature = "trace-gc")]
       {
-         println!("gcmem | allocated {:p}", allocation);
+         println!(
+            "gcmem | allocated {:p}, T: {}",
+            allocation,
+            std::any::type_name::<T>()
+         );
       }
       GcRaw(allocation as *const _)
    }

@@ -6,7 +6,7 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use crate::common::{ErrorKind, Location};
-use crate::gc::{GcRaw, Memory};
+use crate::gc::{Gc, GcRaw, Memory};
 use crate::value::{Closure, RawValue};
 
 /// A 24-bit integer encoding an instruction operand.
@@ -733,22 +733,22 @@ impl DispatchTable {
 /// library.
 #[derive(Debug)]
 pub struct BuiltinDispatchTables {
-   pub nil: GcRaw<DispatchTable>,
-   pub boolean: GcRaw<DispatchTable>,
-   pub number: GcRaw<DispatchTable>,
-   pub string: GcRaw<DispatchTable>,
-   pub function: GcRaw<DispatchTable>,
+   pub nil: Gc<DispatchTable>,
+   pub boolean: Gc<DispatchTable>,
+   pub number: Gc<DispatchTable>,
+   pub string: Gc<DispatchTable>,
+   pub function: Gc<DispatchTable>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
 impl BuiltinDispatchTables {
-   pub fn empty(gc: &mut Memory) -> Self {
+   pub fn empty() -> Self {
       Self {
-         nil: gc.allocate(DispatchTable::new("Nil", "Nil")),
-         boolean: gc.allocate(DispatchTable::new("Boolean", "Boolean")),
-         number: gc.allocate(DispatchTable::new("Number", "Boolean")),
-         string: gc.allocate(DispatchTable::new("String", "String")),
-         function: gc.allocate(DispatchTable::new("Function", "Function")),
+         nil: Gc::new(DispatchTable::new("Nil", "Nil")),
+         boolean: Gc::new(DispatchTable::new("Boolean", "Boolean")),
+         number: Gc::new(DispatchTable::new("Number", "Boolean")),
+         string: Gc::new(DispatchTable::new("String", "String")),
+         function: Gc::new(DispatchTable::new("Function", "Function")),
       }
    }
 }

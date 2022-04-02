@@ -34,17 +34,8 @@ pub struct Engine {
    pub(crate) env: Environment,
    pub(crate) globals: Globals,
    // This field is needed to keep all builtin dispatch tables alive for longer than `gc`.
-   _builtin_refs: BuiltinRefs,
    pub(crate) gc: Memory,
    debug_options: DebugOptions,
-}
-
-struct BuiltinRefs {
-   nil: Gc<DispatchTable>,
-   boolean: Gc<DispatchTable>,
-   number: Gc<DispatchTable>,
-   string: Gc<DispatchTable>,
-   function: Gc<DispatchTable>,
 }
 
 impl Engine {
@@ -65,7 +56,7 @@ impl Engine {
    ) -> Self {
       let mut gc = Memory::new();
       // This is a little bad because it allocates a bunch of empty dtables only to discard them.
-      let mut env = Environment::new(BuiltinDispatchTables::empty(&mut gc));
+      let mut env = Environment::new(BuiltinDispatchTables::empty());
 
       macro_rules! get_dtables {
          ($type_name:tt, $define:tt) => {{
@@ -80,27 +71,17 @@ impl Engine {
       let boolean = get_dtables!("Boolean", define_boolean);
       let number = get_dtables!("Number", define_number);
       let string = get_dtables!("String", define_string);
-      let refs = BuiltinRefs {
+      env.builtin_dtables = BuiltinDispatchTables {
          nil: Gc::clone(&nil.instance_dtable),
          boolean: Gc::clone(&boolean.instance_dtable),
          number: Gc::clone(&number.instance_dtable),
          string: Gc::clone(&string.instance_dtable),
-         function: unsafe {
-            Gc::from_raw(gc.allocate(DispatchTable::new_for_instance("Function")))
-         }, // TODO
-      };
-      env.builtin_dtables = BuiltinDispatchTables {
-         nil: Gc::as_raw(&refs.nil),
-         boolean: Gc::as_raw(&refs.boolean),
-         number: Gc::as_raw(&refs.number),
-         string: Gc::as_raw(&refs.string),
-         function: Gc::as_raw(&refs.function),
+         function: Gc::new(DispatchTable::new_for_instance("Function")),
       };
 
       let mut engine = Self {
          env,
          globals: Globals::new(),
-         _builtin_refs: refs,
          gc,
          debug_options,
       };

@@ -342,11 +342,11 @@ impl Fiber {
    fn get_dispatch_table<'v>(value: &'v RawValue, env: &'v Environment) -> &'v DispatchTable {
       unsafe {
          match value.kind() {
-            ValueKind::Nil => env.builtin_dtables.nil.get(),
-            ValueKind::Boolean => env.builtin_dtables.boolean.get(),
-            ValueKind::Number => env.builtin_dtables.number.get(),
-            ValueKind::String => env.builtin_dtables.string.get(),
-            ValueKind::Function => env.builtin_dtables.function.get(),
+            ValueKind::Nil => &env.builtin_dtables.nil,
+            ValueKind::Boolean => &env.builtin_dtables.boolean,
+            ValueKind::Number => &env.builtin_dtables.number,
+            ValueKind::String => &env.builtin_dtables.string,
+            ValueKind::Function => &env.builtin_dtables.function,
             ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
             ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
          }
@@ -439,7 +439,8 @@ impl Fiber {
             }
             Opcode::CreateType => {
                let name = unsafe { self.chunk.read_string(&mut self.pc) };
-               let dispatch_table = DispatchTable::new_for_type(name);
+               let mut dispatch_table = DispatchTable::new_for_type(name);
+               dispatch_table.pretty_name = Rc::from(format!("unit {}", name));
                let dispatch_table = gc.allocate(dispatch_table);
                let struct_v = Struct::new_type(dispatch_table);
                self.stack.push(RawValue::from(gc.allocate(struct_v)));
@@ -590,6 +591,15 @@ impl Fiber {
                let (method_index, argument_count) = operand.unpack();
                let receiver = self.nth_from_top(argument_count as usize);
                let dtable = Self::get_dispatch_table(receiver, env);
+               #[cfg(feature = "trace-vm-calls")]
+               {
+                  println!(
+                     "call # m. idx={}, argc={}; {:?}",
+                     method_index,
+                     argument_count,
+                     env.get_function_signature(method_index)
+                  );
+               }
                if let Some(closure) = dtable.get_method(method_index) {
                   self.enter_function(env, gc, closure, argument_count as usize)?;
                } else {

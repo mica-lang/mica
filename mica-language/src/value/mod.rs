@@ -508,9 +508,3 @@ pub struct Closure {
    pub function_id: Opr24,
    pub captures: Vec<Pin<Rc<Upvalue>>>,
 }
-
-impl Drop for Closure {
-   fn drop(&mut self) {
-      println!("closure-drop | {}", self.function_id);
-   }
-}

@@ -86,8 +86,7 @@ impl RawValue {
             .deref()
             .to_owned()
             .into(),
-         ValueKind::UserData => unsafe { self.0.get_raw_user_data_unchecked().get() }
-            .dtable()
+         ValueKind::UserData => unsafe { self.0.get_raw_user_data_unchecked().get().dtable() }
             .type_name
             .deref()
             .to_owned()
@@ -420,8 +419,17 @@ impl Struct {
 }
 
 pub trait UserData: Any {
+   /// Returns a GC reference to the user data's dispatch table.
+   fn dtable_gcraw(&self) -> GcRaw<DispatchTable>;
+
    /// Returns the user data's dispatch table.
-   fn dtable(&self) -> &DispatchTable;
+   ///
+   /// # Safety
+   /// This is basically sugar for `dtable_gcraw().get()`, so all the footguns of [`GcRaw::get`]
+   /// apply.
+   unsafe fn dtable(&self) -> &DispatchTable {
+      self.dtable_gcraw().get()
+   }
 
    /// Converts a reference to `UserData` to `Any`.
    fn as_any(&self) -> &dyn Any;

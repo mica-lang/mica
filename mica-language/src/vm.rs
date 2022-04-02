@@ -51,6 +51,11 @@ impl Globals {
       let slot = u32::from(slot) as usize;
       *self.values.get_unchecked(slot)
    }
+
+   /// Returns an iterator over all globals.
+   pub(crate) fn iter(&self) -> impl Iterator<Item = RawValue> + '_ {
+      self.values.iter().copied()
+   }
 }
 
 impl Default for Globals {
@@ -365,6 +370,11 @@ impl Fiber {
       }
    }
 
+   /// Returns an iterator over all GC roots.
+   fn roots<'a>(&'a self, globals: &'a mut Globals) -> impl Iterator<Item = RawValue> + 'a {
+      globals.iter().chain(self.stack.iter().copied())
+   }
+
    /// Interprets bytecode in the chunk, with the provided user state.
    pub fn interpret(
       &mut self,
@@ -382,7 +392,7 @@ impl Fiber {
          let (opcode, operand) = unsafe { self.chunk.read_instruction(&mut self.pc) };
          #[cfg(feature = "trace-vm-opcodes")]
          {
-            println!("{:?}", opcode);
+            println!("{:?} ({})", opcode, operand);
          }
 
          macro_rules! wrap_error {
@@ -418,10 +428,12 @@ impl Fiber {
             }
             Opcode::PushString => {
                let string = unsafe { self.chunk.read_string(&mut self.pc) }.to_owned();
+               unsafe { gc.auto_collect(self.roots(globals)) };
                let rc = gc.allocate(string);
                self.push(RawValue::from(rc));
             }
             Opcode::CreateClosure => {
+               unsafe { gc.auto_collect(self.roots(globals)) };
                let closure = self.create_closure(env, gc, operand);
                self.push(RawValue::from(closure));
             }
@@ -439,6 +451,7 @@ impl Fiber {
                //  - Thus, the only types that can be implemented are user-defined types.
                //  - And each user-defined type is a struct.
                //  - `Opcode::Implement` aborts execution if it isn't.
+               unsafe { gc.auto_collect(self.roots(globals)) };
                let type_struct = unsafe { self.pop().get_raw_struct_unchecked() };
                let field_count = u32::from(operand) as usize;
                let instance = unsafe { type_struct.get().new_instance(field_count) };

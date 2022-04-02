@@ -722,6 +722,11 @@ impl DispatchTable {
       }
       self.methods[index] = Some(closure);
    }
+
+   /// Returns an iterator over all methods in this dispatch table.
+   pub(crate) fn methods(&self) -> impl Iterator<Item = GcRaw<Closure>> + '_ {
+      self.methods.iter().copied().flatten()
+   }
 }
 
 /// Dispatch tables for instances of builtin types. These should be constructed by the standard

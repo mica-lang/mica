@@ -43,6 +43,19 @@ impl Memory {
          }
       }
 
+      unsafe fn mark_dtable_reachable_rec(mem: GcRaw<DispatchTable>) {
+         if !mem.get_mem().reachable.get() {
+            mem.mark_reachable();
+            let dtable = mem.get();
+            if let Some(instance) = dtable.instance {
+               mark_dtable_reachable_rec(instance);
+            }
+            for method in dtable.methods() {
+               mark_reachable_rec(RawValue::from(method))
+            }
+         }
+      }
+
       unsafe fn mark_reachable_rec(value: RawValue) {
          match value.kind() {
             ValueKind::Nil | ValueKind::Boolean | ValueKind::Number => (),
@@ -68,9 +81,17 @@ impl Memory {
                   for field in struct_v.fields() {
                      mark_reachable_rec(field);
                   }
+                  let dtable = *raw.get().dtable.get();
+                  mark_dtable_reachable_rec(dtable);
                }
             }
-            ValueKind::UserData => todo!(),
+            // TODO: Allow user data to specify its own references.
+            ValueKind::UserData => {
+               let raw = value.get_raw_user_data_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+               }
+            }
          }
       }
 
@@ -101,6 +122,14 @@ impl Memory {
       sweep_unreachable(&mut self.structs);
       sweep_unreachable(&mut self.user_data);
       sweep_unreachable(&mut self.dispatch_tables);
+   }
+
+   /// Performs an _automatic_ collection.
+   ///
+   /// Automatic collections only trigger upon specific conditions, such as a specific amount of
+   /// generations passing. Though right now there are no such conditions.
+   pub(crate) unsafe fn auto_collect(&mut self, roots: impl Iterator<Item = RawValue>) {
+      self.collect(roots)
    }
 
    /// Allocates a new `GcRaw<T>` managed by this GC.
@@ -202,6 +231,10 @@ impl<T> GcMem<T> {
          handle_alloc_error(layout);
       }
       unsafe { *allocation = mem }
+      #[cfg(feature = "trace-gc")]
+      {
+         println!("gcmem | allocated {:p}", allocation);
+      }
       GcRaw(allocation as *const _)
    }
 
@@ -211,6 +244,10 @@ impl<T> GcMem<T> {
    /// `mem` must be a pointer returned by [`allocate`][`Self::allocate`].
    unsafe fn deallocate(mem: GcRaw<T>) {
       let mem = mem.0 as *mut GcMem<T>;
+      #[cfg(feature = "trace-gc")]
+      {
+         println!("gcmem | deallocating {:p}", mem);
+      }
       {
          let mem = &mut *mem;
          ManuallyDrop::drop(&mut mem.data);
@@ -221,6 +258,10 @@ impl<T> GcMem<T> {
 
    /// Deallocates the given memory or marks it as unmanaged if there are foreign references to it.
    unsafe fn release(memory: GcRaw<T>) {
+      #[cfg(feature = "trace-gc")]
+      {
+         println!("gcmem | releasing {:p}", memory.0);
+      }
       let mem = memory.get_mem();
       if mem.rc.get() > 0 {
          mem.managed_by_gc.set(false);

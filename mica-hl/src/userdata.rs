@@ -32,8 +32,8 @@ impl<T> value::UserData for Type<T>
 where
    T: Any,
 {
-   fn dtable(&self) -> &DispatchTable {
-      &self.dtable
+   fn dtable_gcraw(&self) -> GcRaw<DispatchTable> {
+      Gc::as_raw(&self.dtable)
    }
 
    fn as_any(&self) -> &dyn Any {
@@ -108,8 +108,8 @@ impl<T> value::UserData for Object<T>
 where
    T: Any,
 {
-   fn dtable(&self) -> &DispatchTable {
-      &self.dtable
+   fn dtable_gcraw(&self) -> GcRaw<DispatchTable> {
+      Gc::as_raw(&self.dtable)
    }
 
    fn as_any(&self) -> &dyn Any {

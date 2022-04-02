@@ -45,7 +45,7 @@ impl Value {
          Value::Function(_) => "Function",
          // Hopefully this doesn't explode.
          Value::Struct(s) => &unsafe { s.0.dtable() }.type_name,
-         Value::UserData(u) => &u.dtable().type_name,
+         Value::UserData(u) => &unsafe { u.dtable() }.type_name,
       }
    }
 

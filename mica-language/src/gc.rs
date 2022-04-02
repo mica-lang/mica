@@ -109,6 +109,9 @@ impl Memory {
          }
       }
 
+      // NOTE: Marking all objects as unreachable beforehand is *somehow* faster than doing it
+      // during the sweep phase. I believe it might have something to do with the objects being
+      // loaded into the CPU cache but I'm really not sure.
       mark_all_unreachable(self.strings.iter().copied());
       mark_all_unreachable(self.closures.iter().copied());
       mark_all_unreachable(self.structs.iter().copied());
@@ -220,7 +223,9 @@ impl<T> GcMem<T> {
    /// Allocates a `GcMem<T>`.
    fn allocate(data: T) -> GcRaw<T> {
       let mem = Self {
-         reachable: Cell::new(true),
+         // NOTE: `reachable` is initially set to `false` because reachability is only determined
+         // during the marking phase.
+         reachable: Cell::new(false),
          managed_by_gc: Cell::new(true),
          rc: Cell::new(0),
          data: ManuallyDrop::new(data),

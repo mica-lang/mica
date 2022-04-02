@@ -45,7 +45,6 @@ pub(super) fn define(builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
       .add_function("asinh", ref_self1(f64::asinh))
       .add_function("acosh", ref_self1(f64::acosh))
       .add_function("atanh", ref_self1(f64::atanh))
-      .add_function("atanh", ref_self1(f64::atanh))
       .add_function("recip", ref_self1(f64::recip))
       .add_function("to_degrees", ref_self1(f64::to_degrees))
       .add_function("to_radians", ref_self1(f64::to_radians))

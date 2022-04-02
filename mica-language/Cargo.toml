@@ -8,6 +8,7 @@ repository = "https://github.com/liquidev/mica"
 
 [features]
 default = []
+# default = ["trace-gc"]
 # default = ["trace-vm-opcodes", "trace-vm-stack-ops"]
 # default = ["trace-gc", "trace-vm-opcodes", "trace-vm-stack-ops"]
 

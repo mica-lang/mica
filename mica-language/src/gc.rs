@@ -10,8 +10,16 @@ use std::ops::Deref;
 use crate::bytecode::DispatchTable;
 use crate::value::{Closure, RawValue, Struct, UserData, ValueKind};
 
-/// A garbage collected pool of a specific type of data.
+/// An allocator and garbage collector for memory.
 pub struct Memory {
+   // Statistics that determine when the next automatic GC cycle should run.
+   allocated_bytes: usize,
+   next_run: usize,
+   growth_factor: usize, // Measured in %, should be greater than 100
+
+   // Things managed by the GC.
+   // We do separate vectors for each type of data because casting from GcRaw<T> to GcRaw<U> is
+   // invalid.
    strings: Vec<GcRaw<String>>,
    closures: Vec<GcRaw<Closure>>,
    structs: Vec<GcRaw<Struct>>,
@@ -23,6 +31,10 @@ impl Memory {
    /// Creates a new GC.
    pub fn new() -> Self {
       Self {
+         allocated_bytes: 0,
+         next_run: 64 * 1024, // 64 KiB
+         growth_factor: 384,  // = 1.5 * 256
+
          strings: Vec::new(),
          closures: Vec::new(),
          structs: Vec::new(),
@@ -95,13 +107,14 @@ impl Memory {
          }
       }
 
-      unsafe fn sweep_unreachable<T>(memories: &mut Vec<GcRaw<T>>) {
+      unsafe fn sweep_unreachable<T>(memories: &mut Vec<GcRaw<T>>, allocated_bytes: &mut usize) {
          let mut i = 0;
          while i < memories.len() {
             let memory = memories[i];
             let mem = memory.get_mem();
             if !mem.reachable.get() {
                GcMem::release(memory);
+               *allocated_bytes -= std::mem::size_of::<T>();
                memories.swap_remove(i);
             } else {
                i += 1;
@@ -120,11 +133,11 @@ impl Memory {
       for value in roots {
          mark_reachable_rec(value);
       }
-      sweep_unreachable(&mut self.strings);
-      sweep_unreachable(&mut self.closures);
-      sweep_unreachable(&mut self.structs);
-      sweep_unreachable(&mut self.user_data);
-      sweep_unreachable(&mut self.dispatch_tables);
+      sweep_unreachable(&mut self.strings, &mut self.allocated_bytes);
+      sweep_unreachable(&mut self.closures, &mut self.allocated_bytes);
+      sweep_unreachable(&mut self.structs, &mut self.allocated_bytes);
+      sweep_unreachable(&mut self.user_data, &mut self.allocated_bytes);
+      sweep_unreachable(&mut self.dispatch_tables, &mut self.allocated_bytes);
    }
 
    /// Performs an _automatic_ collection.
@@ -132,7 +145,27 @@ impl Memory {
    /// Automatic collections only trigger upon specific conditions, such as a specific amount of
    /// generations passing. Though right now there are no such conditions.
    pub(crate) unsafe fn auto_collect(&mut self, roots: impl Iterator<Item = RawValue>) {
-      self.collect(roots)
+      if self.allocated_bytes > self.next_run {
+         self.collect(roots);
+         self.next_run = self.allocated_bytes * self.growth_factor / 256;
+      }
+   }
+
+   /// Registers `mem` inside this GC.
+   fn register<T>(&mut self, mem: GcRaw<T>)
+   where
+      T: GarbageCollected,
+   {
+      T::allocate_in_gc(mem, self);
+      self.allocated_bytes += std::mem::size_of::<T>();
+      #[cfg(feature = "trace-gc")]
+      {
+         println!(
+            "gc | allocated {} bytes, now at {}",
+            std::mem::size_of::<T>(),
+            self.allocated_bytes
+         );
+      }
    }
 
    /// Allocates a new `GcRaw<T>` managed by this GC.
@@ -141,7 +174,7 @@ impl Memory {
       T: GarbageCollected,
    {
       let gcmem = GcMem::allocate(data);
-      T::allocate_in_gc(gcmem, self);
+      self.register(gcmem);
       gcmem
    }
 
@@ -154,7 +187,7 @@ impl Memory {
       unsafe {
          let mem = gc.mem.get_mem();
          if !mem.managed_by_gc.get() {
-            T::allocate_in_gc(gc.mem, self);
+            self.register(gc.mem);
             mem.managed_by_gc.set(true);
          }
          gc.mem

@@ -36,18 +36,18 @@ print(result)
 <p align="center">Factorial benchmark</p>
 
 ```
-> hyperfine --warmup 5 './target/release/mica code/functions.mi' 'lua5.1 code/functions.lua'
-Benchmark 1: ./target/release/mica code/functions.mi
-  Time (mean ± σ):     291.8 ms ±   5.9 ms    [User: 288.5 ms, System: 3.1 ms]
-  Range (min … max):   287.2 ms … 307.3 ms    10 runs
+> hyperfine --warmup 5 'target/release/mica code/functions.mi' 'lua5.1 code/functions.lua'
+Benchmark 1: target/release/mica code/functions.mi
+  Time (mean ± σ):      93.2 ms ±   0.6 ms    [User: 92.1 ms, System: 1.2 ms]
+  Range (min … max):    92.0 ms …  95.5 ms    31 runs
 
 Benchmark 2: lua5.1 code/functions.lua
-  Time (mean ± σ):      28.0 ms ±   0.5 ms    [User: 27.3 ms, System: 1.1 ms]
-  Range (min … max):    27.2 ms …  31.1 ms    99 runs
+  Time (mean ± σ):      27.4 ms ±   0.2 ms    [User: 26.1 ms, System: 1.5 ms]
+  Range (min … max):    27.0 ms …  28.5 ms    98 runs
 
 Summary
   'lua5.1 code/functions.lua' ran
-   10.41 ± 0.29 times faster than './target/release/mica code/functions.mi'
+    3.40 ± 0.04 times faster than 'target/release/mica code/functions.mi'
 ```
 It's not ideal yet but hopefully it'll get better with time. Current bottlenecks include:
 - A really stupid compiler that does zero optimizations

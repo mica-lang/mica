@@ -323,7 +323,11 @@ impl fmt::Debug for RawValue {
             ValueKind::Boolean => write!(f, "{}", self.0.get_boolean_unchecked()),
             ValueKind::Number => write!(f, "{}", self.0.get_number_unchecked()),
             ValueKind::String => write!(f, "{:?}", self.0.get_raw_string_unchecked().get().deref()),
-            ValueKind::Function => write!(f, "<func>"),
+            ValueKind::Function => write!(
+               f,
+               "<func {:?}>",
+               self.0.get_raw_function_unchecked().get_raw()
+            ),
             ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
             ValueKind::UserData => dtable(f, self.0.get_raw_user_data_unchecked().get().dtable()),
          }
@@ -503,4 +507,10 @@ impl Upvalue {
 pub struct Closure {
    pub function_id: Opr24,
    pub captures: Vec<Pin<Rc<Upvalue>>>,
+}
+
+impl Drop for Closure {
+   fn drop(&mut self) {
+      println!("closure-drop | {}", self.function_id);
+   }
 }

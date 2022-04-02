@@ -372,7 +372,7 @@ impl Fiber {
 
    /// Returns an iterator over all GC roots.
    fn roots<'a>(&'a self, globals: &'a mut Globals) -> impl Iterator<Item = RawValue> + 'a {
-      globals.iter().chain(self.stack.iter().copied())
+      globals.iter().chain(self.stack.iter().copied()).chain(self.closure.map(RawValue::from))
    }
 
    /// Interprets bytecode in the chunk, with the provided user state.

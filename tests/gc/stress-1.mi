@@ -1,0 +1,16 @@
+# Stress tests the garbage collector by performing lots of tiny allocations that never get used.
+
+struct Garbage
+
+impl Garbage
+   func new() constructor
+      @trash = 1
+   end
+end
+
+n = 0
+g = nil
+while n < 10000 do
+   g = Garbage.new()
+   n = n + 1
+end

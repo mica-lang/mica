@@ -23,4 +23,5 @@ pub use userdata::*;
 pub use value::*;
 
 pub use mica_language as language;
-pub use mica_language::value::{Value, ValueKind};
+pub use mica_language::gc::Gc;
+pub use mica_language::value::{RawValue, ValueKind};

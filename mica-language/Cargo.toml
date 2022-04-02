@@ -8,8 +8,15 @@ repository = "https://github.com/liquidev/mica"
 
 [features]
 default = []
+# default = ["trace-gc"]
+# default = ["trace-vm-opcodes", "trace-vm-stack-ops", "trace-vm-calls"]
+# default = ["trace-gc", "trace-vm-opcodes", "trace-vm-stack-ops", "trace-vm-calls"]
 
 # Compile with this feature to dump all opcodes executed by the VM.
 trace-vm-opcodes = []
 # Compile with this feature to dump all stack operations to stdout.
 trace-vm-stack-ops = []
+# Compile with this feature to print to stdout on each call.
+trace-vm-calls = []
+# Compile with this feature to trace GC operations like allocation and collection.
+trace-gc = []

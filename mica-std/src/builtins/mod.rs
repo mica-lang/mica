@@ -1,8 +1,6 @@
 mod number;
 mod string;
 
-use std::rc::Rc;
-
 use mica_hl::{StandardLibrary, TypeBuilder};
 
 /// Converts a function that takes a `self` parameter to one that takes a `&self` parameter.
@@ -37,7 +35,7 @@ impl StandardLibrary for Lib {
       number::define(builder)
    }
 
-   fn define_string(&mut self, builder: TypeBuilder<Rc<String>>) -> TypeBuilder<Rc<String>> {
+   fn define_string(&mut self, builder: TypeBuilder<String>) -> TypeBuilder<String> {
       string::define(builder)
    }
 }

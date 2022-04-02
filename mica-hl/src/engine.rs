@@ -7,14 +7,15 @@ use mica_language::bytecode::{
    BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind, Opr24,
 };
 use mica_language::codegen::CodeGenerator;
+use mica_language::gc::{Gc, Memory};
 use mica_language::lexer::Lexer;
 use mica_language::parser::Parser;
-use mica_language::value::{Closure, Value};
+use mica_language::value::{Closure, RawValue};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   ffvariants, BuiltType, Error, Fiber, ForeignFunction, IntoValue, StandardLibrary, TryFromValue,
-   TypeBuilder, UserData,
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, TryFromValue,
+   TypeBuilder, UserData, Value,
 };
 
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
@@ -32,6 +33,8 @@ pub struct DebugOptions {
 pub struct Engine {
    pub(crate) env: Environment,
    pub(crate) globals: Globals,
+   // This field is needed to keep all builtin dispatch tables alive for longer than `gc`.
+   pub(crate) gc: Memory,
    debug_options: DebugOptions,
 }
 
@@ -51,15 +54,16 @@ impl Engine {
       mut stdlib: impl StandardLibrary,
       debug_options: DebugOptions,
    ) -> Self {
+      let mut gc = Memory::new();
       // This is a little bad because it allocates a bunch of empty dtables only to discard them.
-      let mut env = Environment::new(Default::default());
+      let mut env = Environment::new(BuiltinDispatchTables::empty());
 
       macro_rules! get_dtables {
          ($type_name:tt, $define:tt) => {{
             let tb = TypeBuilder::new($type_name);
             let tb = stdlib.$define(tb);
             // Unwrapping here is fine because the stdlib should never declare THAT many methods.
-            tb.build(&mut env).unwrap()
+            tb.build(&mut env, &mut gc).unwrap()
          }};
       }
       // TODO: Expose _*_type in the global scope.
@@ -68,16 +72,17 @@ impl Engine {
       let number = get_dtables!("Number", define_number);
       let string = get_dtables!("String", define_string);
       env.builtin_dtables = BuiltinDispatchTables {
-         nil: Rc::clone(&nil.instance_dtable),
-         boolean: Rc::clone(&boolean.instance_dtable),
-         number: Rc::clone(&number.instance_dtable),
-         string: Rc::clone(&string.instance_dtable),
-         function: Rc::new(DispatchTable::new_for_instance("Function")), // TODO
+         nil: Gc::clone(&nil.instance_dtable),
+         boolean: Gc::clone(&boolean.instance_dtable),
+         number: Gc::clone(&number.instance_dtable),
+         string: Gc::clone(&string.instance_dtable),
+         function: Gc::new(DispatchTable::new_for_instance("Function")),
       };
 
       let mut engine = Self {
          env,
          globals: Globals::new(),
+         gc,
          debug_options,
       };
       // Unwrapping here is fine because at this point we haven't got quite that many globals
@@ -164,10 +169,10 @@ impl Engine {
    pub fn set<G, T>(&mut self, id: G, value: T) -> Result<(), Error>
    where
       G: ToGlobalId,
-      T: IntoValue,
+      T: Into<Value>,
    {
       let id = id.to_global_id(&mut self.env)?;
-      self.globals.set(id.0, value.into_value());
+      self.globals.set(id.0, value.into().to_raw(&mut self.gc));
       Ok(())
    }
 
@@ -184,9 +189,9 @@ impl Engine {
       T: TryFromValue,
    {
       if let Some(id) = id.try_to_global_id(&self.env) {
-         T::try_from_value(&self.globals.get(id.0))
+         T::try_from_value(&Value::from_raw(self.globals.get(id.0)))
       } else {
-         T::try_from_value(&Value::from(()))
+         T::try_from_value(&Value::from_raw(RawValue::from(())))
       }
    }
 
@@ -220,7 +225,7 @@ impl Engine {
             kind: FunctionKind::Foreign(f),
          })
          .map_err(|_| Error::TooManyFunctions)?;
-      let function = Value::from(Rc::new(Closure {
+      let function = RawValue::from(self.gc.allocate(Closure {
          function_id,
          captures: Vec::new(),
       }));
@@ -250,7 +255,7 @@ impl Engine {
    where
       T: Any + UserData,
    {
-      let built = builder.build(&mut self.env)?;
+      let built = builder.build(&mut self.env, &mut self.gc)?;
       self.set_built_type(&built)?;
       Ok(())
    }
@@ -259,7 +264,8 @@ impl Engine {
    where
       T: Any,
    {
-      self.set(typ.type_name.deref(), typ.make_type())
+      let value = typ.make_type();
+      self.set(typ.type_name.deref(), value)
    }
 }
 

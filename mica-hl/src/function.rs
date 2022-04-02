@@ -1,9 +1,10 @@
-use mica_language::value::Value;
+use mica_language::gc::Memory;
+use mica_language::value::RawValue;
 
-use crate::{Error, IntoValue, LanguageErrorKind, RawForeignFunction, TryFromValue};
+use crate::{Error, LanguageErrorKind, RawForeignFunction, TryFromValue, Value};
 
 fn create_rawff(
-   f: impl FnMut(&[Value]) -> Result<Value, LanguageErrorKind> + 'static,
+   f: impl FnMut(&mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind> + 'static,
 ) -> RawForeignFunction {
    Box::new(f)
 }
@@ -12,15 +13,15 @@ fn create_rawff(
 ///
 /// This is a wrapper that does things like type-checking and arity-checking.
 pub struct Arguments<'a> {
-   this: &'a Value,
-   inner: &'a [Value],
+   this: RawValue,
+   inner: &'a [RawValue],
 }
 
 impl<'a> Arguments<'a> {
-   fn new(raw_arguments: &'a [Value]) -> Self {
+   fn new(raw_arguments: &'a [RawValue]) -> Self {
       // Skip the first argument, which is `self` (or the currently called function).
       Self {
-         this: &raw_arguments[0],
+         this: raw_arguments[0],
          inner: &raw_arguments[1..],
       }
    }
@@ -55,12 +56,12 @@ impl<'a> Arguments<'a> {
    }
 
    /// Returns the `self` parameter as a value.
-   pub fn raw_self(&self) -> &Value {
-      self.this
+   pub fn raw_self(&self) -> &RawValue {
+      &self.this
    }
 
    /// Returns the `n`th argument, or `None` if the argument is not present.
-   pub fn nth(&self, n: usize) -> Option<&Value> {
+   pub fn nth(&self, n: usize) -> Option<&RawValue> {
       self.inner.get(n)
    }
 
@@ -70,8 +71,8 @@ impl<'a> Arguments<'a> {
    where
       T: TryFromValue,
    {
-      let value = self.inner.get(n).cloned().unwrap_or(Value::from(()));
-      T::try_from_value(&value).map_err(|error| {
+      let value = self.inner.get(n).cloned().unwrap_or(RawValue::from(()));
+      T::try_from_value(&Value::from_raw(value)).map_err(|error| {
          if let Error::TypeMismatch { expected, got } = error {
             Error::ArgumentTypeMismatch {
                index: n,
@@ -85,7 +86,7 @@ impl<'a> Arguments<'a> {
    }
 
    /// Returns the raw array of arguments.
-   pub fn array(&self) -> &[Value] {
+   pub fn array(&self) -> &[RawValue] {
       self.inner
    }
 }
@@ -94,18 +95,18 @@ impl<'a> Arguments<'a> {
 ///
 /// This `Deref`s to the inner value.
 #[repr(transparent)]
-pub struct RawSelf<'a>(&'a Value);
+pub struct RawSelf<'a>(&'a RawValue);
 
 impl std::ops::Deref for RawSelf<'_> {
-   type Target = Value;
+   type Target = RawValue;
 
    fn deref(&self) -> &Self::Target {
       self.0
    }
 }
 
-impl<'a> From<&'a Value> for RawSelf<'a> {
-   fn from(value: &'a Value) -> Self {
+impl<'a> From<&'a RawValue> for RawSelf<'a> {
+   fn from(value: &'a RawValue) -> Self {
       Self(value)
    }
 }
@@ -265,7 +266,7 @@ macro_rules! impl_non_varargs {
       $(let $this:tt = $setup:tt;)?
       |$arguments:tt| $call_args:tt;
       $ret:ty;
-      |$result:tt| $map:expr;
+      |$gc:tt, $result:tt| $map:expr;
       $($types:tt),*
    ) => {
       /// Implementation for a static number of arguments.
@@ -300,7 +301,7 @@ macro_rules! impl_non_varargs {
          fn into_raw_foreign_function(mut self) -> RawForeignFunction {
             #[allow(unused_imports)]
             use $crate::MicaLanguageResultExt;
-            create_rawff(move |args| {
+            create_rawff(move |$gc, args| {
                let $arguments = Arguments::new(args);
                let _n = 0;
                // Similar to `parameter_count`, we use $types as a driver for a sequential counter.
@@ -340,7 +341,7 @@ macro_rules! impl_non_varargs {
          // Then the generic types/bounds of the `impl`.
          Ret, Err;
          where
-            Ret: $crate::IntoValue,
+            Ret: Into<$crate::Value>,
             Err: std::error::Error;
          // Then the arguments of the `FnMut`.
          ($($types),*);
@@ -350,8 +351,8 @@ macro_rules! impl_non_varargs {
          Result<Ret, Err>;
          // Then the "mapper" "function" that maps the function's result into the raw
          // calling convention.
-         |result| result
-            .map(|value| value.into_value())
+         |gc, result| result
+            .map(|value| value.into().to_raw(gc))
             .map_err(|error| LanguageErrorKind::User(Box::new(error)));
          // Lastly we pass on the generic parameters entered into the macro.
          $($types),*
@@ -359,11 +360,11 @@ macro_rules! impl_non_varargs {
       impl_non_varargs!(
          @for Infallible, ($($types,)*);
          Ret;
-         where Ret: $crate::IntoValue;
+         where Ret: Into<$crate::Value>;
          ($($types),*);
          |_arguments| ($($types,)*);
          Ret;
-         |value| Ok(value.into_value());
+         |gc, value| Ok(value.into().to_raw(gc));
          $($types),*
       );
 
@@ -371,7 +372,7 @@ macro_rules! impl_non_varargs {
          @for FallibleRawSelf, ($($types,)*);
          Ret, Err;
          where
-            Ret: $crate::IntoValue,
+            Ret: Into<$crate::Value>,
             Err: std::error::Error;
          ($crate::RawSelf, $($types),*);
          // base_parameter_count needs to be provided for methods that accept `self`, because the
@@ -379,20 +380,20 @@ macro_rules! impl_non_varargs {
          base_parameter_count 1;
          |arguments| (arguments.raw_self().into(), $($types,)*);
          Result<Ret, Err>;
-         |result| result
-            .map(|value| value.into_value())
+         |gc, result| result
+            .map(|value| value.into().to_raw(gc))
             .map_err(|error| LanguageErrorKind::User(Box::new(error)));
          $($types),*
       );
       impl_non_varargs!(
          @for InfallibleRawSelf, ($($types,)*);
          Ret;
-         where Ret: $crate::IntoValue;
+         where Ret: Into<$crate::Value>;
          ($crate::RawSelf, $($types),*);
          base_parameter_count 1;
          |arguments| (arguments.raw_self().into(), $($types,)*);
          Ret;
-         |value| Ok(value.into_value());
+         |gc, value| Ok(value.into().to_raw(gc));
          $($types),*
       );
 
@@ -400,20 +401,20 @@ macro_rules! impl_non_varargs {
          @for FallibleSelf, $crate::ffvariants::ImmutableSelf<S>, (&S, $($types,)*);
          S, Ret, Err;
          where
-            Ret: $crate::IntoValue,
+            Ret: Into<$crate::Value>,
             Err: std::error::Error,
-            S: $crate::FromValueSelf;
+            S: $crate::SelfFromRawValue;
          (&S, $($types),*);
          base_parameter_count 1;
          let this = {
             unsafe {
-               $crate::FromValueSelf::from_value_self(arguments.raw_self()).mica_language()?
+               $crate::SelfFromRawValue::self_from_raw_value(arguments.raw_self()).mica_language()?
             }
          };
          |arguments| (this, $($types,)*);
          Result<Ret, Err>;
-         |result| result
-            .map(|value| value.into_value())
+         |gc, result| result
+            .map(|value| value.into().to_raw(gc))
             .map_err(|error| LanguageErrorKind::User(Box::new(error)));
          $($types),*
       );
@@ -421,18 +422,18 @@ macro_rules! impl_non_varargs {
          @for FallibleSelf, $crate::ffvariants::MutableSelf<S>, (&mut S, $($types,)*);
          S, Ret, Err;
          where
-            Ret: $crate::IntoValue,
+            Ret: Into<$crate::Value>,
             Err: std::error::Error,
-            S: $crate::FromValueSelfMut;
+            S: $crate::MutSelfFromRawValue;
          (&mut S, $($types),*);
          base_parameter_count 1;
          let this = {
-            unsafe { S::from_value_self_mut(arguments.raw_self()) }.mica_language()?
+            unsafe { S::mut_self_from_raw_value(arguments.raw_self()) }.mica_language()?
          };
          |arguments| (this, $($types,)*);
          Result<Ret, Err>;
-         |result| result
-            .map(|value| value.into_value())
+         |gc, result| result
+            .map(|value| value.into().to_raw(gc))
             .map_err(|error| LanguageErrorKind::User(Box::new(error)));
          $($types),*
       );
@@ -441,34 +442,34 @@ macro_rules! impl_non_varargs {
          @for InfallibleSelf, $crate::ffvariants::ImmutableSelf<S>, (&S, $($types,)*);
          S, Ret;
          where
-            Ret: $crate::IntoValue,
-            S: $crate::FromValueSelf;
+            Ret: Into<$crate::Value>,
+            S: $crate::SelfFromRawValue;
          (&S, $($types),*);
          base_parameter_count 1;
          let this = {
             unsafe {
-               $crate::FromValueSelf::from_value_self(arguments.raw_self()).mica_language()?
+               $crate::SelfFromRawValue::self_from_raw_value(arguments.raw_self()).mica_language()?
             }
          };
          |arguments| (this, $($types,)*);
          Ret;
-         |value| Ok(value.into_value());
+         |gc, value| Ok(value.into().to_raw(gc));
          $($types),*
       );
       impl_non_varargs!(
          @for InfallibleSelf, $crate::ffvariants::MutableSelf<S>, (&mut S, $($types,)*);
          S, Ret;
          where
-            Ret: $crate::IntoValue,
-            S: $crate::FromValueSelfMut;
+            Ret: Into<$crate::Value>,
+            S: $crate::MutSelfFromRawValue;
          (&mut S, $($types),*);
          base_parameter_count 1;
          let this = {
-            unsafe { S::from_value_self_mut(arguments.raw_self()) }.mica_language()?
+            unsafe { S::mut_self_from_raw_value(arguments.raw_self()) }.mica_language()?
          };
          |arguments| (this, $($types,)*);
          Ret;
-         |value| Ok(value.into_value());
+         |gc, value| Ok(value.into().to_raw(gc));
          $($types),*
       );
    };
@@ -494,7 +495,7 @@ impl_non_varargs!(A, B, C, D, E, F, G, H);
 /// Implementation for a variable number of arguments.
 impl<Ret, Err, F> ForeignFunction<ffvariants::VarargsFallible> for F
 where
-   Ret: IntoValue + 'static,
+   Ret: Into<Value> + 'static,
    Err: std::error::Error + 'static,
    F: FnMut(Arguments) -> Result<Ret, Err> + 'static,
 {
@@ -503,9 +504,9 @@ where
    }
 
    fn into_raw_foreign_function(mut self) -> RawForeignFunction {
-      create_rawff(move |args| {
+      create_rawff(move |gc, args| {
          self(Arguments::new(args))
-            .map(|value| value.into_value())
+            .map(|value| value.into().to_raw(gc))
             .map_err(|error| LanguageErrorKind::User(Box::new(error)))
       })
    }
@@ -514,7 +515,7 @@ where
 /// Implementation for a variable number of arguments.
 impl<Ret, F> ForeignFunction<ffvariants::VarargsInfallible> for F
 where
-   Ret: IntoValue + 'static,
+   Ret: Into<Value> + 'static,
    F: FnMut(Arguments) -> Ret + 'static,
 {
    fn parameter_count() -> Option<u16> {
@@ -522,6 +523,6 @@ where
    }
 
    fn into_raw_foreign_function(mut self) -> RawForeignFunction {
-      create_rawff(move |args| Ok(self(Arguments::new(args)).into_value()))
+      create_rawff(move |gc, args| Ok(self(Arguments::new(args)).into().to_raw(gc)))
    }
 }

@@ -1,0 +1,19 @@
+# Tests if the GC can handle very deeply nested objects.
+
+struct LinkedList
+
+impl LinkedList
+   func new(value, next) constructor
+      @value = value
+      @next = next
+   end
+end
+
+i = 0
+list = nil
+# 5 million objects deep oughtta be enough to overflow the stack in a naïve collector.
+# Increasing the limit further would slow down the test runtime too much.
+while i < 5000000 do
+   list = LinkedList.new(i, list)
+   i = i + 1
+end

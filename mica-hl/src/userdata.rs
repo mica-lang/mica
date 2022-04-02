@@ -1,9 +1,9 @@
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
 use std::marker::PhantomData;
-use std::rc::Rc;
 
 use mica_language::bytecode::DispatchTable;
+use mica_language::gc::{Gc, GcRaw};
 use mica_language::value;
 
 use crate::Error;
@@ -15,12 +15,12 @@ pub trait UserData: Any {}
 
 /// A type. This contains no data besides the type dtable and may be used to construct [`Object`]s.
 pub struct Type<T> {
-   dtable: Rc<DispatchTable>,
+   dtable: Gc<DispatchTable>,
    _data: PhantomData<T>,
 }
 
 impl<T> Type<T> {
-   pub(crate) fn new(dtable: Rc<DispatchTable>) -> Self {
+   pub(crate) fn new(dtable: Gc<DispatchTable>) -> Self {
       Self {
          dtable,
          _data: PhantomData,
@@ -32,8 +32,8 @@ impl<T> value::UserData for Type<T>
 where
    T: Any,
 {
-   fn dtable(&self) -> &DispatchTable {
-      &self.dtable
+   fn dtable_gcraw(&self) -> GcRaw<DispatchTable> {
+      Gc::as_raw(&self.dtable)
    }
 
    fn as_any(&self) -> &dyn Any {
@@ -53,7 +53,7 @@ pub trait ObjectConstructor<T> {
 /// can be represented by values inherently. `Object` however may be used for binding types that are
 /// not directly supported by the VM, like [`std::fs::File`].
 pub struct Object<T> {
-   pub(crate) dtable: Rc<DispatchTable>,
+   pub(crate) dtable: Gc<DispatchTable>,
    // The functionality of the RefCell unfortunately has to be replicated because we need unsafe
    // guards that the standard RefCell doesn't provide.
    shared_borrows: Cell<usize>,
@@ -62,9 +62,9 @@ pub struct Object<T> {
 }
 
 impl<T> Object<T> {
-   pub(crate) fn new(dtable: Rc<DispatchTable>, data: T) -> Self {
+   pub(crate) fn new(dtable: GcRaw<DispatchTable>, data: T) -> Self {
       Self {
-         dtable,
+         dtable: unsafe { Gc::from_raw(dtable) },
          shared_borrows: Cell::new(0),
          borrowed_mutably: Cell::new(false),
          data: UnsafeCell::new(data),
@@ -108,8 +108,8 @@ impl<T> value::UserData for Object<T>
 where
    T: Any,
 {
-   fn dtable(&self) -> &DispatchTable {
-      &self.dtable
+   fn dtable_gcraw(&self) -> GcRaw<DispatchTable> {
+      Gc::as_raw(&self.dtable)
    }
 
    fn as_any(&self) -> &dyn Any {

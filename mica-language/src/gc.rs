@@ -28,6 +28,10 @@ pub struct Memory {
 
    /// Things managed by the GC.
    allocations: Vec<GcRaw<()>>,
+
+   /// The "gray stack". Without going too much into what colors mean in GCs, it's used as a way of
+   /// combatting stack overflows by doing actual work on the heap.
+   gray_stack: Vec<RawValue>,
 }
 
 impl Memory {
@@ -40,6 +44,12 @@ impl Memory {
          growth_factor: 384,  // = 1.5 * 256
 
          allocations: Vec::new(),
+
+         // NOTE: Preallocate some stack area here to cut down on GC times in typical programs that
+         // don't allocate deeply recursive objects with lots of fields.
+         // The value of 32 was picked as a sweet spot. Having less or more causes collection times
+         // to be slower for some reason.
+         gray_stack: Vec::with_capacity(32),
       }
    }
 
@@ -55,59 +65,8 @@ impl Memory {
          }
       }
 
-      unsafe fn mark_dtable_reachable_rec(mem: GcRaw<DispatchTable>) {
-         if !mem.get_mem().reachable.get() {
-            mem.mark_reachable();
-            let dtable = mem.get();
-            if let Some(instance) = dtable.instance {
-               mark_dtable_reachable_rec(instance);
-            }
-            for method in dtable.methods() {
-               mark_reachable_rec(RawValue::from(method))
-            }
-         }
-      }
-
-      unsafe fn mark_reachable_rec(value: RawValue) {
-         match value.kind() {
-            ValueKind::Nil | ValueKind::Boolean | ValueKind::Number => (),
-            ValueKind::String => {
-               let raw = value.get_raw_string_unchecked();
-               raw.mark_reachable();
-            }
-            ValueKind::Function => {
-               let raw = value.get_raw_function_unchecked();
-               if !raw.get_mem().reachable.get() {
-                  raw.mark_reachable();
-                  let closure = raw.get();
-                  for upvalue in &closure.captures {
-                     mark_reachable_rec(upvalue.get());
-                  }
-               }
-            }
-            ValueKind::Struct => {
-               let raw = value.get_raw_struct_unchecked();
-               if !raw.get_mem().reachable.get() {
-                  raw.mark_reachable();
-                  let struct_v = raw.get();
-                  for field in struct_v.fields() {
-                     mark_reachable_rec(field);
-                  }
-                  let dtable = *raw.get().dtable.get();
-                  mark_dtable_reachable_rec(dtable);
-               }
-            }
-            // TODO: Allow user data to specify its own references.
-            ValueKind::UserData => {
-               let raw = value.get_raw_user_data_unchecked();
-               if !raw.get_mem().reachable.get() {
-                  raw.mark_reachable();
-               }
-               let dtable = raw.get().dtable_gcraw();
-               mark_dtable_reachable_rec(dtable);
-            }
-         }
-      }
+      // unsafe fn mark_reachable_rec(value: RawValue) {
+      // }
 
       unsafe fn sweep_unreachable<T>(memories: &mut Vec<GcRaw<T>>, allocated_bytes: &mut usize) {
          let mut i = 0;
@@ -136,9 +95,74 @@ impl Memory {
       // loaded into the CPU cache but I'm really not sure.
       mark_all_unreachable(self.allocations.iter().copied());
       for value in roots {
-         mark_reachable_rec(value);
+         self.gray_stack.push(value);
+         self.mark_all_gray_reachable();
       }
       sweep_unreachable(&mut self.allocations, &mut self.allocated_bytes);
+   }
+
+   /// Recursively (as in, actually recursively) marks the dtable and its methods reachable.
+   unsafe fn mark_dtable_reachable_rec(&mut self, mem: GcRaw<DispatchTable>) {
+      if !mem.get_mem().reachable.get() {
+         mem.mark_reachable();
+         let dtable = mem.get();
+         if let Some(instance) = dtable.instance {
+            // NOTE: Recurring here is okay because we never have dtables that are more than two
+            // levels deep.
+            self.mark_dtable_reachable_rec(instance);
+         }
+         for method in dtable.methods() {
+            self.gray_stack.push(RawValue::from(method));
+            self.mark_all_gray_reachable();
+         }
+      }
+   }
+
+   /// Recursively marks all values on the gray stack reachable, beginning with the bottom-most
+   /// value.
+   unsafe fn mark_all_gray_reachable(&mut self) {
+      // NOTE: Unlike `mark_dtable_reachable_rec` this function does not actually recur.
+      // This is to prevent scripters from trivially causing a stack overflow.
+      while let Some(value) = self.gray_stack.pop() {
+         match value.kind() {
+            ValueKind::Nil | ValueKind::Boolean | ValueKind::Number => (),
+            ValueKind::String => {
+               let raw = value.get_raw_string_unchecked();
+               raw.mark_reachable();
+            }
+            ValueKind::Function => {
+               let raw = value.get_raw_function_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+                  let closure = raw.get();
+                  for upvalue in &closure.captures {
+                     self.gray_stack.push(upvalue.get());
+                  }
+               }
+            }
+            ValueKind::Struct => {
+               let raw = value.get_raw_struct_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+                  let struct_v = raw.get();
+                  let dtable = *raw.get().dtable.get();
+                  self.mark_dtable_reachable_rec(dtable);
+                  for field in struct_v.fields() {
+                     self.gray_stack.push(field);
+                  }
+               }
+            }
+            // TODO: Allow user data to specify its own references.
+            ValueKind::UserData => {
+               let raw = value.get_raw_user_data_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+               }
+               let dtable = raw.get().dtable_gcraw();
+               self.mark_dtable_reachable_rec(dtable);
+            }
+         }
+      }
    }
 
    /// Performs an _automatic_ collection.

@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
 use mica_language::bytecode::{
-   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind, Opr24,
+   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind, Opcode, Opr24,
 };
 use mica_language::codegen::CodeGenerator;
 use mica_language::gc::{Gc, Memory};
@@ -14,8 +14,8 @@ use mica_language::value::{Closure, RawValue};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, TryFromValue,
-   TypeBuilder, UserData, Value,
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, LanguageErrorKind, MicaResultExt,
+   StandardLibrary, TryFromValue, TypeBuilder, UserData, Value,
 };
 
 /// The implementation of a raw foreign function.
@@ -142,6 +142,43 @@ impl Engine {
    ) -> Result<Fiber, Error> {
       let script = self.compile(filename, source)?;
       Ok(script.into_fiber())
+   }
+
+   /// Calls the provided function with the given arguments.
+   ///
+   /// # Errors
+   ///
+   /// - [`Error::Runtime`] - if a runtime error occurs - `function` isn't callable or an error is
+   ///   raised during execution
+   pub fn call<T>(
+      &mut self,
+      function: Value,
+      arguments: impl IntoIterator<Item = Value>,
+   ) -> Result<T, Error>
+   where
+      T: TryFromValue,
+   {
+      let stack: Vec<_> =
+         Some(function).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
+      // Having to construct a chunk here isn't the most clean, but it's the simplest way of making
+      // the VM perform a function call. It reuses sanity checks such as ensuring `function`
+      // can actually be called.
+      let mut chunk = Chunk::new(Rc::from("(call)"));
+      chunk.emit((
+         Opcode::Call,
+         // 1 has to be subtracted from the stack length there because the VM itself adds 1 to
+         // count in the function argument.
+         Opr24::try_from(stack.len() - 1)
+            .map_err(|_| LanguageErrorKind::TooManyArguments)
+            .mica()?,
+      ));
+      chunk.emit(Opcode::Halt);
+      let chunk = Rc::new(chunk);
+      let fiber = Fiber {
+         engine: self,
+         inner: vm::Fiber::new(chunk, stack),
+      };
+      fiber.trampoline()
    }
 
    /// Returns the unique global ID for the global with the given name, or an error if there
@@ -287,7 +324,7 @@ impl<'e> Script<'e> {
    pub fn start(&mut self) -> Fiber {
       Fiber {
          engine: self.engine,
-         inner: vm::Fiber::new(Rc::clone(&self.main_chunk)),
+         inner: vm::Fiber::new(Rc::clone(&self.main_chunk), Vec::new()),
       }
    }
 
@@ -295,7 +332,7 @@ impl<'e> Script<'e> {
    pub fn into_fiber(self) -> Fiber<'e> {
       Fiber {
          engine: self.engine,
-         inner: vm::Fiber::new(Rc::clone(&self.main_chunk)),
+         inner: vm::Fiber::new(Rc::clone(&self.main_chunk), Vec::new()),
       }
    }
 }

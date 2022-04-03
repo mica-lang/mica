@@ -118,26 +118,26 @@ impl<'a> From<&'a RawValue> for RawSelf<'a> {
 /// - Constant number of type checked arguments
 ///   - `fn (A, B, C, ...) -> R` where
 ///     - Each argument: [`TryFromValue`]
-///     - `R`: [`ToValue`]
+///     - `R`: [`Into`]`<`[`Value`]`>`
 ///   - `fn (A, B, C, ...) -> Result<R, E>`
 ///     - Each argument: [`TryFromValue`]
-///     - `R`: [`ToValue`]
+///     - `R`: [`Into`]`<`[`Value`]`>`
 ///   - `fn (Self, A, B, C, ...) -> R` where
-///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or
-///       [`FromValueSelfMut`][`crate::FromValueSelfMut`]
+///     - `Self`: [`SelfFromRawValue`][`crate::SelfFromRawValue`] or
+///       [`MutSelfFromRawValue`][`crate::MutSelfFromRawValue`]
 ///     - Each argument after `Self`: [`TryFromValue`]
-///     - `R`: [`ToValue`]
+///     - `R`: [`Into`]`<`[`Value`]`>`
 ///   - `fn (Self, A, B, C, ...) -> Result<R, E>`
-///     - `Self`: [`FromValueSelf`][`crate::FromValueSelf`] or
-///       [`FromValueSelfMut`][`crate::FromValueSelfMut`]
+///     - `Self`: [`SelfFromRawValue`][`crate::SelfFromRawValue`] or
+///       [`MutSelfFromRawValue`][`crate::MutSelfFromRawValue`]
 ///     - Each argument after `Self`: [`TryFromValue`]
-///     - `R`: [`ToValue`]
+///     - `R`: [`Into`]`<`[`Value`]`>`
 ///   - Due to a limitation in Rust's type system, a maximum of 8 arguments is supported now. If
 ///     more is needed, use the varargs versions described below.
 /// - Variable number of dynamically typed arguments
-///   - `fn (`[`Arguments`]`) -> R` where `R`: [`ToValue`]
+///   - `fn (`[`Arguments`]`) -> R` where `R`: [`Into`]`<`[`Value`]`>`
 ///   - `fn (`[`Arguments`]`) -> Result<R, E>` where
-///     - `R`: [`ToValue`]
+///     - `R`: [`Into`]`<`[`Value`]`>`
 ///     - `E`: [`std::error::Error`]
 ///
 /// The generic parameter `V` is not used inside the trait. Its only purpose is to allow for

@@ -1,4 +1,4 @@
-//! **Mica** is an embeddable scripting language for Rust.
+#![doc = include_str!("lib.md")]
 
 pub use mica_hl::*;
 pub use mica_std as std;

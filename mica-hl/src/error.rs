@@ -21,6 +21,8 @@ pub enum Error {
    TooManyFunctions,
    /// Too many methods with different signatures were declared.
    TooManyMethods,
+   /// Too many arguments were passed to a method or a function.
+   TooManyArguments,
    /// A type mismatch occured.
    TypeMismatch {
       expected: Cow<'static, str>,
@@ -56,6 +58,7 @@ impl fmt::Display for Error {
          Self::TooManyGlobals => f.write_str("too many globals"),
          Self::TooManyFunctions => f.write_str("too many functions"),
          Self::TooManyMethods => f.write_str("too many methods with different signatures"),
+         Self::TooManyArguments => f.write_str("too many arguments passed to a function"),
          Self::TypeMismatch { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }

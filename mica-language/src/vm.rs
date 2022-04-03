@@ -90,12 +90,12 @@ pub struct Fiber {
 
 impl Fiber {
    /// Creates a new VM.
-   pub fn new(chunk: Rc<Chunk>) -> Self {
+   pub fn new(chunk: Rc<Chunk>, stack: Vec<RawValue>) -> Self {
       Self {
          pc: 0,
          chunk,
          closure: None,
-         stack: Vec::new(),
+         stack,
          stack_bottom: 0,
          open_upvalues: Vec::new(),
          call_stack: Vec::new(),

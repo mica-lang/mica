@@ -4,7 +4,8 @@ use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
 use mica_language::bytecode::{
-   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind, Opr24,
+   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind,
+   FunctionSignature, Opcode, Opr24,
 };
 use mica_language::codegen::CodeGenerator;
 use mica_language::gc::{Gc, Memory};
@@ -32,7 +33,8 @@ pub struct DebugOptions {
    pub dump_bytecode: bool,
 }
 
-/// An execution engine. Contains information about things like globals, registered types, etc.
+/// **Start here!** An execution engine. Contains information about things like globals, registered
+/// types, etc.
 pub struct Engine {
    pub(crate) env: Environment,
    pub(crate) globals: Globals,
@@ -144,6 +146,111 @@ impl Engine {
       Ok(script.into_fiber())
    }
 
+   /// Calls the provided function with the given arguments.
+   ///
+   /// # Errors
+   ///
+   /// - [`Error::Runtime`] - if a runtime error occurs - `function` isn't callable or an error is
+   ///   raised during execution
+   /// - [`Error::TooManyArguments`] - if more arguments than the implementation can support is
+   ///   passed to the function
+   pub fn call<T>(
+      &mut self,
+      function: Value,
+      arguments: impl IntoIterator<Item = Value>,
+   ) -> Result<T, Error>
+   where
+      T: TryFromValue,
+   {
+      let stack: Vec<_> =
+         Some(function).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
+      // Having to construct a chunk here isn't the most clean, but it's the simplest way of making
+      // the VM perform a function call. It reuses sanity checks such as ensuring `function`
+      // can actually be called.
+      let mut chunk = Chunk::new(Rc::from("(call)"));
+      chunk.emit((
+         Opcode::Call,
+         // 1 has to be subtracted from the stack length there because the VM itself adds 1 to
+         // count in the function argument.
+         Opr24::try_from(stack.len() - 1).map_err(|_| Error::TooManyArguments)?,
+      ));
+      chunk.emit(Opcode::Halt);
+      let chunk = Rc::new(chunk);
+      let fiber = Fiber {
+         engine: self,
+         inner: vm::Fiber::new(chunk, stack),
+      };
+      fiber.trampoline()
+   }
+
+   /// Returns the unique ID of a method with a given name and arity.
+   ///
+   /// Note that there can only exist about 65 thousand unique method signatures. This is usually
+   /// not a problem as method names often repeat. Also note that unlike functions, a method can
+   /// only accept up to 256 arguments. Which, to be quite frankly honest, should be enough for
+   /// anyone.
+   ///
+   /// # Errors
+   ///
+   /// - [`Error::TooManyMethods`] - raised when too many unique method signatures exist at once
+   pub fn method_id(&mut self, signature: impl MethodSignature) -> Result<MethodId, Error> {
+      signature.to_method_id(&mut self.env)
+   }
+
+   /// Calls a method on a receiver with the given arguments.
+   ///
+   /// Note that if you're calling a method often, it's cheaper to precompute the method signature
+   /// into a [`MethodId`] by using the [`method_id`][`Self::method_id`] function, compared to
+   /// passing a name+arity pair every single time.
+   ///
+   /// # Errors
+   ///
+   /// - [`Error::Runtime`] - if a runtime error occurs - `function` isn't callable or an error is
+   ///   raised during execution
+   /// - [`Error::TooManyArguments`] - if more arguments than the implementation can support is
+   ///   passed to the function
+   /// - [`Error::TooManyMethods`] - if too many methods with different signatures exist at the same
+   ///   time
+   /// - [`Error::ArgumentCount`] - if `arguments.count()` does not match the argument count of the
+   ///   signature
+   pub fn call_method<T>(
+      &mut self,
+      receiver: Value,
+      signature: impl MethodSignature,
+      arguments: impl IntoIterator<Item = Value>,
+   ) -> Result<T, Error>
+   where
+      T: TryFromValue,
+   {
+      let method_id = signature.to_method_id(&mut self.env)?;
+      // Unwrapping here is fine because `to_method_id` ensures that a method with a given ID
+      // exists.
+      let signature = self.env.get_function_signature(method_id.0).unwrap();
+      let stack: Vec<_> =
+         Some(receiver).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
+      let argument_count = u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?;
+      if Some(argument_count as u16) != signature.arity {
+         return Err(Error::ArgumentCount {
+            // Unwrapping here is fine because signatures of methods created by `to_method_id`
+            // always have a static arity.
+            expected: signature.arity.unwrap() as usize - 1,
+            got: argument_count as usize - 1,
+         });
+      }
+      let mut chunk = Chunk::new(Rc::from("(call)"));
+      chunk.emit((
+         Opcode::CallMethod,
+         Opr24::pack((method_id.0, argument_count)),
+      ));
+      chunk.emit(Opcode::Halt);
+      let chunk = Rc::new(chunk);
+      let fiber = Fiber {
+         engine: self,
+         inner: vm::Fiber::new(chunk, stack),
+      };
+      fiber.trampoline()
+   }
+
    /// Returns the unique global ID for the global with the given name, or an error if there
    /// are too many globals in scope.
    ///
@@ -153,14 +260,8 @@ impl Engine {
    ///
    /// # Errors
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-   pub fn global_id(&mut self, name: &str) -> Result<GlobalId, Error> {
-      if let Some(slot) = self.env.get_global(name) {
-         Ok(GlobalId(slot))
-      } else {
-         Ok(GlobalId(
-            self.env.create_global(name).map_err(|_| Error::TooManyGlobals)?,
-         ))
-      }
+   pub fn global_id(&mut self, name: impl GlobalName) -> Result<GlobalId, Error> {
+      name.to_global_id(&mut self.env)
    }
 
    /// Sets a global variable that'll be available to scripts executed by the engine.
@@ -171,7 +272,7 @@ impl Engine {
    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
    pub fn set<G, T>(&mut self, id: G, value: T) -> Result<(), Error>
    where
-      G: ToGlobalId,
+      G: GlobalName,
       T: Into<Value>,
    {
       let id = id.to_global_id(&mut self.env)?;
@@ -188,7 +289,7 @@ impl Engine {
    ///  - [`Error::TypeMismatch`] - The type of the value is not convertible to `T`
    pub fn get<G, T>(&self, id: G) -> Result<T, Error>
    where
-      G: TryToGlobalId,
+      G: OptionalGlobalName,
       T: TryFromValue,
    {
       if let Some(id) = id.try_to_global_id(&self.env) {
@@ -287,7 +388,7 @@ impl<'e> Script<'e> {
    pub fn start(&mut self) -> Fiber {
       Fiber {
          engine: self.engine,
-         inner: vm::Fiber::new(Rc::clone(&self.main_chunk)),
+         inner: vm::Fiber::new(Rc::clone(&self.main_chunk), Vec::new()),
       }
    }
 
@@ -295,7 +396,7 @@ impl<'e> Script<'e> {
    pub fn into_fiber(self) -> Fiber<'e> {
       Fiber {
          engine: self.engine,
-         inner: vm::Fiber::new(Rc::clone(&self.main_chunk)),
+         inner: vm::Fiber::new(Rc::clone(&self.main_chunk), Vec::new()),
       }
    }
 }
@@ -316,18 +417,18 @@ mod global_id {
 }
 
 /// A trait for names convertible to global IDs.
-pub trait ToGlobalId: global_id::Sealed {
+pub trait GlobalName: global_id::Sealed {
    #[doc(hidden)]
    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalId, Error>;
 }
 
-impl ToGlobalId for GlobalId {
+impl GlobalName for GlobalId {
    fn to_global_id(&self, _: &mut Environment) -> Result<GlobalId, Error> {
       Ok(*self)
    }
 }
 
-impl ToGlobalId for &str {
+impl GlobalName for &str {
    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalId, Error> {
       Ok(if let Some(slot) = env.get_global(*self) {
          GlobalId(slot)
@@ -338,19 +439,62 @@ impl ToGlobalId for &str {
 }
 
 /// A trait for names convertible to global IDs.
-pub trait TryToGlobalId {
+pub trait OptionalGlobalName {
    #[doc(hidden)]
    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId>;
 }
 
-impl TryToGlobalId for GlobalId {
+impl OptionalGlobalName for GlobalId {
    fn try_to_global_id(&self, _: &Environment) -> Option<GlobalId> {
       Some(*self)
    }
 }
 
-impl TryToGlobalId for &str {
+impl OptionalGlobalName for &str {
    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId> {
       env.get_global(*self).map(GlobalId)
+   }
+}
+
+mod method_id {
+   use crate::MethodId;
+
+   pub trait Sealed {}
+
+   impl Sealed for MethodId {}
+   impl Sealed for (&str, u8) {}
+}
+
+/// An ID unique to an engine, identifying a method signature.
+///
+/// Note that these IDs are not portable across different engine instances.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct MethodId(u16);
+
+/// Implemented by every type that can be used as a method signature.
+///
+/// See [`Engine::call_method`].
+pub trait MethodSignature: method_id::Sealed {
+   #[doc(hidden)]
+   fn to_method_id(&self, env: &mut Environment) -> Result<MethodId, Error>;
+}
+
+impl MethodSignature for MethodId {
+   fn to_method_id(&self, _: &mut Environment) -> Result<MethodId, Error> {
+      Ok(*self)
+   }
+}
+
+/// Tuples of string slices and `u8`s are a user-friendly representation of method signatures.
+/// For instance, `("cat", 1)` represents the method `cat/1`.
+impl MethodSignature for (&str, u8) {
+   fn to_method_id(&self, env: &mut Environment) -> Result<MethodId, Error> {
+      env.get_method_index(&FunctionSignature {
+         name: Rc::from(self.0),
+         arity: Some(self.1 as u16 + 1),
+      })
+      .map(MethodId)
+      .map_err(|_| Error::TooManyMethods)
    }
 }

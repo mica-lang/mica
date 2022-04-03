@@ -176,8 +176,8 @@ where
 
    /// Adds an instance function to the struct.
    ///
-   /// The function must follow the "method" calling convention, in that it accepts `&`[`T`] or
-   /// `&mut `[`T`] as its first parameter.
+   /// The function must follow the "method" calling convention, in that it accepts `&T` or
+   /// `&mut T` as its first parameter.
    pub fn add_function<F, V>(self, name: &str, f: F) -> Self
    where
       V: ffvariants::Method<T>,

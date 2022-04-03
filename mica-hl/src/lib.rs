@@ -24,4 +24,10 @@ pub use value::*;
 
 pub use mica_language as language;
 pub use mica_language::gc::Gc;
-pub use mica_language::value::{RawValue, ValueKind};
+/// An **unsafe** value used internally in the VM.
+///
+/// Does not provide any safety guarantees as to GC'd object lifetimes.
+/// You almost always want [`Value`] instead of this.
+pub use mica_language::value::RawValue;
+/// The kind of a [`RawValue`].
+pub use mica_language::value::ValueKind as RawValueKind;

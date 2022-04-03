@@ -296,7 +296,6 @@ assert_eq!(
 
 It's also possible to call functions from the Mica VM in Rust. For that, the [`Engine::call`]
 function may be used.
-
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -315,7 +314,41 @@ let get_greeting =
       .trampoline()?;
 let greeting: String = engine.call(get_greeting, [Value::from("world")])?;
 assert_eq!(greeting, "Hello, world!");
-
 # Ok(())
 # }
+```
+
+Apart from bare functions, it's also possible to call methods, by using [`Engine::call_method`].
+```rust
+# use mica::Value;
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+# let mut engine = mica::Engine::new(mica::std::lib());
+# mica::std::load(&mut engine);
+let greeter_type =
+   engine
+      .start(
+         "greeter.mi",
+         r#"
+            struct Greeter
+
+            impl Greeter
+               func new(template) constructor
+                  @template = template
+               end
+
+               func greetings(for_whom)
+                  @template.replace("{target}", for_whom)
+               end
+            end
+
+            Greeter
+         "#
+      )?
+      .trampoline()?;
+let greeter = engine.call_method(greeter_type, ("new", 1), [Value::from("Hello, {target}!")])?;
+let greeting: String = engine.call_method(greeter, ("greetings", 1), [Value::from("world")])?;
+assert_eq!(greeting, "Hello, world!");
+# Ok(())
+# }
+
 ```

@@ -237,7 +237,7 @@ dependencies = [
 
 [[package]]
 name = "mica-hl"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "mica-language",
 ]

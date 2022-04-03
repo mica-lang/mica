@@ -5,6 +5,8 @@ use std::fmt::Write;
 
 use mica_hl::{Arguments, Engine, MicaResultExt, Value};
 
+use crate::gc::load_gc;
+
 fn print(arguments: Arguments) {
    for value in arguments.array() {
       print!("{value}");
@@ -57,6 +59,8 @@ pub fn load_core(engine: &mut Engine) -> Result<(), mica_hl::Error> {
    engine.add_function("debug", debug)?;
    engine.add_function("error", error)?;
    engine.add_function("assert", assert)?;
+
+   load_gc(engine)?;
 
    Ok(())
 }

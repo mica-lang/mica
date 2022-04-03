@@ -18,7 +18,10 @@ use crate::{
    TypeBuilder, UserData, Value,
 };
 
+/// The implementation of a raw foreign function.
 pub use mica_language::bytecode::ForeignFunction as RawForeignFunction;
+/// The kind of a raw function.
+pub use mica_language::bytecode::FunctionKind as RawFunctionKind;
 
 /// Options for debugging the language implementation.
 #[derive(Debug, Clone, Copy, Default)]
@@ -214,7 +217,7 @@ impl Engine {
       &mut self,
       name: &str,
       parameter_count: impl Into<Option<u16>>,
-      f: RawForeignFunction,
+      f: FunctionKind,
    ) -> Result<(), Error> {
       let global_id = name.to_global_id(&mut self.env)?;
       let function_id = self
@@ -222,7 +225,7 @@ impl Engine {
          .create_function(Function {
             name: Rc::from(name),
             parameter_count: parameter_count.into(), // doesn't matter for non-methods
-            kind: FunctionKind::Foreign(f),
+            kind: f,
          })
          .map_err(|_| Error::TooManyFunctions)?;
       let function = RawValue::from(self.gc.allocate(Closure {
@@ -242,7 +245,11 @@ impl Engine {
       V: ffvariants::Bare,
       F: ForeignFunction<V>,
    {
-      self.add_raw_function(name, F::parameter_count(), f.into_raw_foreign_function())
+      self.add_raw_function(
+         name,
+         F::parameter_count(),
+         FunctionKind::Foreign(f.into_raw_foreign_function()),
+      )
    }
 
    /// Declares a type in the global scope.

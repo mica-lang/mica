@@ -203,7 +203,18 @@ impl Memory {
    /// Automatic collections only trigger upon specific conditions, such as a specific amount of
    /// generations passing. Though right now there are no such conditions.
    pub(crate) unsafe fn auto_collect(&mut self, roots: impl Iterator<Item = RawValue>) {
+      #[cfg(feature = "trace-gc")]
+      {
+         println!(
+            "gc | auto_collect called with strategy {:?}",
+            self.auto_strategy
+         );
+      }
       if self.auto_strategy.satisfied(self) {
+         #[cfg(feature = "trace-gc")]
+         {
+            println!("gc | strategy satisfied, collecting",);
+         }
          self.collect(roots);
          self.auto_strategy = self.auto_strategy.update(self);
       }

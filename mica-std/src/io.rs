@@ -3,9 +3,8 @@
 //! This feature is disabled by default as mica-std's I/O facilities are still under construction.
 
 use std::io;
-use std::rc::Rc;
 
-use mica_hl::{Engine, TypeBuilder, UserData};
+use mica_hl::{Engine, MutSelfFromRawValue, SelfFromRawValue, TypeBuilder, UserData};
 
 struct File {
    // The file is `None` if the user calls `close/0`.
@@ -46,7 +45,7 @@ pub fn load_io(engine: &mut Engine) -> Result<(), mica_hl::Error> {
    engine.add_type(
       TypeBuilder::<File>::new("File")
          .add_constructor("open", |ctor| {
-            move |name: Rc<str>| -> io::Result<_> { Ok(ctor.construct(File::open(&name)?)) }
+            move |name: String| -> io::Result<_> { Ok(ctor.construct(File::open(&name)?)) }
          })
          .add_function("close", File::close),
    )?;

@@ -9,22 +9,49 @@ use std::{fmt, mem, ptr};
 use crate::bytecode::DispatchTable;
 use crate::value::{RawValue, ValueKind};
 
+/// The strategy used for running the GC automatically.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoStrategy {
+   /// Don't run the GC when `auto_collect` is called.
+   Disabled,
+   /// Always run the GC when `auto_collect` is called.
+   AlwaysRun,
+   /// Run the GC if its `allocated_bytes` exceeds `next_run`, and grow `next_run` to
+   /// `allocated_bytes * growth_factor / 256` after collection.
+   Ceiling {
+      next_run: usize,
+      growth_factor: usize,
+   },
+}
+
+impl AutoStrategy {
+   /// Returns whether the strategy's running condition is satisfied.
+   fn satisfied(&self, gc: &Memory) -> bool {
+      match self {
+         Self::Disabled => false,
+         Self::AlwaysRun => true,
+         Self::Ceiling { next_run, .. } => gc.allocated_bytes >= *next_run,
+      }
+   }
+
+   /// Returns an updated version of the strategy after a successful collection.
+   fn update(self, gc: &Memory) -> Self {
+      if let Self::Ceiling { growth_factor, .. } = self {
+         Self::Ceiling {
+            next_run: gc.allocated_bytes * growth_factor / 256,
+            growth_factor,
+         }
+      } else {
+         self
+      }
+   }
+}
+
 /// An allocator and garbage collector for memory.
 pub struct Memory {
-   // Settings that determine when the next automatic GC cycle should run.
-   /// Run on every call to `auto_collect`. Mostly for debugging purposes.
-   always_run: bool,
-   /// The amount of bytes allocated by the GC.
+   /// Determines when the next GC cycle should run.
+   pub auto_strategy: AutoStrategy,
    allocated_bytes: usize,
-   /// The amount of bytes that need to be allocated at the time of `auto_collect` to trigger a
-   /// garbage collection.
-   next_run: usize,
-   /// The growth factor of `next_run`. After each collection `next_run` will become
-   /// `allocated_bytes` multiplied by this factor.
-   ///
-   /// Note that this factor is expressed in **56.8 fixed-point**, so for a factor of 1 set this to
-   /// 256.
-   growth_factor: usize,
 
    /// Things managed by the GC.
    allocations: Vec<GcRaw<()>>,
@@ -38,10 +65,11 @@ impl Memory {
    /// Creates a new GC.
    pub fn new() -> Self {
       Self {
-         always_run: false,
+         auto_strategy: AutoStrategy::Ceiling {
+            next_run: 64 * 1024, // 64 KiB
+            growth_factor: 384,  // = 1.5 * 256
+         },
          allocated_bytes: 0,
-         next_run: 64 * 1024, // 64 KiB
-         growth_factor: 384,  // = 1.5 * 256
 
          allocations: Vec::new(),
 
@@ -51,6 +79,11 @@ impl Memory {
          // to be slower for some reason.
          gray_stack: Vec::with_capacity(32),
       }
+   }
+
+   /// Returns the amount of bytes currently allocated by the GC.
+   pub fn allocated_bytes(&self) -> usize {
+      self.allocated_bytes
    }
 
    /// Marks and sweeps unused allocations.
@@ -170,9 +203,9 @@ impl Memory {
    /// Automatic collections only trigger upon specific conditions, such as a specific amount of
    /// generations passing. Though right now there are no such conditions.
    pub(crate) unsafe fn auto_collect(&mut self, roots: impl Iterator<Item = RawValue>) {
-      if self.always_run || self.allocated_bytes > self.next_run {
+      if self.auto_strategy.satisfied(self) {
          self.collect(roots);
-         self.next_run = self.allocated_bytes * self.growth_factor / 256;
+         self.auto_strategy = self.auto_strategy.update(self);
       }
    }
 

@@ -5,7 +5,8 @@ use std::ptr;
 use std::rc::Rc;
 
 use crate::bytecode::{
-   CaptureKind, Chunk, DispatchTable, Environment, FunctionKind, FunctionSignature, Opcode, Opr24,
+   CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, FunctionSignature,
+   Opcode, Opr24,
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
@@ -250,6 +251,7 @@ impl Fiber {
    fn enter_function(
       &mut self,
       env: &mut Environment,
+      globals: &mut Globals,
       gc: &mut Memory,
       closure: GcRaw<Closure>,
       argument_count: usize,
@@ -278,6 +280,33 @@ impl Fiber {
             }
             self.push(result);
          }
+         &mut FunctionKind::Control(ctl) => {
+            self.call_control(env, globals, gc, ctl, argument_count)?;
+         }
+      }
+      Ok(())
+   }
+
+   /// Handles a call to a control function.
+   fn call_control(
+      &mut self,
+      env: &Environment,
+      globals: &mut Globals,
+      gc: &mut Memory,
+      ctl: Control,
+      argument_count: usize,
+   ) -> Result<(), Error> {
+      match ctl {
+         Control::GcCollect => {
+            if argument_count != 1 {
+               return Err(self.error_outside_function_call(
+                  None,
+                  env,
+                  ErrorKind::TooManyArguments,
+               ));
+            }
+            unsafe { gc.collect(self.roots(globals)) }
+         }
       }
       Ok(())
    }
@@ -286,7 +315,7 @@ impl Fiber {
    fn error_outside_function_call(
       &mut self,
       closure: Option<GcRaw<Closure>>,
-      env: &mut Environment,
+      env: &Environment,
       kind: ErrorKind,
    ) -> Error {
       self.save_return_point();
@@ -585,7 +614,7 @@ impl Fiber {
                let argument_count = u32::from(operand) as usize + 1;
                let function = self.nth_from_top(argument_count);
                let closure = wrap_error!(function.ensure_raw_function());
-               self.enter_function(env, gc, closure, argument_count)?;
+               self.enter_function(env, globals, gc, closure, argument_count)?;
             }
             Opcode::CallMethod => {
                let (method_index, argument_count) = operand.unpack();
@@ -601,7 +630,7 @@ impl Fiber {
                   );
                }
                if let Some(closure) = dtable.get_method(method_index) {
-                  self.enter_function(env, gc, closure, argument_count as usize)?;
+                  self.enter_function(env, globals, gc, closure, argument_count as usize)?;
                } else {
                   let signature =
                      env.get_function_signature(method_index).cloned().unwrap_or_else(|| {

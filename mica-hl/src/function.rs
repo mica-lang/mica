@@ -18,7 +18,7 @@ pub struct Arguments<'a> {
 }
 
 impl<'a> Arguments<'a> {
-   fn new(raw_arguments: &'a [RawValue]) -> Self {
+   pub fn new(raw_arguments: &'a [RawValue]) -> Self {
       // Skip the first argument, which is `self` (or the currently called function).
       Self {
          this: raw_arguments[0],

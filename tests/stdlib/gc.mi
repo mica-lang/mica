@@ -1,0 +1,28 @@
+# Tests methods of the Gc type.
+
+func make_a_bunch_of_trash()
+   i = 0
+   while i < 100 do
+      i = i + 1
+      n = i.to_string
+      print(Gc.allocated_bytes)
+   end
+end
+
+# Manual collection
+Gc.disable()
+make_a_bunch_of_trash()
+before_collection = Gc.allocated_bytes
+Gc.collect()
+after_collection = Gc.allocated_bytes
+assert(after_collection < before_collection)
+
+# AlwaysRun strategy
+print("-- begin AlwaysRun")
+Gc.enable_always_run()
+make_a_bunch_of_trash()
+print("-- end AlwaysRun")
+
+# Ceiling strategy
+Gc.enable_with_ceiling(1024, 1.5 * 256)
+make_a_bunch_of_trash()

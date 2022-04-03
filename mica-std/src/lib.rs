@@ -2,6 +2,7 @@
 
 mod builtins;
 mod core;
+mod gc;
 #[cfg(feature = "io")]
 mod io;
 

@@ -19,7 +19,7 @@ type Constructor<T> = Box<dyn FnOnce(Rc<dyn ObjectConstructor<T>>) -> RawForeign
 /// as their implementations.
 #[derive(Default)]
 pub(crate) struct DispatchTableDescriptor {
-   methods: Vec<(FunctionSignature, RawForeignFunction)>,
+   methods: Vec<(FunctionSignature, FunctionKind)>,
 }
 
 impl DispatchTableDescriptor {
@@ -28,13 +28,13 @@ impl DispatchTableDescriptor {
       gc: &mut Memory,
       dtable: &mut DispatchTable,
       signature: FunctionSignature,
-      f: RawForeignFunction,
+      f: FunctionKind,
    ) -> Result<(), Error> {
       let function_id = env
          .create_function(Function {
             name: Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name)),
             parameter_count: signature.arity,
-            kind: FunctionKind::Foreign(f),
+            kind: f,
          })
          .map_err(|_| Error::TooManyFunctions)?;
       let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
@@ -108,7 +108,7 @@ where
       mut self,
       name: &str,
       parameter_count: Option<u16>,
-      f: RawForeignFunction,
+      f: FunctionKind,
    ) -> Self {
       self.instance_dtable.methods.push((
          FunctionSignature {
@@ -135,7 +135,7 @@ where
       mut self,
       name: &str,
       parameter_count: Option<u16>,
-      f: RawForeignFunction,
+      f: FunctionKind,
    ) -> Self {
       self.type_dtable.methods.push((
          FunctionSignature {
@@ -183,7 +183,11 @@ where
       V: ffvariants::Method<T>,
       F: ForeignFunction<V>,
    {
-      self.add_raw_function(name, F::parameter_count(), f.into_raw_foreign_function())
+      self.add_raw_function(
+         name,
+         F::parameter_count(),
+         FunctionKind::Foreign(f.into_raw_foreign_function()),
+      )
    }
 
    /// Adds a static function to the struct.
@@ -202,7 +206,7 @@ where
             // signature.
             x + 1
          }),
-         f.into_raw_foreign_function(),
+         FunctionKind::Foreign(f.into_raw_foreign_function()),
       )
    }
 
@@ -267,7 +271,13 @@ where
       });
       for (signature, constructor) in self.constructors {
          let f = constructor(Rc::clone(&instancer));
-         DispatchTableDescriptor::add_function_to_dtable(env, gc, &mut type_dtable, signature, f)?;
+         DispatchTableDescriptor::add_function_to_dtable(
+            env,
+            gc,
+            &mut type_dtable,
+            signature,
+            FunctionKind::Foreign(f),
+         )?;
       }
 
       // Build the instance dtable.

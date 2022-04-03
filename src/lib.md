@@ -291,3 +291,31 @@ assert_eq!(
 # Ok(())
 # }
 ```
+
+## Calling Mica from Rust
+
+It's also possible to call functions from the Mica VM in Rust. For that, the [`Engine::call`]
+function may be used.
+
+```rust
+# use mica::Value;
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+# let mut engine = mica::Engine::new(mica::std::lib());
+# mica::std::load(&mut engine);
+let get_greeting =
+   engine
+      .start(
+         "function.mi",
+         r#"
+            (func (x)
+               "Hello, ".cat(x).cat("!")
+            end)
+         "#
+      )?
+      .trampoline()?;
+let greeting: String = engine.call(get_greeting, [Value::from("world")])?;
+assert_eq!(greeting, "Hello, world!");
+
+# Ok(())
+# }
+```

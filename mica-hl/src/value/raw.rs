@@ -2,9 +2,9 @@ use std::any::Any;
 use std::hint::unreachable_unchecked;
 
 use mica_language::gc::{Gc, Memory};
-use mica_language::value::{RawValue, UserData, ValueKind};
+use mica_language::value::{RawValue, ValueKind};
 
-use crate::{Error, Hidden, Object, UnsafeMutGuard, UnsafeRefGuard, Value};
+use crate::{Error, Hidden, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value};
 
 impl Value {
    /// Converts a safe value to a raw value. Gives management rights of the value to the given GC.
@@ -114,13 +114,13 @@ impl SelfFromRawValue for String {
 
 impl<T> SelfFromRawValue for T
 where
-   T: crate::UserData,
+   T: UserData,
 {
    type Guard = UnsafeRefGuard<T>;
 
    unsafe fn self_from_raw_value(value: &RawValue) -> Result<(&Self, Self::Guard), Error> {
       let user_data = value.get_raw_user_data_unchecked().get();
-      if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
+      if let Some(object) = user_data.as_any().downcast_ref::<Object<T>>() {
          object.unsafe_borrow()
       } else {
          unreachable_unchecked()
@@ -159,7 +159,7 @@ where
 
    unsafe fn mut_self_from_raw_value(value: &RawValue) -> Result<(&mut Self, Self::Guard), Error> {
       let user_data = value.get_raw_user_data_unchecked().get();
-      if let Some(object) = <dyn Any>::downcast_ref::<Object<T>>(user_data) {
+      if let Some(object) = user_data.as_any().downcast_ref::<Object<T>>() {
          object.unsafe_borrow_mut()
       } else {
          unreachable_unchecked()

@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::hint::unreachable_unchecked;
 
 use mica_language::gc::{Gc, Memory};

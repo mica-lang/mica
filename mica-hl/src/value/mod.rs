@@ -12,6 +12,7 @@ use crate::{Error, Object};
 pub use raw::*;
 
 /// A GC'd type whose content cannot be safely accessed.
+#[doc(hidden)]
 pub struct Hidden<T>(pub(crate) Gc<T>);
 
 impl<T> Clone for Hidden<T> {

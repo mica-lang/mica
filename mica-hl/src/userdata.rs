@@ -13,7 +13,7 @@ use crate::Error;
 /// Due to limitations in Rust's type system each user-defined type must implement this.
 pub trait UserData: Any {}
 
-/// A type. This contains no data besides the type dtable and may be used to construct [`Object`]s.
+/// A type. This is used to represent user-defined Rust types in the VM (but not their instances).
 pub struct Type<T> {
    dtable: Gc<DispatchTable>,
    _data: PhantomData<T>,
@@ -42,6 +42,9 @@ where
 }
 
 /// A constructor of objects of type `T`.
+///
+/// See [`TypeBuilder::add_constructor`][`crate::TypeBuilder::add_constructor`] for how this is
+/// used.
 pub trait ObjectConstructor<T> {
    /// Constructs an object.
    fn construct(&self, instance: T) -> Object<T>;

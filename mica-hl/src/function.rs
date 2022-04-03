@@ -94,6 +94,7 @@ impl<'a> Arguments<'a> {
 /// Wrapper struct for marking functions that use the with-raw-self calling convention.
 ///
 /// This `Deref`s to the inner value.
+#[doc(hidden)]
 #[repr(transparent)]
 pub struct RawSelf<'a>(&'a RawValue);
 

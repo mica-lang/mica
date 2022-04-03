@@ -33,7 +33,8 @@ pub struct DebugOptions {
    pub dump_bytecode: bool,
 }
 
-/// An execution engine. Contains information about things like globals, registered types, etc.
+/// **Start here!** An execution engine. Contains information about things like globals, registered
+/// types, etc.
 pub struct Engine {
    pub(crate) env: Environment,
    pub(crate) globals: Globals,
@@ -464,7 +465,7 @@ mod method_id {
    impl Sealed for (&str, u8) {}
 }
 
-/// An method ID unique to an engine, identifying a global variable.
+/// An ID unique to an engine, identifying a method signature.
 ///
 /// Note that these IDs are not portable across different engine instances.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

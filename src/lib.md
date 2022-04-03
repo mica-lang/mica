@@ -61,8 +61,9 @@ let mut script = engine.compile("hello.mi", r#" print("Hello, world!") "#)?;
 # Ok(())
 # }
 ```
-Now that you have a script, you can begin executing it by calling `script.start()`. This will start
-up a new [`Fiber`], which represents a pausable thread of execution.<br>
+Now that you have a script, you can begin executing it by calling
+`script.`[`start`][`Script::start`]`()`. This will start up a new [`Fiber`], which represents a
+pausable thread of execution.<br>
 <sup>Though currently there's no way to signal that you want to pause execution from within Mica.</sup>
 
 ```rust
@@ -94,7 +95,7 @@ while let Some(value) = fiber.resume::<Value>()? {
 ```
 If you only care about the final value returned by the fiber, you can call
 [`trampoline`][`Fiber::trampoline`] instead. The name comes from the fact that the function
-_bounces_ into and out of the VM until execution is done.
+bounces into and out of the VM until execution is done.
 
 Note that this function discards all intermediary values returned by the VM.
 ```rust
@@ -169,7 +170,7 @@ assert_eq!(x, 1.0);
 
 ## Calling Rust from Mica
 
-Mica wouldn't be an embeddable scripting language worth anybody's time if it didn't have a way of
+Mica wouldn't be an embeddable scripting language worth your time if it didn't have a way of
 calling Rust functions. To register a Rust function in the VM, [`Engine::add_function`] can be used:
 ```rust
 # use mica::Value;
@@ -186,9 +187,9 @@ assert_eq!(
 ```
 In the Mica VM Rust functions are named "foreign", because they are foreign to the VM. This
 nomenclature is also used in this crate. Apart from this, Rust functions that are registered into
-the global scope, and do not have a `self` parameter, are called _bare_ in the documentation.
+the global scope, and do not have a `self` parameter, are called "bare" in the documentation.
 
-Rust functions registered in the VM can also be fallible, and return a [`Result`]`<T, E>`.
+Rust functions registered in the VM can also be fallible, and return a [`Result<T, E>`].
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -216,8 +217,8 @@ raise a runtime error in the VM.
 # engine.add_function("parse_integer_with_radix", |s: String, radix: u32| {
 #    usize::from_str_radix(&s, radix)
 # })?;
-assert!(engine.start("ffi.mi", r#" parse_integer_with_radix() "#)?.trampoline::<f64>().is_err());
-assert!(engine.start("ffi.mi", r#" parse_integer_with_radix(1, 16) "#)?.trampoline::<f64>().is_err());
+assert!(engine.start("ffi.mi", r#" parse_integer_with_radix()         "#)?.trampoline::<f64>().is_err());
+assert!(engine.start("ffi.mi", r#" parse_integer_with_radix(1, 16)    "#)?.trampoline::<f64>().is_err());
 assert!(engine.start("ffi.mi", r#" parse_integer_with_radix("aa", 16) "#)?.trampoline::<f64>().is_ok());
 # Ok(())
 # }
@@ -238,12 +239,14 @@ the `Counter` type from the example code at the top of the page, but in Rust.
 First of all, for Rust type system reasons, your type needs to implement [`UserData`].
 
 ```rust
+use mica::UserData;
+
 struct Counter {
    value: usize,
    increment: usize,
 }
 
-impl mica::UserData for Counter {}
+impl UserData for Counter {}
 ```
 
 With a type set up, you can then create a [`TypeBuilder`] and use it in [`Engine::add_type`].
@@ -290,6 +293,16 @@ assert_eq!(
 );
 # Ok(())
 # }
+```
+
+Unfortunately Rust's orphan rules prevent traits from being implemented on types from other crates,
+so the only way of binding someone else's type is by creating a newtype struct and implementing
+`UserData` on it.
+```rust
+# use mica::UserData;
+struct File(std::fs::File);
+
+impl UserData for File {}
 ```
 
 ## Calling Mica from Rust

@@ -146,29 +146,61 @@ impl Lexer {
       }
    }
 
-   /// Parses a number.
-   fn number(&mut self) -> Result<f64, Error> {
-      let start = self.location.byte;
-      while let '0'..='9' = self.get() {
+   /// Returns whether the character is a digit that's part of a number literal.
+   fn is_digit_or_underscore(c: char, radix: u32) -> bool {
+      c.is_digit(radix) || c == '_'
+   }
+
+   /// Collects digits into a string.
+   fn collect_digits(&mut self, output: &mut String, radix: u32) -> Result<(), Error> {
+      let start_location = self.location;
+      let mut had_digits = false;
+      while Self::is_digit_or_underscore(self.get(), radix) {
+         if self.get() != '_' {
+            had_digits = true;
+            output.push(self.get());
+         }
          self.advance();
       }
+      if !had_digits {
+         return Err(self.error_at(start_location, ErrorKind::UnderscoresWithoutDigits));
+      }
+      Ok(())
+   }
+
+   /// Parses a number.
+   fn number(&mut self) -> Result<f64, Error> {
+      let mut number = String::new();
+
+      self.collect_digits(&mut number, 10)?;
       if self.get() == '.' {
          let dot = self.location.byte;
          self.advance();
          if Self::is_identifier_start_char(self.get()) {
+            // Special case: backtrack to the dot if we find an identifier after the decimal point.
+            // We want to parse this as a method call.
             self.location.byte = dot;
-         } else if let '0'..='9' = self.get() {
-            while let '0'..='9' = self.get() {
-               self.advance();
-            }
+         } else if Self::is_digit_or_underscore(self.get(), 10) {
+            self.collect_digits(&mut number, 10)?;
          } else {
             return Err(self.error(ErrorKind::MissingDigitsAfterDecimalPoint));
          }
       }
-      let end = self.location.byte;
+      if let 'e' | 'E' = self.get() {
+         number.push(self.get());
+         self.advance();
+         if let '+' | '-' = self.get() {
+            number.push(self.get());
+            self.advance();
+         }
+         if !Self::is_digit_or_underscore(self.get(), 10) {
+            return Err(self.error(ErrorKind::MissingExponent));
+         }
+         self.collect_digits(&mut number, 10)?;
+      }
 
       // Parsing here must succeed as we only allow decimal digits and a decimal point '.'.
-      let number = self.input[start..end].parse().unwrap();
+      let number = number.parse().unwrap();
       Ok(number)
    }
 
@@ -194,21 +226,18 @@ impl Lexer {
                   }
                   self.advance();
                   let digits_location = self.location;
-                  let start = self.location.byte;
-                  while self.get().is_digit(16) {
-                     self.advance();
-                  }
-                  let end = self.location.byte;
+                  let mut number = String::new();
+                  self.collect_digits(&mut number, 16)?;
                   if self.get() != '}' {
                      return Err(
                         self.error_at(left_brace_location, ErrorKind::UEscapeMissingRightBrace),
                      );
                   }
-                  if end - start == 0 {
+                  if number.is_empty() {
                      return Err(self.error_at(digits_location, ErrorKind::UEscapeEmpty));
                   }
                   // The only error here is guaranteed to be overflow.
-                  let scalar_value = u32::from_str_radix(&self.input[start..end], 16)
+                  let scalar_value = u32::from_str_radix(&number, 16)
                      .map_err(|_| self.error_at(digits_location, ErrorKind::UEscapeOutOfRange))?;
                   char::try_from(scalar_value)
                      .map_err(|_| self.error_at(digits_location, ErrorKind::UEscapeOutOfRange))?

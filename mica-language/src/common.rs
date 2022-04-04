@@ -54,6 +54,8 @@ pub enum ErrorKind {
    // Lexer
    InvalidCharacter(char),
    MissingDigitsAfterDecimalPoint,
+   MissingExponent,
+   UnderscoresWithoutDigits,
    MissingClosingQuote,
    InvalidEscape(char),
    UEscapeLeftBraceExpected,
@@ -120,6 +122,8 @@ impl std::fmt::Display for ErrorKind {
       match self {
          Self::InvalidCharacter(c) => write!(f, "invalid character: {c:?}"),
          Self::MissingDigitsAfterDecimalPoint => write!(f, "missing digits after decimal point"),
+         Self::MissingExponent => write!(f, "number exponent expected"),
+         Self::UnderscoresWithoutDigits => write!(f, "at least one digit expected, got only underscores"),
          Self::MissingClosingQuote => write!(f, "missing closing quote '\"'"),
          Self::InvalidEscape(c) => write!(f, "invalid escape: {c:?}"),
          Self::UEscapeLeftBraceExpected => write!(f, "left brace '{{' expected after \\u escape"),

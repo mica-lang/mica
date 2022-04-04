@@ -205,6 +205,32 @@ impl Lexer {
       Ok(number)
    }
 
+   /// Parses a 32-bit integer with the specified radix.
+   fn integer(&mut self, radix: u32) -> Result<u32, Error> {
+      let start_location = self.location;
+      let mut number = String::new();
+      self.collect_digits(&mut number, radix)?;
+      if number.is_empty() {
+         return Err(self.error_at(start_location, ErrorKind::UnderscoresWithoutDigits));
+      }
+      u32::from_str_radix(&number, radix)
+         .map_err(|_| self.error_at(start_location, ErrorKind::IntLiteralOutOfRange))
+   }
+
+   /// Parses an extended `\16:123` integer with explicit radix literal.
+   fn integer_with_radix(&mut self) -> Result<u32, Error> {
+      let radix_location = self.location;
+      let radix = self.integer(10)?;
+      if !(2..=36).contains(&radix) {
+         return Err(self.error_at(radix_location, ErrorKind::IntRadixOutOfRange));
+      }
+      if self.get() != ':' {
+         return Err(self.error(ErrorKind::ColonExpectedAfterRadix));
+      }
+      self.advance();
+      self.integer(radix)
+   }
+
    /// Parses a character inside of a string.
    fn string_char(&mut self) -> Result<char, Error> {
       let c = self.get();
@@ -286,6 +312,10 @@ impl Lexer {
             self.advance();
             let content = self.string(true)?;
             Ok(self.token(TokenKind::String(Rc::from(content))))
+         }
+         '0'..='9' => {
+            let number = self.integer_with_radix()? as f64;
+            Ok(self.token(TokenKind::Number(number)))
          }
          other => Err(self.error(ErrorKind::InvalidBackslashLiteral(other))),
       }

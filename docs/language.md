@@ -38,7 +38,13 @@ false
 
 Strings begin and end with double quotes, and can contain the following escape sequences:
 - `\\` - literal backslash `\`
-- `\"` - literal double quote `"`
+- `\'` - literal apostrophe `'`
+- `\"` - literal quote `"`
+- `\n` - line feed, ASCII 0Ah
+- `\r` - carriage return, ASCII 0Dh
+- `\t` - tabulator, ASCII 09h
+- `\u{x}` - Unicode [scalar value](https://www.unicode.org/glossary/#unicode_scalar_value)
+  - Between braces must be a hexadecimal digit <= 10FFFFh not contained in the range D800h–DFFFh (inclusive).
 
 ### Identifiers
 

@@ -88,10 +88,15 @@ impl Lexer {
 
    /// Emits an error.
    fn error(&self, kind: ErrorKind) -> Error {
+      self.error_at(self.location, kind)
+   }
+
+   /// Emits an error at a specific location.
+   fn error_at(&self, location: Location, kind: ErrorKind) -> Error {
       Error::Compile {
          module_name: Rc::clone(&self.module_name),
          kind,
-         location: self.location,
+         location,
       }
    }
 
@@ -173,6 +178,7 @@ impl Lexer {
          '\\' => {
             self.advance();
             let escape = self.get();
+            let escape_char_location = self.location;
             self.advance();
             match escape {
                '\'' => '\'',
@@ -182,36 +188,34 @@ impl Lexer {
                'r' => '\r',
                't' => '\t',
                'u' => {
-                  // Update token_start temporarily so that errors are reported at the \u escape
-                  // sequence.
-                  let token_start = self.token_start;
-                  self.token_start = self.location;
-
+                  let left_brace_location = self.location;
                   if self.get() != '{' {
                      return Err(self.error(ErrorKind::UEscapeLeftBraceExpected));
                   }
                   self.advance();
+                  let digits_location = self.location;
                   let start = self.location.byte;
                   while self.get().is_digit(16) {
                      self.advance();
                   }
                   let end = self.location.byte;
                   if self.get() != '}' {
-                     return Err(self.error(ErrorKind::UEscapeMissingRightBrace));
+                     return Err(
+                        self.error_at(left_brace_location, ErrorKind::UEscapeMissingRightBrace),
+                     );
                   }
                   if end - start == 0 {
-                     return Err(self.error(ErrorKind::UEscapeEmpty));
+                     return Err(self.error_at(digits_location, ErrorKind::UEscapeEmpty));
                   }
                   // The only error here is guaranteed to be overflow.
                   let scalar_value = u32::from_str_radix(&self.input[start..end], 16)
-                     .map_err(|_| self.error(ErrorKind::UEscapeOutOfRange))?;
-                  let c = char::try_from(scalar_value)
-                     .map_err(|_| self.error(ErrorKind::UEscapeOutOfRange))?;
-
-                  self.token_start = token_start;
-                  c
+                     .map_err(|_| self.error_at(digits_location, ErrorKind::UEscapeOutOfRange))?;
+                  char::try_from(scalar_value)
+                     .map_err(|_| self.error_at(digits_location, ErrorKind::UEscapeOutOfRange))?
                }
-               other => return Err(self.error(ErrorKind::InvalidEscape(other))),
+               other => {
+                  return Err(self.error_at(escape_char_location, ErrorKind::InvalidEscape(other)))
+               }
             }
          }
          other => other,

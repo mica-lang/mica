@@ -129,7 +129,7 @@ impl std::fmt::Display for ErrorKind {
          }
          Self::UEscapeOutOfRange => write!(
             f,
-            "code point in \\u escape is out of range (must be <= 10FFFF)"
+            "Unicode scalar value in \\u escape is out of range (must be <= 10FFFF and outside of D800..DFFF)"
          ),
 
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),

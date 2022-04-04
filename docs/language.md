@@ -71,7 +71,7 @@ Be aware of some gotchas.
 1e_
 ```
 
-Mica also has syntax sugar for 32-bit integer literals with an arbitrary radix. This syntax is
+Mica also has syntax sugar for **32-bit** integer literals with an arbitrary radix. This syntax is
 `\radix:value`, for instance `\16:DEADBEEF` or `\8:777`.
 The character set used is decimal digits from 0 to 9, and letters from A to Z, in that order.
 Lowercase and uppercase letters are allowed and equivalent. Because of the size of this character
@@ -89,6 +89,10 @@ There exist a few shorthands for commonly used radixes.
 - `\o777` - same as `\8:777`
    - Note that an uppercase O is *not* permitted, because it's easily confused with a zero.
 - `\xFF` or `\XFF` - same as `\16:FF`
+
+Integers that out of the 32-bit range are invalid, though this limitation may be relaxed in
+the future. The current rationale for imposing such a limit is that bit operations in the standard
+library only operate on 32 bits.
 
 #### Strings
 

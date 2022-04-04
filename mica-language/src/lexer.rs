@@ -254,7 +254,7 @@ impl Lexer {
    }
 
    /// Parses a string.
-   fn string(&mut self) -> Result<String, Error> {
+   fn string(&mut self, raw: bool) -> Result<String, Error> {
       self.advance();
       let mut result = String::new();
       while self.get() != '"' {
@@ -264,10 +264,30 @@ impl Lexer {
          if self.get() == '\n' {
             self.advance_line();
          }
-         result.push(self.string_char()?);
+         result.push(if !raw {
+            self.string_char()?
+         } else {
+            let c = self.get();
+            self.advance();
+            c
+         });
       }
       self.advance();
       Ok(result)
+   }
+
+   /// Parses an extended (or "backslash") literal, that is, a literal that begins with a backslash,
+   /// is discriminated by a single character following the backslash, and continues onward.
+   fn extended_literal(&mut self) -> Result<Token, Error> {
+      self.advance(); // Skip backslash
+      match self.get() {
+         'r' => {
+            self.advance();
+            let content = self.string(true)?;
+            Ok(self.token(TokenKind::String(Rc::from(content))))
+         }
+         other => Err(self.error(ErrorKind::InvalidBackslashLiteral(other))),
+      }
    }
 
    /// Parses a single character token.
@@ -353,9 +373,10 @@ impl Lexer {
             Ok(self.token(TokenKind::Number(number)))
          }
          '"' => {
-            let string = self.string()?;
+            let string = self.string(false)?;
             Ok(self.token(TokenKind::String(Rc::from(string))))
          }
+         '\\' => Ok(self.extended_literal()?),
 
          c if Self::is_identifier_start_char(c) => {
             let identifier = self.identifier();

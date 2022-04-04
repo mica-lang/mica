@@ -62,6 +62,8 @@ pub enum ErrorKind {
    UEscapeMissingRightBrace,
    UEscapeEmpty,
    UEscapeOutOfRange,
+   InvalidBackslashLiteral(char),
+   RawStringMissingOpeningQuote,
 
    // Parser
    InvalidPrefixToken,
@@ -125,7 +127,7 @@ impl std::fmt::Display for ErrorKind {
          Self::MissingExponent => write!(f, "number exponent expected"),
          Self::UnderscoresWithoutDigits => write!(f, "at least one digit expected, got only underscores"),
          Self::MissingClosingQuote => write!(f, "missing closing quote '\"'"),
-         Self::InvalidEscape(c) => write!(f, "invalid escape: {c:?}"),
+         Self::InvalidEscape(c) => write!(f, "invalid escape: \\{c}"),
          Self::UEscapeLeftBraceExpected => write!(f, "left brace '{{' expected after \\u escape"),
          Self::UEscapeEmpty => write!(f, "\\u escape is empty"),
          Self::UEscapeMissingRightBrace => {
@@ -135,6 +137,8 @@ impl std::fmt::Display for ErrorKind {
             f,
             "Unicode scalar value in \\u escape is out of range (must be <= 10FFFF and outside of D800..DFFF)"
          ),
+         Self::InvalidBackslashLiteral(c) => write!(f, "invalid extended literal: \\{c}"),
+         Self::RawStringMissingOpeningQuote => write!(f, "missing opening quote '\"' in \\r string"),
 
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),

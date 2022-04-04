@@ -217,8 +217,8 @@ impl Lexer {
          .map_err(|_| self.error_at(start_location, ErrorKind::IntLiteralOutOfRange))
    }
 
-   /// Parses an extended `\16:123` integer with explicit radix literal.
-   fn integer_with_radix(&mut self) -> Result<u32, Error> {
+   /// Parses an extended `\16:123`-style integer with explicit radix.
+   fn integer_with_explicit_radix(&mut self) -> Result<u32, Error> {
       let radix_location = self.location;
       let radix = self.integer(10)?;
       if !(2..=36).contains(&radix) {
@@ -229,6 +229,13 @@ impl Lexer {
       }
       self.advance();
       self.integer(radix)
+   }
+
+   /// Parses an extended `\b1100`-style integer with a constant radix.
+   fn integer_with_constant_radix(&mut self, radix: u32) -> Result<Token, Error> {
+      self.advance(); // Skip over the initial character (eg. b or x)
+      let number = self.integer(radix)? as f64;
+      Ok(self.token(TokenKind::Number(number)))
    }
 
    /// Parses a character inside of a string.
@@ -314,9 +321,14 @@ impl Lexer {
             Ok(self.token(TokenKind::String(Rc::from(content))))
          }
          '0'..='9' => {
-            let number = self.integer_with_radix()? as f64;
+            let number = self.integer_with_explicit_radix()? as f64;
             Ok(self.token(TokenKind::Number(number)))
          }
+         'b' | 'B' => self.integer_with_constant_radix(2),
+         // NOTE: Do not request an uppercase O, this is intentional so as to prevent confusion
+         // between 0 and O.
+         'o' => self.integer_with_constant_radix(8),
+         'x' | 'X' => self.integer_with_constant_radix(16),
          other => Err(self.error(ErrorKind::InvalidBackslashLiteral(other))),
       }
    }

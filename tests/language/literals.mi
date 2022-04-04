@@ -21,6 +21,14 @@ assert(\36:Rust == 1299629)
 assert(\16:deadbeef == 3735928559)
 assert(\36:foo_bar == 948437811)
 
+# Shorthand radix
+assert(\b110 == \2:110)
+assert(\b110 == \B110)
+assert(\o777 == \8:777)
+assert(\o777 == 511)
+assert(\xDEADBEEF == \16:DEADBEEF)
+assert(\xDEADBEEF == \XDEADBEEF)
+
 # String escapes
 assert("\\".byte_at(0) == 92)
 assert("\"".byte_at(0) == 34)

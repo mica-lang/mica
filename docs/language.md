@@ -71,6 +71,25 @@ Be aware of some gotchas.
 1e_
 ```
 
+Mica also has syntax sugar for 32-bit integer literals with an arbitrary radix. This syntax is
+`\radix:value`, for instance `\16:DEADBEEF` or `\8:777`.
+The character set used is decimal digits from 0 to 9, and letters from A to Z, in that order.
+Lowercase and uppercase letters are allowed and equivalent. Because of the size of this character
+set, the maximal allowed radix is 36 (and the minimal is 2).
+
+As with any numbers, underscore separators are permitted between all digits.
+```
+\16:DEADBEEF
+# same as
+\1_6:Dead_beef
+```
+
+There exist a few shorthands for commonly used radixes.
+- `\b110` or `\B110` - same as `\2:110`
+- `\o777` - same as `\8:777`
+   - Note that an uppercase O is *not* permitted, because it's easily confused with a zero.
+- `\xFF` or `\XFF` - same as `\16:FF`
+
 #### Strings
 
 Strings begin and end with double quotes, and can contain the following escape sequences:

@@ -22,3 +22,6 @@ assert("\n".byte_at(0) == 10)
 assert("\r".byte_at(0) == 13)
 assert("\t".byte_at(0) == 9)
 assert("\u{107}" == "ć")
+
+# Raw strings
+assert(\r"C:\Windows\System32" == "C:\\Windows\\System32")

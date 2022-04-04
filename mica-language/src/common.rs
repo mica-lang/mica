@@ -56,6 +56,10 @@ pub enum ErrorKind {
    MissingDigitsAfterDecimalPoint,
    MissingClosingQuote,
    InvalidEscape(char),
+   UEscapeLeftBraceExpected,
+   UEscapeMissingRightBrace,
+   UEscapeEmpty,
+   UEscapeOutOfRange,
 
    // Parser
    InvalidPrefixToken,
@@ -118,6 +122,15 @@ impl std::fmt::Display for ErrorKind {
          Self::MissingDigitsAfterDecimalPoint => write!(f, "missing digits after decimal point"),
          Self::MissingClosingQuote => write!(f, "missing closing quote '\"'"),
          Self::InvalidEscape(c) => write!(f, "invalid escape: {c:?}"),
+         Self::UEscapeLeftBraceExpected => write!(f, "left brace '{{' expected after \\u escape"),
+         Self::UEscapeEmpty => write!(f, "\\u escape is empty"),
+         Self::UEscapeMissingRightBrace => {
+            write!(f, "missing right brace '}}' for this \\u escape")
+         }
+         Self::UEscapeOutOfRange => write!(
+            f,
+            "code point in \\u escape is out of range (must be <= 10FFFF)"
+         ),
 
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),

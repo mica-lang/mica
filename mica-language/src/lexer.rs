@@ -167,6 +167,57 @@ impl Lexer {
       Ok(number)
    }
 
+   /// Parses a character inside of a string.
+   fn string_char(&mut self) -> Result<char, Error> {
+      Ok(match self.get() {
+         '\\' => {
+            self.advance();
+            let escape = self.get();
+            self.advance();
+            match escape {
+               '\'' => '\'',
+               '"' => '"',
+               '\\' => '\\',
+               'n' => '\n',
+               'r' => '\r',
+               't' => '\t',
+               'u' => {
+                  // Update token_start temporarily so that errors are reported at the \u escape
+                  // sequence.
+                  let token_start = self.token_start;
+                  self.token_start = self.location;
+
+                  if self.get() != '{' {
+                     return Err(self.error(ErrorKind::UEscapeLeftBraceExpected));
+                  }
+                  self.advance();
+                  let start = self.location.byte;
+                  while self.get().is_digit(16) {
+                     self.advance();
+                  }
+                  let end = self.location.byte;
+                  if self.get() != '}' {
+                     return Err(self.error(ErrorKind::UEscapeMissingRightBrace));
+                  }
+                  if end - start == 0 {
+                     return Err(self.error(ErrorKind::UEscapeEmpty));
+                  }
+                  // The only error here is guaranteed to be overflow.
+                  let scalar_value = u32::from_str_radix(&self.input[start..end], 16)
+                     .map_err(|_| self.error(ErrorKind::UEscapeOutOfRange))?;
+                  let c = char::try_from(scalar_value)
+                     .map_err(|_| self.error(ErrorKind::UEscapeOutOfRange))?;
+
+                  self.token_start = token_start;
+                  c
+               }
+               other => return Err(self.error(ErrorKind::InvalidEscape(other))),
+            }
+         }
+         other => other,
+      })
+   }
+
    /// Parses a string.
    fn string(&mut self) -> Result<String, Error> {
       self.advance();
@@ -178,17 +229,7 @@ impl Lexer {
          if self.get() == '\n' {
             self.advance_line();
          }
-         result.push(match self.get() {
-            '\\' => {
-               self.advance();
-               match self.get() {
-                  '"' => '"',
-                  '\\' => '\\',
-                  other => return Err(self.error(ErrorKind::InvalidEscape(other))),
-               }
-            }
-            other => other,
-         });
+         result.push(self.string_char()?);
          self.advance();
       }
       self.advance();

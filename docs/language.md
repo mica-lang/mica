@@ -24,14 +24,50 @@ determined at runtime.
 
 Literals are a way of inputting values directly into a program's source code. A literal expression
 evaluates to the value of the literal.
-```
+```mica
 nil       # Nil, means no value
 true      # Boolean
 false
 1         # Number
 1.41
+1e9
+1_000
 "abc"     # String
 "\"hi\""
+```
+
+#### Numbers
+
+Number literals are composed of a series of decimal digits, optionally followed by a decimal point
+`.`, which must then be followed by another series of decimal digits which are fractional part.
+As a special rule, the `.` can also be immediately followed by a starting character of an
+[identifier](#identifiers), which is parsed as a call to a method on the number.
+
+This can then be followed by an `e` or `E`, signifying scientific notation, and the `e` must be
+followed by an optional `+` or `-`, signifying the sign of the exponent, and digits signifying the
+exponent.
+
+Digits (decimal or not) can be separated with underscores `_`.
+
+Examples of valid numbers showcasing the various features include:
+```mica
+1000
+1_000
+3.14159265
+0.000_000_001
+3e2     # 300
+3.14e2  # 314
+1e1     # 10
+1e+1
+1_e+1
+5e-2    # 0.05
+```
+Be aware of some gotchas.
+```mica
+# The following example is *not* a number, but a method call (0)._000
+0._000
+# The following example is invalid syntax, because the exponent must have at least one digit.
+1e_
 ```
 
 #### Strings
@@ -45,6 +81,8 @@ Strings begin and end with double quotes, and can contain the following escape s
 - `\t` - tabulator, ASCII 09h
 - `\u{x}` - Unicode [scalar value](https://www.unicode.org/glossary/#unicode_scalar_value)
   - Between braces must be a hexadecimal digit <= 10FFFFh not contained in the range D800h–DFFFh (inclusive).
+  - Like in any number, digits can be separated with underscores.
+  - At least one digit must be present.
 
 ### Identifiers
 

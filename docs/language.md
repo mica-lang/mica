@@ -34,6 +34,7 @@ false
 1_000
 "abc"     # String
 "\"hi\""
+\r"C:\Windows\System32"
 ```
 
 #### Numbers
@@ -83,6 +84,11 @@ Strings begin and end with double quotes, and can contain the following escape s
   - Between braces must be a hexadecimal digit <= 10FFFFh not contained in the range D800h–DFFFh (inclusive).
   - Like in any number, digits can be separated with underscores.
   - At least one digit must be present.
+
+Raw strings begin with the extended literal sequence `\r`, followed by double quotes, any sequence
+of characters that doesn't contain double quotes, and end with double quotes. Raw strings do not
+interpret any escape sequences. This also means that raw strings themselves cannot contain
+quotes `"`, though this restriction may get lifted at some point in the future.
 
 ### Identifiers
 

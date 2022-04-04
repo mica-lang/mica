@@ -235,6 +235,7 @@ impl Lexer {
                         self.error_at(left_brace_location, ErrorKind::UEscapeMissingRightBrace),
                      );
                   }
+                  self.advance();
                   if number.is_empty() {
                      return Err(self.error_at(digits_location, ErrorKind::UEscapeEmpty));
                   }

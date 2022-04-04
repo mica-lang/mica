@@ -175,6 +175,7 @@ impl Lexer {
       self.collect_digits(&mut number, 10)?;
       if self.get() == '.' {
          let dot = self.location.byte;
+         number.push(self.get());
          self.advance();
          if Self::is_identifier_start_char(self.get()) {
             // Special case: backtrack to the dot if we find an identifier after the decimal point.
@@ -206,9 +207,10 @@ impl Lexer {
 
    /// Parses a character inside of a string.
    fn string_char(&mut self) -> Result<char, Error> {
-      Ok(match self.get() {
+      let c = self.get();
+      self.advance();
+      Ok(match c {
          '\\' => {
-            self.advance();
             let escape = self.get();
             let escape_char_location = self.location;
             self.advance();
@@ -263,7 +265,6 @@ impl Lexer {
             self.advance_line();
          }
          result.push(self.string_char()?);
-         self.advance();
       }
       self.advance();
       Ok(result)

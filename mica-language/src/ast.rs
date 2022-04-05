@@ -70,6 +70,10 @@ impl Ast {
       unsafe { self.nodes.get_unchecked(node.0 as usize).1 }
    }
 
+   fn data(&self, node: NodeId) -> Option<&NodeData> {
+      unsafe { self.data.get_unchecked(node.0 as usize).as_ref() }
+   }
+
    /// Returns the source location of a node.
    pub fn location(&self, node: NodeId) -> Location {
       unsafe { *self.locations.get_unchecked(node.0 as usize) }
@@ -77,7 +81,7 @@ impl Ast {
 
    /// Returns the number data of a node, or `None` if the node carries a different type of data.
    pub fn number(&self, node: NodeId) -> Option<f64> {
-      if let &Some(NodeData::Number(n)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
+      if let Some(&NodeData::Number(n)) = self.data(node) {
          return Some(n);
       }
       None
@@ -85,7 +89,7 @@ impl Ast {
 
    /// Returns the string data of a node, or `None` if the node carries a different type of data.
    pub fn string(&self, node: NodeId) -> Option<&Rc<str>> {
-      if let Some(NodeData::String(s)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
+      if let Some(NodeData::String(s)) = self.data(node) {
          return Some(s);
       }
       None
@@ -93,7 +97,7 @@ impl Ast {
 
    /// Returns the children data of a node, or `None` if the node carries a different type of data.
    pub fn children(&self, node: NodeId) -> Option<&[NodeId]> {
-      if let Some(NodeData::Children(c)) = unsafe { self.data.get_unchecked(node.0 as usize) } {
+      if let Some(NodeData::Children(c)) = self.data(node) {
          return Some(c);
       }
       None
@@ -210,6 +214,9 @@ pub enum NodeKind {
 
    /// An identifier. Must contain string data.
    Identifier,
+
+   /// A list literal.
+   List,
 
    /// Negation operator (prefix `-`).
    Negate,

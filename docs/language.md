@@ -113,10 +113,24 @@ of characters that doesn't contain double quotes, and end with double quotes. Ra
 interpret any escape sequences. This also means that raw strings themselves cannot contain
 quotes `"`, though this restriction may get lifted at some point in the future.
 
+Note that ordinary _and_ long string literals must not contain embedded line breaks.
+
 Mica also features a literal for getting the numeric value of any Unicode codepoint.
-```
+```mica
 \u' '  # \x20
 \u'🗿'  # \x1F5FF
+```
+
+Strings that span multiple lines are a little hard to represent using the usual double-quoted `""`
+syntax, which is why _long_ string literals exist. These literals allow you to more conveniently
+represent multiline content.
+To construct a long string literal, prefix each line of the string with `\\`.
+```mica
+# Spaces after \\ are not stripped.
+s =
+   \\Hello,
+   \\ world!
+assert(s == "Hello,\n world!")
 ```
 
 ### Identifiers

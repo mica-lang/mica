@@ -34,6 +34,9 @@ pub(super) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
       .add_function("nth_char", |s: &String, position: usize| {
          s.chars().nth(position)
       })
+      .add_function("nth_code_point", |s: &String, position: usize| {
+         s.chars().nth(position).map(u32::from)
+      })
       .add_function("char_len", |s: &String| s.chars().count())
       .add_function("is_empty", |s: &String| s.is_empty())
       .add_function("to_lowercase", |s: &String| s.to_lowercase())

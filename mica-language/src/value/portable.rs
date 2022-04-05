@@ -143,6 +143,7 @@ impl PartialEq for ValueImpl {
          (Self::Number(l), Self::Number(r)) => l == r,
          (Self::String(l), Self::String(r)) => unsafe { l.get() == r.get() },
          (Self::Function(l), Self::Function(r)) => l == r,
+         (Self::List(l), Self::List(r)) => unsafe { l.get() == r.get() },
          (Self::Struct(l), Self::Struct(r)) => l == r,
          _ => mem::discriminant(self) == mem::discriminant(other),
       }

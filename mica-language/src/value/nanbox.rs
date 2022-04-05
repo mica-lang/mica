@@ -219,10 +219,18 @@ impl PartialEq for ValueImpl {
          && unsafe { self.object_tag() == other.object_tag() }
       {
          unsafe {
-            if self.object_tag() == Self::OBJECT_STRING {
-               let a = self.as_gc::<String>().get();
-               let b = other.as_gc::<String>().get();
-               return a == b;
+            match self.object_tag() {
+               Self::OBJECT_STRING => {
+                  let a = self.as_gc::<String>().get();
+                  let b = other.as_gc::<String>().get();
+                  return a == b;
+               }
+               Self::OBJECT_LIST => {
+                  let a = self.as_gc::<List>().get();
+                  let b = other.as_gc::<List>().get();
+                  return a == b;
+               }
+               _ => (),
             }
          }
       }

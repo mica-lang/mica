@@ -472,6 +472,14 @@ impl List {
       }
    }
 
+   /// Returns a mutable reference to the vector inside.
+   ///
+   /// # Safety
+   /// No references (mutable or not) to the vector must exist at the time of calling this.
+   pub unsafe fn get_mut(&self) -> *mut Vec<RawValue> {
+      self.elements.get()
+   }
+
    /// Returns the items of the list as a slice.
    ///
    /// # Safety
@@ -498,6 +506,12 @@ impl List {
       }
 
       Ok(left.len().partial_cmp(&right.len()))
+   }
+}
+
+impl PartialEq for List {
+   fn eq(&self, other: &Self) -> bool {
+      (unsafe { &*self.elements.get() } == unsafe { &*other.elements.get() })
    }
 }
 

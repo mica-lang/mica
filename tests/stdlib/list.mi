@@ -14,6 +14,12 @@ assert(l.get(0) == 1)
 assert(l.get(1) == 3)
 assert(l.get(2) == 4)
 
+do
+   li = [1]
+   li.set(0, 2)
+   assert(li == [2])
+end
+
 assert(l.first == 1)
 assert(l.last == 4)
 

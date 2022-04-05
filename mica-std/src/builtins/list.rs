@@ -16,6 +16,20 @@ pub(super) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
             Ok(v.get(index).copied().unwrap_or(RawValue::from(())))
          })),
       )
+      .add_function(
+         "set",
+         |v: &mut Vec<RawValue>, index: usize, value: RawValue| {
+            if index < v.len() {
+               v[index] = value;
+               Ok(value)
+            } else {
+               Err(OutOfBounds {
+                  index,
+                  len: v.len(),
+               })
+            }
+         },
+      )
       .add_function("first", |v: &Vec<RawValue>| v.first().copied())
       .add_function("last", |v: &Vec<RawValue>| v.last().copied())
       .add_function("contains", |v: &Vec<RawValue>, x: RawValue| v.contains(&x))
@@ -41,3 +55,21 @@ pub(super) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
       })
       .add_function("clone", |v: &Vec<RawValue>| v.clone())
 }
+
+#[derive(Debug)]
+struct OutOfBounds {
+   index: usize,
+   len: usize,
+}
+
+impl std::fmt::Display for OutOfBounds {
+   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+      write!(
+         f,
+         "index {} is out of the list's bounds (the list's length is {})",
+         self.index, self.len
+      )
+   }
+}
+
+impl std::error::Error for OutOfBounds {}

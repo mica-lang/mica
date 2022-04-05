@@ -9,6 +9,8 @@ use crate::common::{Error, ErrorKind, Location};
 pub enum TokenKind {
    Number(f64),
    String(Rc<str>),
+   // NOTE: Long strings \\ are joined into one string literal by the parser.
+   LongString(Rc<str>),
 
    Identifier(Rc<str>),
 
@@ -88,10 +90,15 @@ impl Lexer {
 
    /// Emits an error.
    fn error(&self, kind: ErrorKind) -> Error {
+      self.error_at(self.location, kind)
+   }
+
+   /// Emits an error at a specific location.
+   fn error_at(&self, location: Location, kind: ErrorKind) -> Error {
       Error::Compile {
          module_name: Rc::clone(&self.module_name),
          kind,
-         location: self.location,
+         location,
       }
    }
 
@@ -141,34 +148,149 @@ impl Lexer {
       }
    }
 
-   /// Parses a number.
-   fn number(&mut self) -> Result<f64, Error> {
-      let start = self.location.byte;
-      while let '0'..='9' = self.get() {
+   /// Returns whether the character is a digit that's part of a number literal.
+   fn is_digit_or_underscore(c: char, radix: u32) -> bool {
+      c.is_digit(radix) || c == '_'
+   }
+
+   /// Collects digits into a string.
+   fn collect_digits(&mut self, output: &mut String, radix: u32) -> Result<(), Error> {
+      let start_location = self.location;
+      let mut had_digits = false;
+      while Self::is_digit_or_underscore(self.get(), radix) {
+         if self.get() != '_' {
+            had_digits = true;
+            output.push(self.get());
+         }
          self.advance();
       }
+      if !had_digits {
+         return Err(self.error_at(start_location, ErrorKind::UnderscoresWithoutDigits));
+      }
+      Ok(())
+   }
+
+   /// Parses a number.
+   fn number(&mut self) -> Result<f64, Error> {
+      let mut number = String::new();
+
+      self.collect_digits(&mut number, 10)?;
       if self.get() == '.' {
          let dot = self.location.byte;
+         number.push(self.get());
          self.advance();
          if Self::is_identifier_start_char(self.get()) {
+            // Special case: backtrack to the dot if we find an identifier after the decimal point.
+            // We want to parse this as a method call.
             self.location.byte = dot;
-         } else if let '0'..='9' = self.get() {
-            while let '0'..='9' = self.get() {
-               self.advance();
-            }
+         } else if Self::is_digit_or_underscore(self.get(), 10) {
+            self.collect_digits(&mut number, 10)?;
          } else {
             return Err(self.error(ErrorKind::MissingDigitsAfterDecimalPoint));
          }
       }
-      let end = self.location.byte;
+      if let 'e' | 'E' = self.get() {
+         number.push(self.get());
+         self.advance();
+         if let '+' | '-' = self.get() {
+            number.push(self.get());
+            self.advance();
+         }
+         if !Self::is_digit_or_underscore(self.get(), 10) {
+            return Err(self.error(ErrorKind::MissingExponent));
+         }
+         self.collect_digits(&mut number, 10)?;
+      }
 
       // Parsing here must succeed as we only allow decimal digits and a decimal point '.'.
-      let number = self.input[start..end].parse().unwrap();
+      let number = number.parse().unwrap();
       Ok(number)
    }
 
+   /// Parses a 32-bit integer with the specified radix.
+   fn integer(&mut self, radix: u32) -> Result<u32, Error> {
+      let start_location = self.location;
+      let mut number = String::new();
+      self.collect_digits(&mut number, radix)?;
+      if number.is_empty() {
+         return Err(self.error_at(start_location, ErrorKind::UnderscoresWithoutDigits));
+      }
+      u32::from_str_radix(&number, radix)
+         .map_err(|_| self.error_at(start_location, ErrorKind::IntLiteralOutOfRange))
+   }
+
+   /// Parses an extended `\16:123`-style integer with explicit radix.
+   fn integer_with_explicit_radix(&mut self) -> Result<u32, Error> {
+      let radix_location = self.location;
+      let radix = self.integer(10)?;
+      if !(2..=36).contains(&radix) {
+         return Err(self.error_at(radix_location, ErrorKind::IntRadixOutOfRange));
+      }
+      if self.get() != ':' {
+         return Err(self.error(ErrorKind::ColonExpectedAfterRadix));
+      }
+      self.advance();
+      self.integer(radix)
+   }
+
+   /// Parses an extended `\b1100`-style integer with a constant radix.
+   fn integer_with_constant_radix(&mut self, radix: u32) -> Result<Token, Error> {
+      self.advance(); // Skip over the initial character (eg. b or x)
+      let number = self.integer(radix)? as f64;
+      Ok(self.token(TokenKind::Number(number)))
+   }
+
+   /// Parses a character inside of a string.
+   fn string_char(&mut self) -> Result<char, Error> {
+      let c = self.get();
+      self.advance();
+      Ok(match c {
+         '\\' => {
+            let escape = self.get();
+            let escape_char_location = self.location;
+            self.advance();
+            match escape {
+               '\'' => '\'',
+               '"' => '"',
+               '\\' => '\\',
+               'n' => '\n',
+               'r' => '\r',
+               't' => '\t',
+               'u' => {
+                  let left_brace_location = self.location;
+                  if self.get() != '{' {
+                     return Err(self.error(ErrorKind::UEscapeLeftBraceExpected));
+                  }
+                  self.advance();
+                  let digits_location = self.location;
+                  let mut number = String::new();
+                  self.collect_digits(&mut number, 16)?;
+                  if self.get() != '}' {
+                     return Err(
+                        self.error_at(left_brace_location, ErrorKind::UEscapeMissingRightBrace),
+                     );
+                  }
+                  self.advance();
+                  if number.is_empty() {
+                     return Err(self.error_at(digits_location, ErrorKind::UEscapeEmpty));
+                  }
+                  // The only error here is guaranteed to be overflow.
+                  let scalar_value = u32::from_str_radix(&number, 16)
+                     .map_err(|_| self.error_at(digits_location, ErrorKind::UEscapeOutOfRange))?;
+                  char::try_from(scalar_value)
+                     .map_err(|_| self.error_at(digits_location, ErrorKind::UEscapeOutOfRange))?
+               }
+               other => {
+                  return Err(self.error_at(escape_char_location, ErrorKind::InvalidEscape(other)))
+               }
+            }
+         }
+         other => other,
+      })
+   }
+
    /// Parses a string.
-   fn string(&mut self) -> Result<String, Error> {
+   fn string(&mut self, raw: bool) -> Result<String, Error> {
       self.advance();
       let mut result = String::new();
       while self.get() != '"' {
@@ -176,23 +298,77 @@ impl Lexer {
             return Err(self.error(ErrorKind::MissingClosingQuote));
          }
          if self.get() == '\n' {
-            self.advance_line();
+            return Err(self.error(ErrorKind::LineBreakInStringIsNotAllowed));
          }
-         result.push(match self.get() {
-            '\\' => {
-               self.advance();
-               match self.get() {
-                  '"' => '"',
-                  '\\' => '\\',
-                  other => return Err(self.error(ErrorKind::InvalidEscape(other))),
-               }
-            }
-            other => other,
+         result.push(if !raw {
+            self.string_char()?
+         } else {
+            let c = self.get();
+            self.advance();
+            c
          });
-         self.advance();
       }
       self.advance();
       Ok(result)
+   }
+
+   /// Parses a character literal 'a'.
+   fn character(&mut self) -> Result<char, Error> {
+      if self.get() != '\'' {
+         return Err(self.error(ErrorKind::CharacterMissingOpeningApostrophe));
+      }
+      self.advance();
+      let c = self.string_char()?;
+      if self.get() != '\'' {
+         return Err(self.error(ErrorKind::CharacterMissingClosingApostrophe));
+      }
+      self.advance();
+      Ok(c)
+   }
+
+   /// Parses a long string literal \\.
+   fn long_string(&mut self) -> String {
+      let mut string = String::new();
+      while !matches!(self.get(), '\n' | Self::EOF) {
+         // NOTE: Newlines are added in by the parser.
+         // CR (from CRLF line breaks) is handled like a normal character and thus is preserved.
+         string.push(self.get());
+         self.advance();
+      }
+      string
+   }
+
+   /// Parses an extended (or "backslash") literal, that is, a literal that begins with a backslash,
+   /// is discriminated by a single character following the backslash, and continues onward.
+   fn extended_literal(&mut self) -> Result<Token, Error> {
+      self.advance(); // Skip backslash
+      match self.get() {
+         'r' => {
+            self.advance();
+            let content = self.string(true)?;
+            Ok(self.token(TokenKind::String(Rc::from(content))))
+         }
+         'u' => {
+            self.advance();
+            let c = self.character()? as u32 as f64;
+            Ok(self.token(TokenKind::Number(c)))
+         }
+         '\\' => {
+            self.advance();
+            let content = self.long_string();
+            Ok(self.token(TokenKind::LongString(Rc::from(content))))
+         }
+         '0'..='9' => {
+            let number = self.integer_with_explicit_radix()? as f64;
+            Ok(self.token(TokenKind::Number(number)))
+         }
+         'b' | 'B' => self.integer_with_constant_radix(2),
+         // NOTE: Do not request an uppercase O, this is intentional so as to prevent confusion
+         // between 0 and O.
+         'o' => self.integer_with_constant_radix(8),
+         'x' | 'X' => self.integer_with_constant_radix(16),
+         other => Err(self.error(ErrorKind::InvalidBackslashLiteral(other))),
+      }
    }
 
    /// Parses a single character token.
@@ -278,9 +454,10 @@ impl Lexer {
             Ok(self.token(TokenKind::Number(number)))
          }
          '"' => {
-            let string = self.string()?;
+            let string = self.string(false)?;
             Ok(self.token(TokenKind::String(Rc::from(string))))
          }
+         '\\' => Ok(self.extended_literal()?),
 
          c if Self::is_identifier_start_char(c) => {
             let identifier = self.identifier();

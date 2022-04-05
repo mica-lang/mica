@@ -24,21 +24,114 @@ determined at runtime.
 
 Literals are a way of inputting values directly into a program's source code. A literal expression
 evaluates to the value of the literal.
-```
+```mica
 nil       # Nil, means no value
 true      # Boolean
 false
 1         # Number
 1.41
+1e9
+1_000
 "abc"     # String
 "\"hi\""
+\r"C:\Windows\System32"
 ```
+
+#### Numbers
+
+Number literals are composed of a series of decimal digits, optionally followed by a decimal point
+`.`, which must then be followed by another series of decimal digits which are fractional part.
+As a special rule, the `.` can also be immediately followed by a starting character of an
+[identifier](#identifiers), which is parsed as a call to a method on the number.
+
+This can then be followed by an `e` or `E`, signifying scientific notation, and the `e` must be
+followed by an optional `+` or `-`, signifying the sign of the exponent, and digits signifying the
+exponent.
+
+Digits (decimal or not) can be separated with underscores `_`.
+
+Examples of valid numbers showcasing the various features include:
+```mica
+1000
+1_000
+3.14159265
+0.000_000_001
+3e2     # 300
+3.14e2  # 314
+1e1     # 10
+1e+1
+1_e+1
+5e-2    # 0.05
+```
+Be aware of some gotchas.
+```mica
+# The following example is *not* a number, but a method call (0)._000
+0._000
+# The following example is invalid syntax, because the exponent must have at least one digit.
+1e_
+```
+
+Mica also has syntax sugar for **32-bit** integer literals with an arbitrary radix. This syntax is
+`\radix:value`, for instance `\16:DEADBEEF` or `\8:777`.
+The character set used is decimal digits from 0 to 9, and letters from A to Z, in that order.
+Lowercase and uppercase letters are allowed and equivalent. Because of the size of this character
+set, the maximal allowed radix is 36 (and the minimal is 2).
+
+As with any numbers, underscore separators are permitted between all digits.
+```
+\16:DEADBEEF
+# same as
+\1_6:Dead_beef
+```
+
+There exist a few shorthands for commonly used radixes.
+- `\b110` or `\B110` - same as `\2:110`
+- `\o777` - same as `\8:777`
+   - Note that an uppercase O is *not* permitted, because it's easily confused with a zero.
+- `\xFF` or `\XFF` - same as `\16:FF`
+
+Integers that out of the 32-bit range are invalid, though this limitation may be relaxed in
+the future. The current rationale for imposing such a limit is that bit operations in the standard
+library only operate on 32 bits.
 
 #### Strings
 
 Strings begin and end with double quotes, and can contain the following escape sequences:
 - `\\` - literal backslash `\`
-- `\"` - literal double quote `"`
+- `\'` - literal apostrophe `'`
+- `\"` - literal quote `"`
+- `\n` - line feed, ASCII 0Ah
+- `\r` - carriage return, ASCII 0Dh
+- `\t` - tabulator, ASCII 09h
+- `\u{x}` - Unicode [scalar value](https://www.unicode.org/glossary/#unicode_scalar_value)
+  - Between braces must be a hexadecimal digit <= 10FFFFh not contained in the range D800h–DFFFh (inclusive).
+  - Like in any number, digits can be separated with underscores.
+  - At least one digit must be present.
+
+Raw strings begin with the extended literal sequence `\r`, followed by double quotes, any sequence
+of characters that doesn't contain double quotes, and end with double quotes. Raw strings do not
+interpret any escape sequences. This also means that raw strings themselves cannot contain
+quotes `"`, though this restriction may get lifted at some point in the future.
+
+Note that ordinary _and_ long string literals must not contain embedded line breaks.
+
+Mica also features a literal for getting the numeric value of any Unicode codepoint.
+```mica
+\u' '  # \x20
+\u'🗿'  # \x1F5FF
+```
+
+Strings that span multiple lines are a little hard to represent using the usual double-quoted `""`
+syntax, which is why _long_ string literals exist. These literals allow you to more conveniently
+represent multiline content.
+To construct a long string literal, prefix each line of the string with `\\`.
+```mica
+# Spaces after \\ are not stripped.
+s =
+   \\Hello,
+   \\ world!
+assert(s == "Hello,\n world!")
+```
 
 ### Identifiers
 

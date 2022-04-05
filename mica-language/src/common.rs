@@ -54,8 +54,22 @@ pub enum ErrorKind {
    // Lexer
    InvalidCharacter(char),
    MissingDigitsAfterDecimalPoint,
+   MissingExponent,
+   UnderscoresWithoutDigits,
    MissingClosingQuote,
    InvalidEscape(char),
+   LineBreakInStringIsNotAllowed,
+   UEscapeLeftBraceExpected,
+   UEscapeMissingRightBrace,
+   UEscapeEmpty,
+   UEscapeOutOfRange,
+   InvalidBackslashLiteral(char),
+   RawStringMissingOpeningQuote,
+   IntLiteralOutOfRange,
+   IntRadixOutOfRange,
+   ColonExpectedAfterRadix,
+   CharacterMissingOpeningApostrophe,
+   CharacterMissingClosingApostrophe,
 
    // Parser
    InvalidPrefixToken,
@@ -116,8 +130,27 @@ impl std::fmt::Display for ErrorKind {
       match self {
          Self::InvalidCharacter(c) => write!(f, "invalid character: {c:?}"),
          Self::MissingDigitsAfterDecimalPoint => write!(f, "missing digits after decimal point"),
+         Self::MissingExponent => write!(f, "number exponent expected"),
+         Self::UnderscoresWithoutDigits => write!(f, "at least one digit expected, got only underscores"),
          Self::MissingClosingQuote => write!(f, "missing closing quote '\"'"),
-         Self::InvalidEscape(c) => write!(f, "invalid escape: {c:?}"),
+         Self::InvalidEscape(c) => write!(f, "invalid escape: \\{c}"),
+         Self::LineBreakInStringIsNotAllowed => write!(f, "line breaks are not allowed in string literals; use \\n or a long string literal \\\\"),
+         Self::UEscapeLeftBraceExpected => write!(f, "left brace '{{' expected after \\u escape"),
+         Self::UEscapeEmpty => write!(f, "\\u escape is empty"),
+         Self::UEscapeMissingRightBrace => {
+            write!(f, "missing right brace '}}' for this \\u escape")
+         }
+         Self::UEscapeOutOfRange => write!(
+            f,
+            "Unicode scalar value in \\u escape is out of range (must be <= 10FFFF and outside of D800..DFFF)"
+         ),
+         Self::InvalidBackslashLiteral(c) => write!(f, "invalid extended literal: \\{c}"),
+         Self::RawStringMissingOpeningQuote => write!(f, "missing opening quote '\"' in \\r string"),
+         Self::IntLiteralOutOfRange => write!(f, "integer literal out of range"),
+         Self::IntRadixOutOfRange => write!(f, "integer radix out of range; must be >= 2 and <= 36"),
+         Self::ColonExpectedAfterRadix => write!(f, "colon ':' expected after integer radix"),
+         Self::CharacterMissingOpeningApostrophe => write!(f, "apostrophe ' expected to begin character literal"),
+         Self::CharacterMissingClosingApostrophe => write!(f, "apostrophe ' expected to end character literal"),
 
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),

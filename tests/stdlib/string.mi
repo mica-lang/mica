@@ -23,6 +23,7 @@ assert("abc end".rfind("world") == nil)
 assert("abc".byte_at(0) == 97)
 assert("abc".nth_char(1) == "b")
 assert("łąść".nth_char(1) == "ą")
+assert("🗿".nth_code_point(0) == \u'🗿')
 
 assert("abc".byte_len == 3)
 assert("łąść".byte_len == 8)

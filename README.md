@@ -1,5 +1,7 @@
 # Mica
 
+[Language reference][langref] · [Rust API][rustapi] · ![Crate version](https://img.shields.io/crates/v/mica?style=flat-square)
+
 A simple, human-friendly scripting language, developed one feature at a time.
 
 - **Human-friendly** syntax inspired by Ruby and Lua
@@ -9,7 +11,16 @@ A simple, human-friendly scripting language, developed one feature at a time.
 
 You can try out the REPL with `cargo run -p mica-cli --release`.
 
-A language reference is available [here](language.md).
+## Try it out
+
+To compile Mica, use the following command:
+```sh
+$ cargo build -p mica-cli --release
+# or, if you want to run it immediately:
+$ cargo run -p mica-cli --release
+```
+
+Check out the [language reference][langref] to have a detailed look at the language!
 
 ## Performance
 
@@ -58,3 +69,38 @@ It's not ideal yet but hopefully it'll get better with time. Current bottlenecks
 - Stack-based rather than register-based virtual machine
 - Rust not having a way of doing direct threading in the interpreter dispatch loop. _Tail calls when_
 - The bytecode compiler not optimizing much
+
+## Why?
+
+The Rust ecosystem has plenty of existing scripting languages, but none of them quite cuts it for
+me.
+- [Lua](https://lua.org) is awesome, but I found [mlua](https://github.com/khvzak/mlua) and
+  [rlua](https://github.com/amethyst/rlua) quite annoying to use due to their inability to bind
+  most functions out of the box. You have to create wrapper functions that take giant tuples as
+  arguments, which confuses the heck out of rustfmt, and is just plain inconvenient.
+- [Rhai](https://github.com/rhaiscript/rhai) is nice, but the AST-walk interpreter is very slow.
+  A waste of computer resources which I cannot afford to have in my programs.
+- [Dyon](https://github.com/pistondevelopers/dyon)… exists, but it seems more like an
+  experimenting ground for implementing language features rather than a language designed for end
+  users.
+- [Rune](https://github.com/rune-rs/rune) is by far the most promising, but even the author admits
+  that performance isn't the primary goal right now.
+- And there's plenty more languages, though these seem like the most prominent ones as far as I
+  could tell. I also ruled out weird and wacky (including [FP](https://en.wikipedia.org/wiki/Functional_programming))
+  languages, because due to current processor architectures they're doomed to remain merely
+  research projects. Also, imperative languages are the most widely taught ones by far.
+
+There's also a number of unfinished crates with bindings for more niche scripting languages that
+are written in C, but, well, _they're unfinished_.
+
+I wanted a language that would take performance seriously. Be designed with specific goals in mind.
+Sugary, but not quite sweet enough to give you instant diabetes. And made by me.
+
+Designing and implementing a programming language has been one of my arch nemeses for the
+[past](https://github.com/liquidev/hayago) [few](https://github.com/liquidev/cflang) [years](https://github.com/liquidev/tsuki)
+with varying levels of success, but I feel like finally, this is it. This time I'm gonna do it.
+
+
+
+  [langref]: docs/language.md
+  [rustapi]: https://docs.rs/mica/latest

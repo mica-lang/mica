@@ -1,6 +1,6 @@
 # Mica
 
-[Language reference][langref] · [Rust API][rustapi]<br>
+[Language reference][langref] · [Rust API][rustapi]
 ![Crate version](https://img.shields.io/crates/v/mica?style=flat-square)
 
 A simple, human-friendly scripting language, developed one feature at a time.

@@ -1,3 +1,6 @@
+#![allow(clippy::or_fun_call)]
+
+mod list;
 mod number;
 mod string;
 
@@ -40,7 +43,7 @@ impl StandardLibrary for Lib {
    }
 
    fn define_list(&mut self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
-      builder
+      list::define(builder)
    }
 }
 

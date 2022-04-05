@@ -43,3 +43,4 @@ assert(\r"C:\Windows\System32" == "C:\\Windows\\System32")
 
 # Character literals
 assert(\u'ć' == \x107)
+assert(\u'🗿' == \x1F5FF)

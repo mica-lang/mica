@@ -40,3 +40,6 @@ assert("\u{107}" == "ć")
 
 # Raw strings
 assert(\r"C:\Windows\System32" == "C:\\Windows\\System32")
+
+# Character literals
+assert(\u'ć' == \x107)

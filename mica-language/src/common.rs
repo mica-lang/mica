@@ -67,6 +67,8 @@ pub enum ErrorKind {
    IntLiteralOutOfRange,
    IntRadixOutOfRange,
    ColonExpectedAfterRadix,
+   CharacterMissingOpeningApostrophe,
+   CharacterMissingClosingApostrophe,
 
    // Parser
    InvalidPrefixToken,
@@ -145,6 +147,8 @@ impl std::fmt::Display for ErrorKind {
          Self::IntLiteralOutOfRange => write!(f, "integer literal out of range"),
          Self::IntRadixOutOfRange => write!(f, "integer radix out of range; must be >= 2 and <= 36"),
          Self::ColonExpectedAfterRadix => write!(f, "colon ':' expected after integer radix"),
+         Self::CharacterMissingOpeningApostrophe => write!(f, "apostrophe ' expected to begin character literal"),
+         Self::CharacterMissingClosingApostrophe => write!(f, "apostrophe ' expected to end character literal"),
 
          Self::InvalidPrefixToken => write!(f, "invalid token in prefix position"),
          Self::InvalidInfixToken => write!(f, "invalid token in infix position"),

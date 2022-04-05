@@ -310,6 +310,20 @@ impl Lexer {
       Ok(result)
    }
 
+   /// Parses a character literal 'a'.
+   fn character(&mut self) -> Result<char, Error> {
+      if self.get() != '\'' {
+         return Err(self.error(ErrorKind::CharacterMissingOpeningApostrophe));
+      }
+      self.advance();
+      let c = self.string_char()?;
+      if self.get() != '\'' {
+         return Err(self.error(ErrorKind::CharacterMissingClosingApostrophe));
+      }
+      self.advance();
+      Ok(c)
+   }
+
    /// Parses an extended (or "backslash") literal, that is, a literal that begins with a backslash,
    /// is discriminated by a single character following the backslash, and continues onward.
    fn extended_literal(&mut self) -> Result<Token, Error> {
@@ -319,6 +333,11 @@ impl Lexer {
             self.advance();
             let content = self.string(true)?;
             Ok(self.token(TokenKind::String(Rc::from(content))))
+         }
+         'u' => {
+            self.advance();
+            let c = self.character()? as u32 as f64;
+            Ok(self.token(TokenKind::Number(c)))
          }
          '0'..='9' => {
             let number = self.integer_with_explicit_radix()? as f64;

@@ -44,9 +44,9 @@ assert(\r"C:\Windows\System32" == "C:\\Windows\\System32")
 # Long strings
 s =
    \\Hello
-   \\world!
+   \\ world!
 # Replace CRLF to LF for Windows.
-assert(s.replace("\r\n", "\n") == "Hello\nworld!")
+assert(s.replace("\r\n", "\n") == "Hello\n world!")
 
 # Character literals
 assert(\u'ć' == \x107)

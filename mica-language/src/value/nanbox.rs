@@ -5,7 +5,7 @@ use std::hint::unreachable_unchecked;
 
 use crate::gc::{GcMem, GcRaw};
 
-use super::{Closure, Struct, UserData, ValueCommon, ValueKind};
+use super::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
 
 fn _size_and_alignment_checks() {
    // If any of these checks fail, your platform cannot use NaN boxing.
@@ -47,6 +47,9 @@ impl ValueImpl {
    const OBJECT_FUNCTION: u64 = 1;
    const OBJECT_STRUCT: u64 = 2;
    const OBJECT_USER_DATA: u64 = 3;
+   const OBJECT_LIST: u64 = 4;
+   // NOTE: Be careful with adding more types! We're limited to supporting up to eight (the enum
+   // value must be <= 7), consider using user data whenever it would make sense.
 
    /// The set of bits used for the object tag.
    /// The tag is three bits used to determine the type of the object.
@@ -150,6 +153,10 @@ impl ValueCommon for ValueImpl {
       unsafe { Self::new_object_nan(Self::OBJECT_STRUCT, s) }
    }
 
+   fn new_list(l: GcRaw<List>) -> Self {
+      unsafe { Self::new_object_nan(Self::OBJECT_LIST, l) }
+   }
+
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_USER_DATA, u) }
    }
@@ -164,6 +171,7 @@ impl ValueCommon for ValueImpl {
                Self::OBJECT_FUNCTION => ValueKind::Function,
                Self::OBJECT_STRUCT => ValueKind::Struct,
                Self::OBJECT_USER_DATA => ValueKind::UserData,
+               Self::OBJECT_LIST => ValueKind::List,
                _ => unreachable_unchecked(),
             }
          },
@@ -192,6 +200,10 @@ impl ValueCommon for ValueImpl {
       self.as_gc()
    }
 
+   unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
+      self.as_gc()
+   }
+
    unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>> {
       self.as_gc()
    }
@@ -207,10 +219,18 @@ impl PartialEq for ValueImpl {
          && unsafe { self.object_tag() == other.object_tag() }
       {
          unsafe {
-            if self.object_tag() == Self::OBJECT_STRING {
-               let a = self.as_gc::<String>().get();
-               let b = other.as_gc::<String>().get();
-               return a == b;
+            match self.object_tag() {
+               Self::OBJECT_STRING => {
+                  let a = self.as_gc::<String>().get();
+                  let b = other.as_gc::<String>().get();
+                  return a == b;
+               }
+               Self::OBJECT_LIST => {
+                  let a = self.as_gc::<List>().get();
+                  let b = other.as_gc::<List>().get();
+                  return a == b;
+               }
+               _ => (),
             }
          }
       }

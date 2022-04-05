@@ -10,6 +10,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
+use std::fmt::Write;
 use std::marker::PhantomPinned;
 use std::ops::Deref;
 use std::pin::Pin;
@@ -34,6 +35,7 @@ pub enum ValueKind {
    String,
    Function,
    Struct,
+   List,
    UserData,
 }
 
@@ -45,6 +47,7 @@ trait ValueCommon: Clone + PartialEq {
    fn new_string(s: GcRaw<String>) -> Self;
    fn new_function(f: GcRaw<Closure>) -> Self;
    fn new_struct(s: GcRaw<Struct>) -> Self;
+   fn new_list(s: GcRaw<List>) -> Self;
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self;
 
    fn kind(&self) -> ValueKind;
@@ -55,6 +58,7 @@ trait ValueCommon: Clone + PartialEq {
    unsafe fn get_raw_string_unchecked(&self) -> GcRaw<String>;
    unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure>;
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct>;
+   unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List>;
    unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>>;
 }
 
@@ -81,6 +85,7 @@ impl RawValue {
          ValueKind::Number => "Number".into(),
          ValueKind::String => "String".into(),
          ValueKind::Function => "Function".into(),
+         ValueKind::List => "List".into(),
          ValueKind::Struct => unsafe { self.0.get_raw_struct_unchecked().get().dtable() }
             .type_name
             .deref()
@@ -139,6 +144,14 @@ impl RawValue {
    /// Calling this on a value that isn't known to be a struct is undefined behavior.
    pub unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
       self.0.get_raw_struct_unchecked()
+   }
+
+   /// Returns a list value without performing any checks.
+   ///
+   /// # Safety
+   /// Calling this on a value that isn't known to be a list is undefined behavior.
+   pub unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
+      self.0.get_raw_list_unchecked()
    }
 
    /// Returns a user data value without performing any checks.
@@ -256,6 +269,11 @@ impl RawValue {
             },
             ValueKind::Function => Ok(None),
             ValueKind::Struct => Ok(None),
+            ValueKind::List => unsafe {
+               let a = self.0.get_raw_list_unchecked();
+               let b = other.0.get_raw_list_unchecked();
+               a.get().try_partial_cmp(b.get())
+            },
             ValueKind::UserData => Ok(None),
          }
       }
@@ -304,6 +322,12 @@ impl From<GcRaw<Struct>> for RawValue {
    }
 }
 
+impl From<GcRaw<List>> for RawValue {
+   fn from(s: GcRaw<List>) -> Self {
+      Self(ValueImpl::new_list(s))
+   }
+}
+
 impl From<GcRaw<Box<dyn UserData>>> for RawValue {
    fn from(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self(ValueImpl::new_user_data(u))
@@ -328,6 +352,19 @@ impl fmt::Debug for RawValue {
                "<func {:?}>",
                self.0.get_raw_function_unchecked().get_raw()
             ),
+            ValueKind::List => {
+               f.write_char('[')?;
+               let list = self.0.get_raw_list_unchecked();
+               let elements = list.get().as_slice();
+               for (i, element) in elements.iter().enumerate() {
+                  if i != 0 {
+                     f.write_str(", ")?;
+                  }
+                  fmt::Debug::fmt(element, f)?;
+               }
+               f.write_char(']')?;
+               Ok(())
+            }
             ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
             ValueKind::UserData => dtable(f, self.0.get_raw_user_data_unchecked().get().dtable()),
          }
@@ -419,6 +456,62 @@ impl Struct {
 
    pub(crate) unsafe fn fields(&self) -> impl Iterator<Item = RawValue> + '_ {
       (&*self.fields.get()).iter().copied()
+   }
+}
+
+/// A Mica list.
+pub struct List {
+   elements: UnsafeCell<Vec<RawValue>>,
+}
+
+impl List {
+   /// Creates a new, empty list.
+   pub fn new(elements: Vec<RawValue>) -> List {
+      List {
+         elements: UnsafeCell::new(elements),
+      }
+   }
+
+   /// Returns a mutable reference to the vector inside.
+   ///
+   /// # Safety
+   /// No references (mutable or not) to the vector must exist at the time of calling this.
+   pub unsafe fn get_mut(&self) -> *mut Vec<RawValue> {
+      self.elements.get()
+   }
+
+   /// Returns the items of the list as a slice.
+   ///
+   /// # Safety
+   /// There must be no mutable references to the list inside at the time of calling this.
+   pub(crate) unsafe fn as_slice(&self) -> &[RawValue] {
+      &*self.elements.get()
+   }
+
+   /// Attempts to compare two lists to each other lexicographically.
+   pub(crate) unsafe fn try_partial_cmp(
+      &self,
+      other: &List,
+   ) -> Result<Option<Ordering>, ErrorKind> {
+      let (left, right) = (self.as_slice(), other.as_slice());
+      let len = left.len().min(right.len());
+      let a = &left[..len];
+      let b = &right[..len];
+
+      for i in 0..len {
+         match a[i].try_partial_cmp(&b[i])? {
+            Some(Ordering::Equal) => (),
+            non_eq => return Ok(non_eq),
+         }
+      }
+
+      Ok(left.len().partial_cmp(&right.len()))
+   }
+}
+
+impl PartialEq for List {
+   fn eq(&self, other: &Self) -> bool {
+      (unsafe { &*self.elements.get() } == unsafe { &*other.elements.get() })
    }
 }
 

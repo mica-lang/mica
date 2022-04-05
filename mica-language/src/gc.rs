@@ -173,6 +173,16 @@ impl Memory {
                   }
                }
             }
+            ValueKind::List => {
+               let raw = value.get_raw_list_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+                  let elements = raw.get().as_slice();
+                  for &element in elements {
+                     self.gray_stack.push(element);
+                  }
+               }
+            }
             ValueKind::Struct => {
                let raw = value.get_raw_struct_unchecked();
                if !raw.get_mem().reachable.get() {

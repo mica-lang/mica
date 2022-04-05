@@ -10,7 +10,7 @@ use crate::bytecode::{
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
-use crate::value::{Closure, RawValue, Struct, Upvalue, ValueKind};
+use crate::value::{Closure, List, RawValue, Struct, Upvalue, ValueKind};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -376,6 +376,7 @@ impl Fiber {
             ValueKind::Number => &env.builtin_dtables.number,
             ValueKind::String => &env.builtin_dtables.string,
             ValueKind::Function => &env.builtin_dtables.function,
+            ValueKind::List => &env.builtin_dtables.list,
             ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
             ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
          }
@@ -487,6 +488,13 @@ impl Fiber {
                let instance = unsafe { type_struct.get().new_instance(field_count) };
                let instance = gc.allocate(instance);
                self.push(RawValue::from(instance));
+            }
+            Opcode::CreateList => {
+               unsafe { gc.auto_collect(self.roots(globals)) };
+               let len = u32::from(operand) as usize;
+               let elements = self.stack.drain(self.stack.len() - len..).collect();
+               let list = gc.allocate(List::new(elements));
+               self.push(RawValue::from(list));
             }
 
             Opcode::AssignGlobal => {

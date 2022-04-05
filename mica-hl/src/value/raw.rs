@@ -16,11 +16,12 @@ impl Value {
          Value::String(s) => RawValue::from(gc.manage(s)),
          Value::Function(f) => RawValue::from(gc.manage(&f.0)),
          Value::Struct(s) => RawValue::from(gc.manage(&s.0)),
+         Value::List(l) => RawValue::from(gc.manage(&l.0)),
          Value::UserData(u) => RawValue::from(gc.manage(u)),
       }
    }
 
-   /// Converts a safe value to a raw value. Gives management rights of the value to the given GC.
+   /// Converts a safe value to a raw value. Does not give management rights to a GC.
    pub(crate) fn to_raw_unmanaged(&self) -> RawValue {
       match self {
          Value::Nil => RawValue::from(()),
@@ -30,6 +31,7 @@ impl Value {
          Value::String(s) => RawValue::from(Gc::as_raw(s)),
          Value::Function(f) => RawValue::from(Gc::as_raw(&f.0)),
          Value::Struct(s) => RawValue::from(Gc::as_raw(&s.0)),
+         Value::List(l) => RawValue::from(Gc::as_raw(&l.0)),
          Value::UserData(u) => RawValue::from(Gc::as_raw(u)),
       }
    }
@@ -46,6 +48,7 @@ impl Value {
                Self::Function(Hidden(Gc::from_raw(raw.get_raw_function_unchecked())))
             }
             ValueKind::Struct => Self::Struct(Hidden(Gc::from_raw(raw.get_raw_struct_unchecked()))),
+            ValueKind::List => Self::List(Hidden(Gc::from_raw(raw.get_raw_list_unchecked()))),
             ValueKind::UserData => Self::UserData(Gc::from_raw(raw.get_raw_user_data_unchecked())),
          }
       }
@@ -111,6 +114,14 @@ impl SelfFromRawValue for String {
    }
 }
 
+impl SelfFromRawValue for Vec<RawValue> {
+   type Guard = ();
+
+   unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
+      Ok((&*v.get_raw_list_unchecked().get().get_mut(), ()))
+   }
+}
+
 impl<T> SelfFromRawValue for T
 where
    T: UserData,
@@ -148,6 +159,14 @@ where
    /// Because GATs aren't stable yet, `Self::Guard` can keep a **raw pointer** to the value
    /// and as such must not outlive the value.
    unsafe fn mut_self_from_raw_value(value: &RawValue) -> Result<(&mut Self, Self::Guard), Error>;
+}
+
+impl MutSelfFromRawValue for Vec<RawValue> {
+   type Guard = ();
+
+   unsafe fn mut_self_from_raw_value(v: &RawValue) -> Result<(&mut Self, Self::Guard), Error> {
+      Ok((&mut *v.get_raw_list_unchecked().get().get_mut(), ()))
+   }
 }
 
 impl<T> MutSelfFromRawValue for T

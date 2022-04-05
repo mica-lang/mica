@@ -6,7 +6,7 @@ use std::mem;
 
 use crate::gc::GcRaw;
 
-use super::{Closure, Struct, UserData, ValueCommon, ValueKind};
+use super::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
 
 /// A portable implementation of values.
 #[derive(Clone, Copy)]
@@ -25,6 +25,8 @@ pub enum ValueImpl {
    Function(GcRaw<Closure>),
    /// A struct.
    Struct(GcRaw<Struct>),
+   /// A list.
+   List(GcRaw<List>),
    /// Dynamically-typed user data.
    UserData(GcRaw<Box<dyn UserData>>),
 }
@@ -57,6 +59,10 @@ impl ValueCommon for ValueImpl {
       Self::Struct(s)
    }
 
+   fn new_list(l: GcRaw<List>) -> Self {
+      Self::List(l)
+   }
+
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self::UserData(u)
    }
@@ -69,6 +75,7 @@ impl ValueCommon for ValueImpl {
          ValueImpl::String(_) => ValueKind::String,
          ValueImpl::Function(_) => ValueKind::Function,
          ValueImpl::Struct(_) => ValueKind::Struct,
+         ValueImpl::List(_) => ValueKind::List,
          ValueImpl::UserData(_) => ValueKind::UserData,
       }
    }
@@ -108,6 +115,14 @@ impl ValueCommon for ValueImpl {
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
       if let Self::Struct(s) = self {
          *s
+      } else {
+         unreachable_unchecked()
+      }
+   }
+
+   unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
+      if let Self::List(l) = self {
+         *l
       } else {
          unreachable_unchecked()
       }

@@ -1,3 +1,5 @@
+use mica_language::value::RawValue;
+
 use crate::TypeBuilder;
 
 /// Definitions of basic types provided by a standard library.
@@ -16,4 +18,7 @@ pub trait StandardLibrary {
 
    /// Defines the `String` type using the given type builder.
    fn define_string(&mut self, builder: TypeBuilder<String>) -> TypeBuilder<String>;
+
+   /// Defines the `List` type using the given type builder.
+   fn define_list(&mut self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>>;
 }

@@ -1,7 +1,7 @@
 mod number;
 mod string;
 
-use mica_hl::{StandardLibrary, TypeBuilder};
+use mica_hl::{RawValue, StandardLibrary, TypeBuilder};
 
 /// Converts a function that takes a `self` parameter to one that takes a `&self` parameter.
 fn ref_self1<A, R>(mut f: impl FnMut(A) -> R) -> impl FnMut(&A) -> R
@@ -37,6 +37,10 @@ impl StandardLibrary for Lib {
 
    fn define_string(&mut self, builder: TypeBuilder<String>) -> TypeBuilder<String> {
       string::define(builder)
+   }
+
+   fn define_list(&mut self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
+      builder
    }
 }
 

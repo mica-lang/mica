@@ -127,6 +127,8 @@ pub enum Opcode {
    /// Creates a struct instance from the type at the top of the stack, with the specified amount
    /// of fields.
    CreateStruct,
+   /// Creates a list from `operand` values that are at the top of the stack.
+   CreateList,
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal,
@@ -746,6 +748,7 @@ pub struct BuiltinDispatchTables {
    pub number: Gc<DispatchTable>,
    pub string: Gc<DispatchTable>,
    pub function: Gc<DispatchTable>,
+   pub list: Gc<DispatchTable>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
@@ -757,6 +760,7 @@ impl BuiltinDispatchTables {
          number: Gc::new(DispatchTable::new("Number", "Boolean")),
          string: Gc::new(DispatchTable::new("String", "String")),
          function: Gc::new(DispatchTable::new("Function", "Function")),
+         list: Gc::new(DispatchTable::new("List", "List")),
       }
    }
 }

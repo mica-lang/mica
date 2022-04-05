@@ -205,6 +205,20 @@ impl Parser {
       }
    }
 
+   /// Parses a list literal.
+   fn parse_list(&mut self, token: Token) -> Result<NodeId, Error> {
+      let mut elements = Vec::new();
+      self.parse_comma_separated(&mut elements, TokenKind::RightBracket, |p| {
+         p.parse_expression(0)
+      })?;
+      Ok(self
+         .ast
+         .build_node(NodeKind::List, ())
+         .with_location(token.location)
+         .with_children(elements)
+         .done())
+   }
+
    /// Parses a `do` block.
    fn parse_do_block(&mut self, token: Token) -> Result<NodeId, Error> {
       let mut children = Vec::new();
@@ -371,6 +385,7 @@ impl Parser {
             }
             Ok(inner)
          }
+         TokenKind::LeftBracket => self.parse_list(token),
 
          TokenKind::Do => self.parse_do_block(token),
          TokenKind::If => self.parse_if_expression(token),

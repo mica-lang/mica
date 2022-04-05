@@ -109,6 +109,7 @@ pub enum ErrorKind {
    FieldDoesNotExist(Rc<str>),
    FieldOutsideOfImpl,
    MissingFields(Vec<Rc<str>>),
+   ListIsTooLong,
 
    // Runtime
    TypeError {
@@ -202,6 +203,7 @@ impl std::fmt::Display for ErrorKind {
                "the following fields were not assigned in this constructor: {fields}"
             )
          }
+         Self::ListIsTooLong => write!(f, "list literal has too many elements"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

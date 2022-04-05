@@ -76,12 +76,14 @@ impl Engine {
       let boolean = get_dtables!("Boolean", define_boolean);
       let number = get_dtables!("Number", define_number);
       let string = get_dtables!("String", define_string);
+      let list = get_dtables!("List", define_list);
       env.builtin_dtables = BuiltinDispatchTables {
          nil: Gc::clone(&nil.instance_dtable),
          boolean: Gc::clone(&boolean.instance_dtable),
          number: Gc::clone(&number.instance_dtable),
          string: Gc::clone(&string.instance_dtable),
          function: Gc::new(DispatchTable::new_for_instance("Function")),
+         list: Gc::clone(&list.instance_dtable),
       };
 
       let mut engine = Self {

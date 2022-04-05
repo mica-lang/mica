@@ -506,6 +506,18 @@ impl<'e> CodeGenerator<'e> {
       })
    }
 
+   /// Generates code for a list literal.
+   fn generate_list(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
+      let children = ast.children(node).unwrap();
+      let len =
+         Opr24::try_from(children.len()).map_err(|_| ast.error(node, ErrorKind::ListIsTooLong))?;
+      for &child in children {
+         self.generate_node(ast, child, Expression::Used)?;
+      }
+      self.chunk.emit((Opcode::CreateList, len));
+      Ok(ExpressionResult::Present)
+   }
+
    /// Generates code for a `do..end` expression.
    fn generate_do(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let children = ast.children(node).unwrap();
@@ -1027,6 +1039,8 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::String => self.generate_string(ast, node),
 
          NodeKind::Identifier => self.generate_variable(ast, node)?,
+
+         NodeKind::List => self.generate_list(ast, node)?,
 
          NodeKind::Negate | NodeKind::Not => self.generate_unary(ast, node)?,
 

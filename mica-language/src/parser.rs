@@ -116,6 +116,30 @@ impl Parser {
       }
    }
 
+   /// Parses a sequence of long string literals.
+   fn parse_long_string(&mut self, first: Token) -> Result<NodeId, Error> {
+      let mut content = String::new();
+      if let TokenKind::LongString(s) = first.kind {
+         content.push_str(&s);
+      } else {
+         panic!("first token must be a long string")
+      }
+      while let TokenKind::LongString(_) = self.lexer.peek_token()?.kind {
+         let s = match self.lexer.next_token()?.kind {
+            TokenKind::LongString(s) => s,
+            _ => unreachable!(),
+         };
+         content.push('\n');
+         content.push_str(&s);
+      }
+      Ok(self
+         .ast
+         .build_node(NodeKind::String, ())
+         .with_location(first.location)
+         .with_string(Rc::from(content))
+         .done())
+   }
+
    /// Parses an identifier.
    fn parse_identifier(&mut self, token: Token) -> Result<NodeId, Error> {
       if let TokenKind::Identifier(i) = token.kind {
@@ -328,6 +352,7 @@ impl Parser {
          TokenKind::True => Ok(self.parse_unit(token, NodeKind::True)),
          TokenKind::Number(_) => Ok(self.parse_number(token)),
          TokenKind::String(_) => Ok(self.parse_string(token)),
+         TokenKind::LongString(_) => self.parse_long_string(token),
          TokenKind::Identifier(_) => self.parse_identifier(token),
 
          TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),

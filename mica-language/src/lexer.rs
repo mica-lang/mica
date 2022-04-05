@@ -9,6 +9,8 @@ use crate::common::{Error, ErrorKind, Location};
 pub enum TokenKind {
    Number(f64),
    String(Rc<str>),
+   // NOTE: Long strings \\ are joined into one string literal by the parser.
+   LongString(Rc<str>),
 
    Identifier(Rc<str>),
 
@@ -296,7 +298,7 @@ impl Lexer {
             return Err(self.error(ErrorKind::MissingClosingQuote));
          }
          if self.get() == '\n' {
-            self.advance_line();
+            return Err(self.error(ErrorKind::LineBreakInStringIsNotAllowed));
          }
          result.push(if !raw {
             self.string_char()?
@@ -324,6 +326,18 @@ impl Lexer {
       Ok(c)
    }
 
+   /// Parses a long string literal \\.
+   fn long_string(&mut self) -> String {
+      let mut string = String::new();
+      while !matches!(self.get(), '\n' | Self::EOF) {
+         // NOTE: Newlines are added in by the parser.
+         // CR (from CRLF line breaks) is handled like a normal character and thus is preserved.
+         string.push(self.get());
+         self.advance();
+      }
+      string
+   }
+
    /// Parses an extended (or "backslash") literal, that is, a literal that begins with a backslash,
    /// is discriminated by a single character following the backslash, and continues onward.
    fn extended_literal(&mut self) -> Result<Token, Error> {
@@ -338,6 +352,11 @@ impl Lexer {
             self.advance();
             let c = self.character()? as u32 as f64;
             Ok(self.token(TokenKind::Number(c)))
+         }
+         '\\' => {
+            self.advance();
+            let content = self.long_string();
+            Ok(self.token(TokenKind::LongString(Rc::from(content))))
          }
          '0'..='9' => {
             let number = self.integer_with_explicit_radix()? as f64;

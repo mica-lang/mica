@@ -41,6 +41,13 @@ assert("\u{107}" == "ć")
 # Raw strings
 assert(\r"C:\Windows\System32" == "C:\\Windows\\System32")
 
+# Long strings
+s =
+   \\Hello
+   \\world!
+# Replace CRLF to LF for Windows.
+assert(s.replace("\r\n", "\n") == "Hello\nworld!")
+
 # Character literals
 assert(\u'ć' == \x107)
 assert(\u'🗿' == \x1F5FF)

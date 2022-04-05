@@ -58,6 +58,7 @@ pub enum ErrorKind {
    UnderscoresWithoutDigits,
    MissingClosingQuote,
    InvalidEscape(char),
+   LineBreakInStringIsNotAllowed,
    UEscapeLeftBraceExpected,
    UEscapeMissingRightBrace,
    UEscapeEmpty,
@@ -133,6 +134,7 @@ impl std::fmt::Display for ErrorKind {
          Self::UnderscoresWithoutDigits => write!(f, "at least one digit expected, got only underscores"),
          Self::MissingClosingQuote => write!(f, "missing closing quote '\"'"),
          Self::InvalidEscape(c) => write!(f, "invalid escape: \\{c}"),
+         Self::LineBreakInStringIsNotAllowed => write!(f, "line breaks are not allowed in string literals; use \\n or a long string literal \\\\"),
          Self::UEscapeLeftBraceExpected => write!(f, "left brace '{{' expected after \\u escape"),
          Self::UEscapeEmpty => write!(f, "\\u escape is empty"),
          Self::UEscapeMissingRightBrace => {

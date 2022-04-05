@@ -113,6 +113,12 @@ of characters that doesn't contain double quotes, and end with double quotes. Ra
 interpret any escape sequences. This also means that raw strings themselves cannot contain
 quotes `"`, though this restriction may get lifted at some point in the future.
 
+Mica also features a literal for getting the numeric value of any Unicode codepoint.
+```
+\u' '  # \x20
+\u'🗿'  # \x1F5FF
+```
+
 ### Identifiers
 
 Identifiers allow for referring to existing, named values.

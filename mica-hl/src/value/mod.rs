@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use mica_language::gc::Gc;
-use mica_language::value::{self, Closure, List, Struct, UserData};
+use mica_language::value::{self, Closure, List, RawValue, Struct, UserData};
 
 use crate::{Error, Object};
 
@@ -72,6 +72,14 @@ impl fmt::Debug for Value {
 impl fmt::Display for Value {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
       fmt::Display::fmt(&self.to_raw_unmanaged(), f)
+   }
+}
+
+/// **NOTE:** You should generally avoid dealing with raw values.
+#[doc(hidden)]
+impl From<RawValue> for Value {
+   fn from(raw: RawValue) -> Self {
+      Self::from_raw(raw)
    }
 }
 
@@ -153,6 +161,16 @@ where
    }
 }
 
+/// **NOTE:** You should generally avoid dealing with raw values. This method in particular could
+/// cause you a bad time if you feed temporary `Value`s converted into `RawValue`s into the
+/// vector.
+#[doc(hidden)]
+impl From<Vec<RawValue>> for Value {
+   fn from(v: Vec<RawValue>) -> Self {
+      Value::List(Hidden(Gc::new(List::new(v))))
+   }
+}
+
 impl<T> From<Object<T>> for Value
 where
    T: Any,
@@ -181,6 +199,16 @@ fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
 impl TryFromValue for Value {
    fn try_from_value(value: &Value) -> Result<Self, Error> {
       Ok(value.clone())
+   }
+}
+
+/// **NOTE:** You should generally avoid dealing with raw values. This implementation is especially
+/// unsafe as the resulting RawValue is **unmanaged**, which means it may outlive the original value
+/// and cause memory safety issues.
+#[doc(hidden)]
+impl TryFromValue for RawValue {
+   fn try_from_value(value: &Value) -> Result<Self, Error> {
+      Ok(value.to_raw_unmanaged())
    }
 }
 

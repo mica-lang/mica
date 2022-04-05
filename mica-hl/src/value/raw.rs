@@ -21,7 +21,7 @@ impl Value {
       }
    }
 
-   /// Converts a safe value to a raw value. Gives management rights of the value to the given GC.
+   /// Converts a safe value to a raw value. Does not give management rights to a GC.
    pub(crate) fn to_raw_unmanaged(&self) -> RawValue {
       match self {
          Value::Nil => RawValue::from(()),
@@ -114,6 +114,14 @@ impl SelfFromRawValue for String {
    }
 }
 
+impl SelfFromRawValue for Vec<RawValue> {
+   type Guard = ();
+
+   unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
+      Ok((&*v.get_raw_list_unchecked().get().get_mut(), ()))
+   }
+}
+
 impl<T> SelfFromRawValue for T
 where
    T: UserData,
@@ -151,6 +159,14 @@ where
    /// Because GATs aren't stable yet, `Self::Guard` can keep a **raw pointer** to the value
    /// and as such must not outlive the value.
    unsafe fn mut_self_from_raw_value(value: &RawValue) -> Result<(&mut Self, Self::Guard), Error>;
+}
+
+impl MutSelfFromRawValue for Vec<RawValue> {
+   type Guard = ();
+
+   unsafe fn mut_self_from_raw_value(v: &RawValue) -> Result<(&mut Self, Self::Guard), Error> {
+      Ok((&mut *v.get_raw_list_unchecked().get().get_mut(), ()))
+   }
 }
 
 impl<T> MutSelfFromRawValue for T

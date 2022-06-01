@@ -5,7 +5,7 @@ while true; do
    # "a"
    # "a"
    # Gc.collect
-   printf '\"a\"\n\"a\"\nGc.collect\n' | "$MICA" $MICAFLAGS > /dev/null
+   printf '\"a\"\n\"a\"\nGc.collect\n' | "$MICA" $MICAFLAGS
    if [ $? -ne 0 ]; then
       break
    fi

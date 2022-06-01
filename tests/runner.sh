@@ -23,7 +23,7 @@ run-test() {
       "$mica" "$filename" $MICAFLAGS
       status=$?
    elif [[ "$filename" == *.sh ]]; then
-      MICA="$mica" MICAFLAGS="$MICAFLAGS" bash "$filename"
+      MICA="$mica" MICAFLAGS="$MICAFLAGS" bash "$filename" > /dev/null
       status=$?
    fi
    if [ $status -eq 0 ]; then

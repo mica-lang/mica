@@ -248,8 +248,8 @@ pub mod ffvariants {
 
    impl<'s, Args> Method<super::RawSelf<'s>> for FallibleRawSelf<Args> {}
    impl<'s, Args> Method<super::RawSelf<'s>> for InfallibleRawSelf<Args> {}
-   impl<'a, S, Args> Method<S::Receiver> for FallibleSelf<S, Args> where S: Receiver {}
-   impl<'a, S, Args> Method<S::Receiver> for InfallibleSelf<S, Args> where S: Receiver {}
+   impl<S, Args> Method<S::Receiver> for FallibleSelf<S, Args> where S: Receiver {}
+   impl<S, Args> Method<S::Receiver> for InfallibleSelf<S, Args> where S: Receiver {}
 }
 
 macro_rules! impl_non_varargs {
@@ -274,7 +274,7 @@ macro_rules! impl_non_varargs {
          $($genericdef,)+
          Fun,
          $($types),*
-      > $crate::ForeignFunction<$crate::ffvariants::$variant<$($variant_args,)+>> for Fun
+      > $crate::ForeignFunction<$crate::ffvariants::$variant<$($variant_args,)+>> for Fun // :)
       where
          $($genericty: $bound + 'static,)+
          Fun: FnMut $params -> $ret + 'static,
@@ -287,10 +287,10 @@ macro_rules! impl_non_varargs {
                $(let n = $base_parameter_count;)?
                $(
                   // To force Rust into expanding $var into a sequence of additions, we create an
-                  // unused variable to drive the expansion. Constant evaluation will ensure this is
+                  // unused variable to drive the expansion. Constant evaluation will ensure n is
                   // a constant integer by the time compilation is finished.
                   #[allow(unused, non_snake_case)]
-                  let $types = ();
+                  let $types = 0;
                   let n = n + 1;
                )*
                n

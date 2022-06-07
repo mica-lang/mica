@@ -1,0 +1,16 @@
+# Deleting the global variables defined for built-ins should work.
+
+Nil = nil
+Boolean = nil
+Number = nil
+String = nil
+List = nil
+
+"a"
+"a"
+
+Gc.collect
+
+assert("a".cat("b") == "ab")
+"b"
+[]

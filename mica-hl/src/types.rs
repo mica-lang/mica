@@ -306,10 +306,12 @@ where
 
 impl<T> BuiltType<T> {
    /// Makes a `Type<T>` user data value from the built type.
-   pub(crate) fn make_type(&self) -> Value
+   pub(crate) fn make_type(&self, gc: &mut Memory) -> Value
    where
       T: Any,
    {
+      gc.manage(&self.type_dtable);
+      gc.manage(&self.instance_dtable);
       let user_data: Box<dyn value::UserData> =
          Box::new(Type::<T>::new(Gc::clone(&self.type_dtable)));
       Value::UserData(Gc::new(user_data))

@@ -98,22 +98,20 @@ impl Memory {
          }
       }
 
-      // unsafe fn mark_reachable_rec(value: RawValue) {
-      // }
-
       unsafe fn sweep_unreachable<T>(memories: &mut Vec<GcRaw<T>>, allocated_bytes: &mut usize) {
          let mut i = 0;
          while i < memories.len() {
             let memory = memories[i];
             let mem = memory.get_mem();
             if !mem.reachable.get() {
+               let data_size = mem.data_size;
                GcMem::release(memory);
-               *allocated_bytes -= mem.data_size;
+               *allocated_bytes -= data_size;
                #[cfg(feature = "trace-gc")]
                {
                   println!(
-                     "gc | freed {} bytes, now at {}",
-                     mem.data_size, *allocated_bytes
+                     "gc | freed {} bytes ({:p}), now at {}",
+                     data_size, memory.0, *allocated_bytes
                   );
                }
                memories.swap_remove(i);
@@ -291,6 +289,9 @@ pub(crate) struct GcMem<T> {
    finalizer: unsafe fn(*mut u8),
    /// The size of the allocated data.
    data_size: usize,
+   /// The layout that was used for allocating this `GcMem<T>`; this is needed to deallocate
+   /// without triggering undefined behavior.
+   layout: Layout,
    /// The data.
    data: T,
 }
@@ -314,6 +315,7 @@ impl<T> GcMem<T> {
 
    /// Allocates a `GcMem<T>`.
    fn allocate(data: T, finalizer: unsafe fn(*mut u8)) -> GcRaw<T> {
+      let layout = Self::layout();
       let mem = Self {
          // NOTE: `reachable` is initially set to `false` because reachability is only determined
          // during the marking phase.
@@ -322,9 +324,9 @@ impl<T> GcMem<T> {
          rc: Cell::new(0),
          finalizer,
          data_size: std::mem::size_of::<T>(),
+         layout,
          data,
       };
-      let layout = Self::layout();
       let allocation = unsafe { std::alloc::alloc(layout) } as *mut Self;
       if allocation.is_null() {
          handle_alloc_error(layout);
@@ -351,13 +353,14 @@ impl<T> GcMem<T> {
       {
          println!("gcmem | deallocating {:p}", mem);
       }
+      let layout;
       {
          let mem = &mut *mem;
          (mem.finalizer)(&mut mem.data as *mut T as *mut u8);
-         // ManuallyDrop::drop(&mut mem.data);
+         layout = mem.layout;
       }
       // Ugh, that cast from *const to *mut hurts.
-      std::alloc::dealloc(mem as *mut u8, Self::layout())
+      std::alloc::dealloc(mem as *mut u8, layout)
    }
 
    /// Deallocates the given memory or marks it as unmanaged if there are foreign references to it.

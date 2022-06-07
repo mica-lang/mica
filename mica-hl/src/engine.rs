@@ -98,6 +98,7 @@ impl Engine {
       engine.set_built_type(&boolean).unwrap();
       engine.set_built_type(&number).unwrap();
       engine.set_built_type(&string).unwrap();
+      engine.set_built_type(&list).unwrap();
 
       engine
    }
@@ -374,7 +375,7 @@ impl Engine {
    where
       T: Any,
    {
-      let value = typ.make_type();
+      let value = typ.make_type(&mut self.gc);
       self.set(typ.type_name.deref(), value)
    }
 }

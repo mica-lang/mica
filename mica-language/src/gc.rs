@@ -113,8 +113,8 @@ impl Memory {
                #[cfg(feature = "trace-gc")]
                {
                   println!(
-                     "gc | freed {} bytes, now at {}",
-                     mem.data_size, *allocated_bytes
+                     "gc | freed {} bytes ({:p}), now at {}",
+                     data_size, memory.0, *allocated_bytes
                   );
                }
                memories.swap_remove(i);

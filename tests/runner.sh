@@ -6,7 +6,11 @@
 # Bash scripts have to end with the .sh extension, and have the $MICA environment variable set
 # to the Mica REPL executable (defined below).
 
-mica="./target/release/mica"
+if [ -z "${MICA}" ]; then
+   mica="./target/release/mica"
+else
+   mica="$MICA"
+fi
 
 if [ -z "${MICAFLAGS}" ]; then
    MICAFLAGS=""

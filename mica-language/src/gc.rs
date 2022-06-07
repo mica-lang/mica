@@ -98,9 +98,6 @@ impl Memory {
          }
       }
 
-      // unsafe fn mark_reachable_rec(value: RawValue) {
-      // }
-
       unsafe fn sweep_unreachable<T>(memories: &mut Vec<GcRaw<T>>, allocated_bytes: &mut usize) {
          let mut i = 0;
          while i < memories.len() {
@@ -326,12 +323,10 @@ impl<T> GcMem<T> {
          managed_by_gc: Cell::new(true),
          rc: Cell::new(0),
          finalizer,
-         layout,
          data_size: std::mem::size_of::<T>(),
          layout,
          data,
       };
-      let layout = Self::layout();
       let allocation = unsafe { std::alloc::alloc(layout) } as *mut Self;
       if allocation.is_null() {
          handle_alloc_error(layout);

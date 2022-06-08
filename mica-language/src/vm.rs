@@ -306,6 +306,8 @@ impl Fiber {
                ));
             }
             unsafe { gc.collect(self.roots(globals)) }
+            self.pop();
+            self.push(RawValue::from(()));
          }
       }
       Ok(())

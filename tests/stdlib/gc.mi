@@ -9,17 +9,17 @@ func make_a_bunch_of_trash()
 end
 
 # Manual collection
-Gc.disable()
+assert(Gc.disable() == nil)
 make_a_bunch_of_trash()
 before_collection = Gc.allocated_bytes
-Gc.collect()
+assert(Gc.collect() == nil)
 after_collection = Gc.allocated_bytes
 assert(after_collection < before_collection)
 
 # AlwaysRun strategy
-Gc.enable_always_run()
+assert(Gc.enable_always_run() == nil)
 make_a_bunch_of_trash()
 
 # Ceiling strategy
-Gc.enable_with_ceiling(1024, 1.5 * 256)
+assert(Gc.enable_with_ceiling(1024, 1.5 * 256) == nil)
 make_a_bunch_of_trash()

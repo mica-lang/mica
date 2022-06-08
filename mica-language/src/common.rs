@@ -84,6 +84,7 @@ pub enum ErrorKind {
    UnexpectedEof,
    CommaExpected,
    ColonExpectedAfterDictKey,
+   RightBracketExpectedToCloseEmptyDict,
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
@@ -167,6 +168,7 @@ impl std::fmt::Display for ErrorKind {
          Self::UnexpectedEof => write!(f, "unexpected end of file"),
          Self::CommaExpected => write!(f, "comma ',' expected"),
          Self::ColonExpectedAfterDictKey => write!(f, "colon ':' expected after dict key"),
+         Self::RightBracketExpectedToCloseEmptyDict => write!(f, "right bracket ']' expected to close empty dict literal [:]"),
 
          Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),

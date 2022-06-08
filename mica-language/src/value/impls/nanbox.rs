@@ -4,7 +4,7 @@
 use std::hint::unreachable_unchecked;
 
 use crate::gc::{GcMem, GcRaw};
-use crate::value::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
+use crate::value::{Closure, Dict, List, Struct, UserData, ValueCommon, ValueKind};
 
 fn _size_and_alignment_checks() {
    // If any of these checks fail, your platform cannot use NaN boxing.
@@ -47,6 +47,7 @@ impl ValueImpl {
    const OBJECT_STRUCT: u64 = 2;
    const OBJECT_USER_DATA: u64 = 3;
    const OBJECT_LIST: u64 = 4;
+   const OBJECT_DICT: u64 = 5;
    // NOTE: Be careful with adding more types! We're limited to supporting up to eight (the enum
    // value must be <= 7), consider using user data whenever it would make sense.
 
@@ -156,6 +157,10 @@ impl ValueCommon for ValueImpl {
       unsafe { Self::new_object_nan(Self::OBJECT_LIST, l) }
    }
 
+   fn new_dict(l: GcRaw<Dict>) -> Self {
+      unsafe { Self::new_object_nan(Self::OBJECT_DICT, l) }
+   }
+
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_USER_DATA, u) }
    }
@@ -171,6 +176,7 @@ impl ValueCommon for ValueImpl {
                Self::OBJECT_STRUCT => ValueKind::Struct,
                Self::OBJECT_USER_DATA => ValueKind::UserData,
                Self::OBJECT_LIST => ValueKind::List,
+               Self::OBJECT_DICT => ValueKind::Dict,
                _ => unreachable_unchecked(),
             }
          },
@@ -200,6 +206,10 @@ impl ValueCommon for ValueImpl {
    }
 
    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
+      self.as_gc()
+   }
+
+   unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict> {
       self.as_gc()
    }
 

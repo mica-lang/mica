@@ -36,6 +36,7 @@ pub enum ValueKind {
    Function,
    Struct,
    List,
+   Dict,
    UserData,
 }
 
@@ -48,6 +49,7 @@ trait ValueCommon: Clone + PartialEq {
    fn new_function(f: GcRaw<Closure>) -> Self;
    fn new_struct(s: GcRaw<Struct>) -> Self;
    fn new_list(s: GcRaw<List>) -> Self;
+   fn new_dict(d: GcRaw<Dict>) -> Self;
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self;
 
    fn kind(&self) -> ValueKind;
@@ -59,6 +61,7 @@ trait ValueCommon: Clone + PartialEq {
    unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure>;
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct>;
    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List>;
+   unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict>;
    unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>>;
 }
 
@@ -86,6 +89,7 @@ impl RawValue {
          ValueKind::String => "String".into(),
          ValueKind::Function => "Function".into(),
          ValueKind::List => "List".into(),
+         ValueKind::Dict => "Dict".into(),
          ValueKind::Struct => unsafe { self.0.get_raw_struct_unchecked().get().dtable() }
             .type_name
             .deref()
@@ -152,6 +156,14 @@ impl RawValue {
    /// Calling this on a value that isn't known to be a list is undefined behavior.
    pub unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
       self.0.get_raw_list_unchecked()
+   }
+
+   /// Returns a dict value without performing any checks.
+   ///
+   /// # Safety
+   /// Calling this on a value that isn't known to be a dict is undefined behavior.
+   pub unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict> {
+      self.0.get_raw_dict_unchecked()
    }
 
    /// Returns a user data value without performing any checks.
@@ -274,6 +286,7 @@ impl RawValue {
                let b = other.0.get_raw_list_unchecked();
                a.get().try_partial_cmp(b.get())
             },
+            ValueKind::Dict => todo!(),
             ValueKind::UserData => Ok(None),
          }
       }
@@ -328,6 +341,12 @@ impl From<GcRaw<List>> for RawValue {
    }
 }
 
+impl From<GcRaw<Dict>> for RawValue {
+   fn from(s: GcRaw<Dict>) -> Self {
+      Self(ValueImpl::new_dict(s))
+   }
+}
+
 impl From<GcRaw<Box<dyn UserData>>> for RawValue {
    fn from(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self(ValueImpl::new_user_data(u))
@@ -363,6 +382,25 @@ impl fmt::Debug for RawValue {
                   fmt::Debug::fmt(element, f)?;
                }
                f.write_char(']')?;
+               Ok(())
+            }
+            ValueKind::Dict => {
+               let dict = self.0.get_raw_dict_unchecked();
+               let dict = dict.get();
+               if dict.is_empty() {
+                  f.write_str("[:]")?;
+               } else {
+                  f.write_char('[')?;
+                  for (i, (key, value)) in dict.iter().enumerate() {
+                     if i != 0 {
+                        f.write_str(", ")?;
+                     }
+                     fmt::Debug::fmt(&key, f)?;
+                     f.write_str(": ")?;
+                     fmt::Debug::fmt(&value, f)?;
+                  }
+                  f.write_char(']')?;
+               }
                Ok(())
             }
             ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),

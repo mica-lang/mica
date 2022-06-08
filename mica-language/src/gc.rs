@@ -181,6 +181,16 @@ impl Memory {
                   }
                }
             }
+            ValueKind::Dict => {
+               let raw = value.get_raw_dict_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+                  for (key, value) in raw.get().iter() {
+                     self.gray_stack.push(key);
+                     self.gray_stack.push(value);
+                  }
+               }
+            }
             ValueKind::Struct => {
                let raw = value.get_raw_struct_unchecked();
                if !raw.get_mem().reachable.get() {

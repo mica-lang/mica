@@ -5,7 +5,7 @@ use std::hint::unreachable_unchecked;
 use std::mem;
 
 use crate::gc::GcRaw;
-use crate::value::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
+use crate::value::{Closure, Dict, List, Struct, UserData, ValueCommon, ValueKind};
 
 /// A portable implementation of values.
 #[derive(Clone, Copy)]
@@ -26,6 +26,8 @@ pub enum ValueImpl {
    Struct(GcRaw<Struct>),
    /// A list.
    List(GcRaw<List>),
+   /// A dict.
+   Dict(GcRaw<Dict>),
    /// Dynamically-typed user data.
    UserData(GcRaw<Box<dyn UserData>>),
 }
@@ -62,6 +64,10 @@ impl ValueCommon for ValueImpl {
       Self::List(l)
    }
 
+   fn new_dict(d: GcRaw<Dict>) -> Self {
+      Self::Dict(d)
+   }
+
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self::UserData(u)
    }
@@ -75,6 +81,7 @@ impl ValueCommon for ValueImpl {
          ValueImpl::Function(_) => ValueKind::Function,
          ValueImpl::Struct(_) => ValueKind::Struct,
          ValueImpl::List(_) => ValueKind::List,
+         ValueImpl::Dict(_) => ValueKind::Dict,
          ValueImpl::UserData(_) => ValueKind::UserData,
       }
    }
@@ -122,6 +129,14 @@ impl ValueCommon for ValueImpl {
    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
       if let Self::List(l) = self {
          *l
+      } else {
+         unreachable_unchecked()
+      }
+   }
+
+   unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict> {
+      if let Self::Dict(d) = self {
+         *d
       } else {
          unreachable_unchecked()
       }

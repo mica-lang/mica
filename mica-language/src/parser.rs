@@ -216,38 +216,53 @@ impl Parser {
 
       let mut elements = Vec::new();
       let mut mode = Mode::Unknown;
-      self.parse_comma_separated(&mut elements, TokenKind::RightBracket, |p| match mode {
-         Mode::Unknown => {
-            let key = p.parse_expression(0)?;
-            if p.lexer.peek_token()?.kind == TokenKind::Colon {
-               mode = Mode::Dict;
-               let colon = p.lexer.next_token()?;
+      if self.lexer.peek_token()?.kind == TokenKind::Colon {
+         self.lexer.next_token()?;
+         self.expect(TokenKind::RightBracket, |_| {
+            ErrorKind::RightBracketExpectedToCloseEmptyDict
+         })?;
+         mode = Mode::Dict;
+      } else {
+         self.parse_comma_separated(&mut elements, TokenKind::RightBracket, |p| match mode {
+            Mode::Unknown => {
+               let key = p.parse_expression(0)?;
+               if p.lexer.peek_token()?.kind == TokenKind::Colon {
+                  mode = Mode::Dict;
+                  let colon = p.lexer.next_token()?;
+                  let value = p.parse_expression(0)?;
+                  Ok(p
+                     .ast
+                     .build_node(NodeKind::DictPair, (key, value))
+                     .with_location(colon.location)
+                     .done())
+               } else {
+                  mode = Mode::List;
+                  Ok(key)
+               }
+            }
+            Mode::Dict => {
+               let key = p.parse_expression(0)?;
+               let colon = p.expect(TokenKind::Colon, |_| ErrorKind::ColonExpectedAfterDictKey)?;
                let value = p.parse_expression(0)?;
                Ok(p
                   .ast
                   .build_node(NodeKind::DictPair, (key, value))
                   .with_location(colon.location)
                   .done())
-            } else {
-               mode = Mode::List;
-               Ok(key)
             }
-         }
-         Mode::Dict => {
-            let key = p.parse_expression(0)?;
-            let colon = p.expect(TokenKind::Colon, |_| ErrorKind::ColonExpectedAfterDictKey)?;
-            let value = p.parse_expression(0)?;
-            Ok(p
-               .ast
-               .build_node(NodeKind::DictPair, (key, value))
-               .with_location(colon.location)
-               .done())
-         }
-         Mode::List => p.parse_expression(0),
-      })?;
+            Mode::List => p.parse_expression(0),
+         })?;
+      }
+
       Ok(self
          .ast
-         .build_node(NodeKind::List, ())
+         .build_node(
+            match mode {
+               Mode::Unknown | Mode::List => NodeKind::List,
+               Mode::Dict => NodeKind::Dict,
+            },
+            (),
+         )
          .with_location(token.location)
          .with_children(elements)
          .done())

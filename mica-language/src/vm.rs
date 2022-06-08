@@ -10,7 +10,7 @@ use crate::bytecode::{
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
-use crate::value::{Closure, List, RawValue, Struct, Upvalue, ValueKind};
+use crate::value::{Closure, Dict, List, RawValue, Struct, Upvalue, ValueKind};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -379,6 +379,7 @@ impl Fiber {
             ValueKind::String => &env.builtin_dtables.string,
             ValueKind::Function => &env.builtin_dtables.function,
             ValueKind::List => &env.builtin_dtables.list,
+            ValueKind::Dict => &env.builtin_dtables.dict,
             ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
             ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
          }
@@ -499,7 +500,18 @@ impl Fiber {
                self.push(RawValue::from(list));
             }
             Opcode::CreateDict => {
-               todo!();
+               unsafe { gc.auto_collect(self.roots(globals)) };
+               let npairs = u32::from(operand) as usize;
+               let dict = Dict::new();
+               {
+                  let mut pairs = self.stack.drain(self.stack.len() - npairs * 2..);
+                  while let Some(key) = pairs.next() {
+                     let value = pairs.next().unwrap();
+                     dict.insert(key, value);
+                  }
+               }
+               let dict = gc.allocate(dict);
+               self.push(RawValue::from(dict));
             }
 
             Opcode::AssignGlobal => {

@@ -17,6 +17,7 @@ impl Value {
          Value::Function(f) => RawValue::from(gc.manage(&f.0)),
          Value::Struct(s) => RawValue::from(gc.manage(&s.0)),
          Value::List(l) => RawValue::from(gc.manage(&l.0)),
+         Value::Dict(d) => RawValue::from(gc.manage(&d.0)),
          Value::UserData(u) => RawValue::from(gc.manage(u)),
       }
    }
@@ -32,6 +33,7 @@ impl Value {
          Value::Function(f) => RawValue::from(Gc::as_raw(&f.0)),
          Value::Struct(s) => RawValue::from(Gc::as_raw(&s.0)),
          Value::List(l) => RawValue::from(Gc::as_raw(&l.0)),
+         Value::Dict(d) => RawValue::from(Gc::as_raw(&d.0)),
          Value::UserData(u) => RawValue::from(Gc::as_raw(u)),
       }
    }
@@ -49,6 +51,7 @@ impl Value {
             }
             ValueKind::Struct => Self::Struct(Hidden(Gc::from_raw(raw.get_raw_struct_unchecked()))),
             ValueKind::List => Self::List(Hidden(Gc::from_raw(raw.get_raw_list_unchecked()))),
+            ValueKind::Dict => Self::Dict(Hidden(Gc::from_raw(raw.get_raw_dict_unchecked()))),
             ValueKind::UserData => Self::UserData(Gc::from_raw(raw.get_raw_user_data_unchecked())),
          }
       }

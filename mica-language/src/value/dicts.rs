@@ -7,7 +7,7 @@ use nohash_hasher::BuildNoHashHasher;
 
 use super::{RawValue, ValueKind};
 
-type DictMap = HashMap<u64, (RawValue, RawValue), BuildNoHashHasher<u64>>;
+pub type DictMap = HashMap<u64, (RawValue, RawValue), BuildNoHashHasher<u64>>;
 
 #[derive(Default)]
 struct DictInner {
@@ -27,11 +27,36 @@ impl Dict {
       Self::default()
    }
 
+   /// Returns the number of elements stored in the dict.
+   pub fn len(&self) -> usize {
+      unsafe {
+         let inner = &*self.inner.get();
+         inner.pairs.len()
+      }
+   }
+
+   /// Returns whether the dict is empty.
+   pub fn is_empty(&self) -> bool {
+      self.len() == 0
+   }
+
    /// Sets the value at the given key. Returns an error if the key cannot be hashed.
    pub fn insert(&self, key: RawValue, value: RawValue) {
       unsafe {
          let inner = &mut *self.inner.get();
          inner.pairs.insert(key.hash(inner.state.build_hasher()), (key, value));
+      }
+   }
+
+   /// Removes the value at the given key and returns it (or `nil` if there was no value).
+   pub fn remove(&self, key: RawValue) -> RawValue {
+      unsafe {
+         let inner = &mut *self.inner.get();
+         inner
+            .pairs
+            .remove(&key.hash(inner.state.build_hasher()))
+            .map(|(_k, v)| v)
+            .unwrap_or(RawValue::from(()))
       }
    }
 
@@ -52,6 +77,16 @@ impl Dict {
       unsafe {
          let inner = &*self.inner.get();
          inner.pairs.contains_key(&key.hash(inner.state.build_hasher()))
+      }
+   }
+
+   /// Returns an iterator over pairs stored in the dict.
+   ///
+   /// WARNING: The dict must not be modified while iterating over it.
+   pub(crate) fn iter(&self) -> impl Iterator<Item = (RawValue, RawValue)> + '_ {
+      unsafe {
+         let inner = &*self.inner.get();
+         inner.pairs.iter().map(|(_, &(k, v))| (k, v))
       }
    }
 }
@@ -75,8 +110,9 @@ impl RawValue {
             // Objects with interior mutability are hashed by reference.
             ValueKind::Function => self.get_raw_function_unchecked().get_raw().hash(&mut state),
             ValueKind::Struct => self.get_raw_struct_unchecked().get_raw().hash(&mut state),
-            // TODO: Consider not hashing lists by reference.
+            // TODO: Consider not hashing lists and dicts by reference.
             ValueKind::List => self.get_raw_list_unchecked().get_raw().hash(&mut state),
+            ValueKind::Dict => self.get_raw_dict_unchecked().get_raw().hash(&mut state),
             ValueKind::UserData => self.get_raw_user_data_unchecked().get_raw().hash(&mut state),
          }
       }

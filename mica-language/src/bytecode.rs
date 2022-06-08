@@ -752,6 +752,7 @@ pub struct BuiltinDispatchTables {
    pub string: Gc<DispatchTable>,
    pub function: Gc<DispatchTable>,
    pub list: Gc<DispatchTable>,
+   pub dict: Gc<DispatchTable>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
@@ -764,6 +765,7 @@ impl BuiltinDispatchTables {
          string: Gc::new(DispatchTable::new("String", "String")),
          function: Gc::new(DispatchTable::new("Function", "Function")),
          list: Gc::new(DispatchTable::new("List", "List")),
+         dict: Gc::new(DispatchTable::new("Dict", "Dict")),
       }
    }
 }

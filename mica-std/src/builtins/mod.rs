@@ -1,9 +1,11 @@
 #![allow(clippy::or_fun_call)]
 
+mod dict;
 mod list;
 mod number;
 mod string;
 
+use mica_hl::language::value::Dict;
 use mica_hl::{RawValue, StandardLibrary, TypeBuilder};
 
 /// Converts a function that takes a `self` parameter to one that takes a `&self` parameter.
@@ -44,6 +46,10 @@ impl StandardLibrary for Lib {
 
    fn define_list(&mut self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
       list::define(builder)
+   }
+
+   fn define_dict(&mut self, builder: TypeBuilder<Dict>) -> TypeBuilder<Dict> {
+      dict::define(builder)
    }
 }
 

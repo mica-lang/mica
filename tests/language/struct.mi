@@ -7,15 +7,11 @@ assert(Test == Test)
 assert(Other == Other)
 assert(Test != Other)
 
-# A struct item returns nil.
-assert(do
-   struct Test2
-end == nil)
+# A struct expression returns the struct.
+assert(struct Test2 != nil)
 
 # A struct can be implemented with arbitrary methods.
-struct Greetings
-
-impl Greetings
+impl struct Greetings
    func get(for_whom) static
       "Hello, ".cat(for_whom).cat("!")
    end
@@ -25,9 +21,7 @@ assert(Greetings.get("World") == "Hello, World!")
 
 # A struct can have a constructor that sets its fields up.
 # It can also have instance methods.
-struct Vector
-
-impl Vector
+impl struct Vector
    func new(x, y) constructor
       @x = x
       @y = y
@@ -73,3 +67,6 @@ v = Vector.new(1, 2)
 assert(u == u)
 assert(v == v)
 assert(u != v)
+
+# `impl` blocks return the implemented struct.
+assert(impl struct ErgonomicImpl end == ErgonomicImpl)

@@ -946,9 +946,9 @@ impl<'e> CodeGenerator<'e> {
       let variable = self
          .create_variable(name, VariableAllocation::Allocate)
          .map_err(|kind| ast.error(node, kind))?;
-      self.generate_variable_sink(variable);
+      self.generate_variable_assign(variable);
 
-      Ok(ExpressionResult::Absent)
+      Ok(ExpressionResult::Present)
    }
 
    /// Generates code for an `impl` block.

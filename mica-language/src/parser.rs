@@ -358,6 +358,29 @@ impl Parser {
       Ok(self.ast.build_node(kind, result).with_location(token.location).done())
    }
 
+   /// Parses a struct declaration.
+   fn parse_struct(&mut self, struct_token: Token) -> Result<NodeId, Error> {
+      let name = self.lexer.next_token()?;
+      let name = self.parse_identifier(name)?;
+      Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
+   }
+
+   /// Parses an `impl` block.
+   fn parse_impl(&mut self, impl_token: Token) -> Result<NodeId, Error> {
+      let implementee = self.parse_expression(0)?;
+      let mut items = Vec::new();
+      // Note that we parse any type of item inside of the `impl` block.
+      // The codegen phase is the thing that ensures the items declared are valid.
+      self.parse_terminated_block(&impl_token, &mut items, |k| k == &TokenKind::End)?;
+      let _end = self.lexer.next_token()?;
+      Ok(self
+         .ast
+         .build_node(NodeKind::Impl, implementee)
+         .with_location(impl_token.location)
+         .with_children(items)
+         .done())
+   }
+
    /// Parses a prefix expression.
    fn parse_prefix(&mut self, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
@@ -395,6 +418,8 @@ impl Parser {
          TokenKind::Return => self.parse_break_like(token, NodeKind::Return),
 
          TokenKind::Func => self.parse_function(token, true),
+         TokenKind::Struct => self.parse_struct(token),
+         TokenKind::Impl => self.parse_impl(token),
 
          _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
       }
@@ -477,31 +502,6 @@ impl Parser {
       Ok(left)
    }
 
-   /// Parses a struct declaration.
-   fn parse_struct(&mut self) -> Result<NodeId, Error> {
-      let struct_token = self.lexer.next_token()?;
-      let name = self.lexer.next_token()?;
-      let name = self.parse_identifier(name)?;
-      Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
-   }
-
-   /// Parses an `impl` block.
-   fn parse_impl(&mut self) -> Result<NodeId, Error> {
-      let impl_token = self.lexer.next_token()?;
-      let implementee = self.parse_expression(0)?;
-      let mut items = Vec::new();
-      // Note that we parse any type of item inside of the `impl` block.
-      // The codegen phase is the thing that ensures the items declared are valid.
-      self.parse_terminated_block(&impl_token, &mut items, |k| k == &TokenKind::End)?;
-      let _end = self.lexer.next_token()?;
-      Ok(self
-         .ast
-         .build_node(NodeKind::Impl, implementee)
-         .with_location(impl_token.location)
-         .with_children(items)
-         .done())
-   }
-
    /// Parses a single item.
    fn parse_item(&mut self) -> Result<NodeId, Error> {
       let token = self.lexer.peek_token()?;
@@ -510,8 +510,6 @@ impl Parser {
             let func_token = self.lexer.next_token()?;
             self.parse_function(func_token, false)
          }
-         TokenKind::Struct => self.parse_struct(),
-         TokenKind::Impl => self.parse_impl(),
          _ => self.parse_expression(0),
       }
    }

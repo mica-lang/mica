@@ -20,3 +20,6 @@ trace-vm-stack-ops = []
 trace-vm-calls = []
 # Compile with this feature to trace GC operations like allocation and collection.
 trace-gc = []
+
+[dependencies]
+nohash-hasher = "0.2.0"

@@ -27,7 +27,7 @@ pub use lists::*;
 pub use structs::*;
 
 /// The kind of a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ValueKind {
    Nil,
    Boolean,

@@ -518,6 +518,20 @@ impl<'e> CodeGenerator<'e> {
       Ok(ExpressionResult::Present)
    }
 
+   /// Generates code for a dict literal.
+   fn generate_dict(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
+      let children = ast.children(node).unwrap();
+      let len =
+         Opr24::try_from(children.len()).map_err(|_| ast.error(node, ErrorKind::DictIsTooLarge))?;
+      for &child in children {
+         let (key, value) = ast.node_pair(child);
+         self.generate_node(ast, key, Expression::Used)?;
+         self.generate_node(ast, value, Expression::Used)?;
+      }
+      self.chunk.emit((Opcode::CreateDict, len));
+      Ok(ExpressionResult::Present)
+   }
+
    /// Generates code for a `do..end` expression.
    fn generate_do(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let children = ast.children(node).unwrap();
@@ -1041,6 +1055,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Identifier => self.generate_variable(ast, node)?,
 
          NodeKind::List => self.generate_list(ast, node)?,
+         NodeKind::Dict => self.generate_dict(ast, node)?,
 
          NodeKind::Negate | NodeKind::Not => self.generate_unary(ast, node)?,
 
@@ -1085,6 +1100,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Struct => self.generate_struct(ast, node)?,
          NodeKind::Impl => self.generate_impl(ast, node)?,
 
+         | NodeKind::DictPair
          | NodeKind::IfBranch
          | NodeKind::ElseBranch
          | NodeKind::Parameters

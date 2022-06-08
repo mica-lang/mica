@@ -5,8 +5,7 @@ use std::hint::unreachable_unchecked;
 use std::mem;
 
 use crate::gc::GcRaw;
-
-use super::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
+use crate::value::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
 
 /// A portable implementation of values.
 #[derive(Clone, Copy)]

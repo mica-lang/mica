@@ -498,6 +498,9 @@ impl Fiber {
                let list = gc.allocate(List::new(elements));
                self.push(RawValue::from(list));
             }
+            Opcode::CreateDict => {
+               todo!();
+            }
 
             Opcode::AssignGlobal => {
                let value = self.stack_top();

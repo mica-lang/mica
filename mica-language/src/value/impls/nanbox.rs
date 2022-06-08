@@ -4,8 +4,7 @@
 use std::hint::unreachable_unchecked;
 
 use crate::gc::{GcMem, GcRaw};
-
-use super::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
+use crate::value::{Closure, List, Struct, UserData, ValueCommon, ValueKind};
 
 fn _size_and_alignment_checks() {
    // If any of these checks fail, your platform cannot use NaN boxing.

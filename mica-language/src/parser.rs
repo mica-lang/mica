@@ -205,11 +205,45 @@ impl Parser {
       }
    }
 
-   /// Parses a list literal.
-   fn parse_list(&mut self, token: Token) -> Result<NodeId, Error> {
+   /// Parses a list or dict literal.
+   fn parse_list_or_dict(&mut self, token: Token) -> Result<NodeId, Error> {
+      #[derive(Clone, Copy, PartialEq, Eq)]
+      enum Mode {
+         Unknown,
+         Dict,
+         List,
+      }
+
       let mut elements = Vec::new();
-      self.parse_comma_separated(&mut elements, TokenKind::RightBracket, |p| {
-         p.parse_expression(0)
+      let mut mode = Mode::Unknown;
+      self.parse_comma_separated(&mut elements, TokenKind::RightBracket, |p| match mode {
+         Mode::Unknown => {
+            let key = p.parse_expression(0)?;
+            if p.lexer.peek_token()?.kind == TokenKind::Colon {
+               mode = Mode::Dict;
+               let colon = p.lexer.next_token()?;
+               let value = p.parse_expression(0)?;
+               Ok(p
+                  .ast
+                  .build_node(NodeKind::DictPair, (key, value))
+                  .with_location(colon.location)
+                  .done())
+            } else {
+               mode = Mode::List;
+               Ok(key)
+            }
+         }
+         Mode::Dict => {
+            let key = p.parse_expression(0)?;
+            let colon = p.expect(TokenKind::Colon, |_| ErrorKind::ColonExpectedAfterDictKey)?;
+            let value = p.parse_expression(0)?;
+            Ok(p
+               .ast
+               .build_node(NodeKind::DictPair, (key, value))
+               .with_location(colon.location)
+               .done())
+         }
+         Mode::List => p.parse_expression(0),
       })?;
       Ok(self
          .ast
@@ -408,7 +442,7 @@ impl Parser {
             }
             Ok(inner)
          }
-         TokenKind::LeftBracket => self.parse_list(token),
+         TokenKind::LeftBracket => self.parse_list_or_dict(token),
 
          TokenKind::Do => self.parse_do_block(token),
          TokenKind::If => self.parse_if_expression(token),

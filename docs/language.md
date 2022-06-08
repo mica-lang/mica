@@ -474,15 +474,6 @@ end)  #> 11
 ```
 In fact, a bare `break` is syntax sugar for `break nil`.
 
-## Items
-
-Items are a step above expressions, because they are treated specially by the compiler.
-Each item introduces a new variable into scope.
-Items are not expressions, but an expression can appear in any place an item can.
-All items evaluate to `nil` when used as the last statement of a block.
-
-The top level of a script, as well as any block such as `do..end`, is comprised of items.
-
 ### Function definitions
 
 A function definition creates a new function and assigns it to a variable. The syntax is:
@@ -516,6 +507,10 @@ struct Another
 assert(Example == Example)
 assert(Another == Another)
 assert(Example != Another)
+```
+The `struct T` expression returns the newly created struct after introducing it into scope.
+```
+assert(struct Example == Example)
 ```
 
 ### Implementations
@@ -556,7 +551,6 @@ declared in the first one.
 
 ```mica
 struct Vector
-
 impl Vector
    func new(x, y) constructor
       # Declare fields that will store the X/Y coordinates of the vector.
@@ -599,10 +593,14 @@ implemented anymore. This prevents monkey-patching foreign types, which is often
 programming practice, though the actual reason behind sealing has more to do with how dynamic
 Mica's `impl` blocks are.
 
+If multiple `impl`s per type were allowed, the compiler would somehow need to keep track of what
+fields each `impl` declares, which is impossible to do in a straightforward way due to the dynamic
+type system.
+
 The implemented struct can be any expression, so nothing prevents you from doing this:
 ```mica
 struct S
-function obtain_struct()
+func obtain_struct()
    S
 end
 
@@ -610,6 +608,26 @@ impl obtain_struct()
    # ...
 end
 ```
-If multiple `impl`s per type were allowed, the compiler would somehow need to keep track of what
-fields each `impl` declares, which is impossible to do in a straightforward way due to the dynamic
-type system.
+This also leads to the following idiom, where a newly created struct is implemented right away:
+```
+impl struct Immediate
+   # ...
+end
+```
+Apart from this, an `impl` block returns the implemented struct, so eg. returning a newly
+implemented struct from a function is possible.
+```
+func make_me_a_struct()
+   impl struct TheStruct
+      func say_hi() static
+         print("Hi!!")
+      end
+   end
+end
+
+AStruct = make_me_a_struct()
+AStruct.say_hi()
+
+Another = make_me_a_struct()
+assert(Another != AStruct)
+```

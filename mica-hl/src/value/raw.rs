@@ -1,7 +1,7 @@
 use std::hint::unreachable_unchecked;
 
 use mica_language::gc::{Gc, Memory};
-use mica_language::value::{RawValue, ValueKind};
+use mica_language::value::{Dict, RawValue, ValueKind};
 
 use crate::{Error, Hidden, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value};
 
@@ -122,6 +122,14 @@ impl SelfFromRawValue for Vec<RawValue> {
 
    unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
       Ok((&*v.get_raw_list_unchecked().get().get_mut(), ()))
+   }
+}
+
+impl SelfFromRawValue for Dict {
+   type Guard = ();
+
+   unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
+      Ok((v.get_raw_dict_unchecked().get(), ()))
    }
 }
 

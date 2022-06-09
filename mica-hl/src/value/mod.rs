@@ -173,6 +173,15 @@ impl From<Vec<RawValue>> for Value {
    }
 }
 
+/// **NOTE:** Again, you should avoid dealing with raw values. See comment above
+/// (for `From<Vec<RawValue>>`).
+#[doc(hidden)]
+impl From<Dict> for Value {
+   fn from(d: Dict) -> Self {
+      Value::Dict(Hidden(Gc::new(d)))
+   }
+}
+
 impl<T> From<Object<T>> for Value
 where
    T: Any,

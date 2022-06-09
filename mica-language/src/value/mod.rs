@@ -2,32 +2,32 @@
 //!
 //! This module abstracts platform specifics such as NaN boxing away into a common interface.
 
-#[cfg(mica_enable_nan_boxing)]
-mod nanbox;
-mod portable;
+mod closures;
+mod dicts;
+mod impls;
+mod lists;
+mod structs;
 
 use std::any::Any;
 use std::borrow::Cow;
-use std::cell::{Cell, UnsafeCell};
 use std::cmp::Ordering;
+use std::fmt;
 use std::fmt::Write;
-use std::marker::PhantomPinned;
 use std::ops::Deref;
-use std::pin::Pin;
-use std::rc::Rc;
-use std::{fmt, mem, ptr};
 
-use crate::bytecode::{DispatchTable, Opr24};
+use crate::bytecode::DispatchTable;
 use crate::common::ErrorKind;
 use crate::gc::GcRaw;
 
-#[cfg(mica_enable_nan_boxing)]
-use nanbox::ValueImpl;
-#[cfg(not(mica_enable_nan_boxing))]
-use portable::ValueImpl;
+use impls::ValueImpl;
+
+pub use closures::*;
+pub use dicts::*;
+pub use lists::*;
+pub use structs::*;
 
 /// The kind of a value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ValueKind {
    Nil,
    Boolean,
@@ -36,6 +36,7 @@ pub enum ValueKind {
    Function,
    Struct,
    List,
+   Dict,
    UserData,
 }
 
@@ -48,6 +49,7 @@ trait ValueCommon: Clone + PartialEq {
    fn new_function(f: GcRaw<Closure>) -> Self;
    fn new_struct(s: GcRaw<Struct>) -> Self;
    fn new_list(s: GcRaw<List>) -> Self;
+   fn new_dict(d: GcRaw<Dict>) -> Self;
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self;
 
    fn kind(&self) -> ValueKind;
@@ -59,6 +61,7 @@ trait ValueCommon: Clone + PartialEq {
    unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure>;
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct>;
    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List>;
+   unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict>;
    unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>>;
 }
 
@@ -86,6 +89,7 @@ impl RawValue {
          ValueKind::String => "String".into(),
          ValueKind::Function => "Function".into(),
          ValueKind::List => "List".into(),
+         ValueKind::Dict => "Dict".into(),
          ValueKind::Struct => unsafe { self.0.get_raw_struct_unchecked().get().dtable() }
             .type_name
             .deref()
@@ -152,6 +156,14 @@ impl RawValue {
    /// Calling this on a value that isn't known to be a list is undefined behavior.
    pub unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
       self.0.get_raw_list_unchecked()
+   }
+
+   /// Returns a dict value without performing any checks.
+   ///
+   /// # Safety
+   /// Calling this on a value that isn't known to be a dict is undefined behavior.
+   pub unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict> {
+      self.0.get_raw_dict_unchecked()
    }
 
    /// Returns a user data value without performing any checks.
@@ -274,6 +286,7 @@ impl RawValue {
                let b = other.0.get_raw_list_unchecked();
                a.get().try_partial_cmp(b.get())
             },
+            ValueKind::Dict => todo!(),
             ValueKind::UserData => Ok(None),
          }
       }
@@ -328,6 +341,12 @@ impl From<GcRaw<List>> for RawValue {
    }
 }
 
+impl From<GcRaw<Dict>> for RawValue {
+   fn from(s: GcRaw<Dict>) -> Self {
+      Self(ValueImpl::new_dict(s))
+   }
+}
+
 impl From<GcRaw<Box<dyn UserData>>> for RawValue {
    fn from(u: GcRaw<Box<dyn UserData>>) -> Self {
       Self(ValueImpl::new_user_data(u))
@@ -365,6 +384,25 @@ impl fmt::Debug for RawValue {
                f.write_char(']')?;
                Ok(())
             }
+            ValueKind::Dict => {
+               let dict = self.0.get_raw_dict_unchecked();
+               let dict = dict.get();
+               if dict.is_empty() {
+                  f.write_str("[:]")?;
+               } else {
+                  f.write_char('[')?;
+                  for (i, (key, value)) in dict.iter().enumerate() {
+                     if i != 0 {
+                        f.write_str(", ")?;
+                     }
+                     fmt::Debug::fmt(&key, f)?;
+                     f.write_str(": ")?;
+                     fmt::Debug::fmt(&value, f)?;
+                  }
+                  f.write_char(']')?;
+               }
+               Ok(())
+            }
             ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
             ValueKind::UserData => dtable(f, self.0.get_raw_user_data_unchecked().get().dtable()),
          }
@@ -383,138 +421,6 @@ impl fmt::Display for RawValue {
    }
 }
 
-/// The innards of a struct.
-///
-/// Note that both types and actual constructed structs use the same representation. The difference
-/// is that types do not contain associated fields (Mica does not have static fields.)
-#[repr(align(8))]
-pub struct Struct {
-   /// The disptach table of the struct. This may only be set once, and setting it seals the
-   /// struct.
-   pub(crate) dtable: UnsafeCell<GcRaw<DispatchTable>>,
-   sealed: Cell<bool>,
-   fields: UnsafeCell<Vec<RawValue>>,
-}
-
-impl Struct {
-   /// Creates a new `Struct` representing a type.
-   pub fn new_type(dtable: GcRaw<DispatchTable>) -> Self {
-      Self {
-         dtable: UnsafeCell::new(dtable),
-         sealed: Cell::new(false),
-         fields: UnsafeCell::new(Vec::new()),
-      }
-   }
-
-   /// Creates a new instance of this struct type.
-   pub(crate) unsafe fn new_instance(&self, field_count: usize) -> Self {
-      Self {
-         dtable: UnsafeCell::new(self.dtable().instance.unwrap_unchecked()),
-         sealed: Cell::new(true),
-         fields: UnsafeCell::new(std::iter::repeat(RawValue::from(())).take(field_count).collect()),
-      }
-   }
-
-   /// Returns a reference to the dispatch table of the struct.
-   ///
-   /// # Safety
-   ///
-   /// Note that the reference's lifetime does not match the struct's. This is because the reference
-   /// actually comes from the GC, but `Struct` does not have a lifetime parameter that would
-   /// signify that.
-   ///
-   /// Because the lifetime of the reference is not tracked, this function is unsafe.
-   pub unsafe fn dtable<'a>(&self) -> &'a DispatchTable {
-      self.dtable.get().as_ref().unwrap_unchecked().get()
-   }
-
-   /// Implements the struct with the given dispatch table.
-   pub(crate) fn implement(&self, dtable: GcRaw<DispatchTable>) -> Result<(), ErrorKind> {
-      if self.sealed.get() {
-         return Err(ErrorKind::StructAlreadyImplemented);
-      }
-      unsafe { *self.dtable.get() = dtable }
-      self.sealed.set(true);
-      Ok(())
-   }
-
-   /// Returns the value of a field.
-   ///
-   /// # Safety
-   /// This does not perform any borrow checks or bounds checks.
-   pub(crate) unsafe fn get_field(&self, index: usize) -> RawValue {
-      *(&*self.fields.get()).get_unchecked(index)
-   }
-
-   /// Sets the value of a field.
-   ///
-   /// # Safety
-   /// This does not perform any borrow checks or bounds checks.
-   pub(crate) unsafe fn set_field(&self, index: usize, value: RawValue) {
-      *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
-   }
-
-   pub(crate) unsafe fn fields(&self) -> impl Iterator<Item = RawValue> + '_ {
-      (&*self.fields.get()).iter().copied()
-   }
-}
-
-/// A Mica list.
-pub struct List {
-   elements: UnsafeCell<Vec<RawValue>>,
-}
-
-impl List {
-   /// Creates a new, empty list.
-   pub fn new(elements: Vec<RawValue>) -> List {
-      List {
-         elements: UnsafeCell::new(elements),
-      }
-   }
-
-   /// Returns a mutable reference to the vector inside.
-   ///
-   /// # Safety
-   /// No references (mutable or not) to the vector must exist at the time of calling this.
-   pub unsafe fn get_mut(&self) -> *mut Vec<RawValue> {
-      self.elements.get()
-   }
-
-   /// Returns the items of the list as a slice.
-   ///
-   /// # Safety
-   /// There must be no mutable references to the list inside at the time of calling this.
-   pub(crate) unsafe fn as_slice(&self) -> &[RawValue] {
-      &*self.elements.get()
-   }
-
-   /// Attempts to compare two lists to each other lexicographically.
-   pub(crate) unsafe fn try_partial_cmp(
-      &self,
-      other: &List,
-   ) -> Result<Option<Ordering>, ErrorKind> {
-      let (left, right) = (self.as_slice(), other.as_slice());
-      let len = left.len().min(right.len());
-      let a = &left[..len];
-      let b = &right[..len];
-
-      for i in 0..len {
-         match a[i].try_partial_cmp(&b[i])? {
-            Some(Ordering::Equal) => (),
-            non_eq => return Ok(non_eq),
-         }
-      }
-
-      Ok(left.len().partial_cmp(&right.len()))
-   }
-}
-
-impl PartialEq for List {
-   fn eq(&self, other: &Self) -> bool {
-      (unsafe { &*self.elements.get() } == unsafe { &*other.elements.get() })
-   }
-}
-
 pub trait UserData: Any {
    /// Returns a GC reference to the user data's dispatch table.
    fn dtable_gcraw(&self) -> GcRaw<DispatchTable>;
@@ -530,74 +436,4 @@ pub trait UserData: Any {
 
    /// Converts a reference to `UserData` to `Any`.
    fn as_any(&self) -> &dyn Any;
-}
-
-/// An upvalue captured by a closure.
-pub struct Upvalue {
-   /// A writable pointer to the variable captured by this upvalue.
-   pub(crate) ptr: UnsafeCell<ptr::NonNull<RawValue>>,
-   /// Storage for a closed upvalue.
-   closed: UnsafeCell<RawValue>,
-
-   _pinned: PhantomPinned,
-}
-
-impl fmt::Debug for Upvalue {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      f.debug_struct("Upvalue")
-         .field("ptr", unsafe { self.ptr.get().as_ref() }.unwrap())
-         .field("closed", unsafe { self.closed.get().as_ref() }.unwrap())
-         .finish_non_exhaustive()
-   }
-}
-
-impl Upvalue {
-   /// Creates a new upvalue pointing to a live variable.
-   pub(crate) fn new(var: ptr::NonNull<RawValue>) -> Pin<Rc<Upvalue>> {
-      Rc::pin(Upvalue {
-         ptr: UnsafeCell::new(var),
-         closed: UnsafeCell::new(RawValue::from(())),
-         _pinned: PhantomPinned,
-      })
-   }
-
-   /// Closes an upvalue by `mem::take`ing the value behind the `ptr` into the `closed` field, and
-   /// updating the `ptr` field to point to the `closed` field's contents.
-   ///
-   /// # Safety
-   /// The caller must ensure there are no mutable references to the variable at the time of
-   /// calling this.
-   pub(crate) unsafe fn close(&self) {
-      let ptr = &mut *self.ptr.get();
-      let closed = &mut *self.closed.get();
-      let value = mem::take(ptr.as_mut());
-      *closed = value;
-      *ptr = ptr::NonNull::new(closed).unwrap();
-   }
-
-   /// Returns the value pointed to by this upvalue.
-   ///
-   /// # Safety
-   /// The caller must ensure there are no mutable references to the source variable at the time
-   /// of calling this.
-   pub(crate) unsafe fn get(&self) -> RawValue {
-      *(*self.ptr.get()).as_ptr()
-   }
-
-   /// Writes to the variable pointed to by this upvalue.
-   ///
-   /// # Safety
-   /// The caller must ensure there are no mutable references to the source variable at the time
-   /// of calling this.
-   pub(crate) unsafe fn set(&self, value: RawValue) {
-      *(*self.ptr.get()).as_ptr() = value;
-   }
-}
-
-/// The runtime representation of a function.
-#[derive(Debug)]
-#[repr(align(8))]
-pub struct Closure {
-   pub function_id: Opr24,
-   pub captures: Vec<Pin<Rc<Upvalue>>>,
 }

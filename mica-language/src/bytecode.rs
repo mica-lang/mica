@@ -129,6 +129,9 @@ pub enum Opcode {
    CreateStruct,
    /// Creates a list from `operand` values that are at the top of the stack.
    CreateList,
+   /// Creates a dict from `operand * 2` values that are at the top of the stack. The values have
+   /// to be arranged in `key, value, key, value...` order, from bottom to top.
+   CreateDict,
 
    /// Assigns the value at the top of the stack to a global. The value stays on the stack.
    AssignGlobal,
@@ -749,6 +752,7 @@ pub struct BuiltinDispatchTables {
    pub string: Gc<DispatchTable>,
    pub function: Gc<DispatchTable>,
    pub list: Gc<DispatchTable>,
+   pub dict: Gc<DispatchTable>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
@@ -761,6 +765,7 @@ impl BuiltinDispatchTables {
          string: Gc::new(DispatchTable::new("String", "String")),
          function: Gc::new(DispatchTable::new("Function", "Function")),
          list: Gc::new(DispatchTable::new("List", "List")),
+         dict: Gc::new(DispatchTable::new("Dict", "Dict")),
       }
    }
 }

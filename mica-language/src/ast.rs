@@ -217,6 +217,10 @@ pub enum NodeKind {
 
    /// A list literal.
    List,
+   /// A dict literal.
+   Dict,
+   /// A `key: value` pair in a dict literal.
+   DictPair,
 
    /// Negation operator (prefix `-`).
    Negate,

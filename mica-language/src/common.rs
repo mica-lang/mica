@@ -83,6 +83,8 @@ pub enum ErrorKind {
    LeftParenExpected,
    UnexpectedEof,
    CommaExpected,
+   ColonExpectedAfterDictKey,
+   RightBracketExpectedToCloseEmptyDict,
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
@@ -110,6 +112,7 @@ pub enum ErrorKind {
    FieldOutsideOfImpl,
    MissingFields(Vec<Rc<str>>),
    ListIsTooLong,
+   DictIsTooLarge,
 
    // Runtime
    TypeError {
@@ -164,6 +167,8 @@ impl std::fmt::Display for ErrorKind {
          Self::LeftParenExpected => write!(f, "left parenthesis '(' expected"),
          Self::UnexpectedEof => write!(f, "unexpected end of file"),
          Self::CommaExpected => write!(f, "comma ',' expected"),
+         Self::ColonExpectedAfterDictKey => write!(f, "colon ':' expected after dict key"),
+         Self::RightBracketExpectedToCloseEmptyDict => write!(f, "right bracket ']' expected to close empty dict literal [:]"),
 
          Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
@@ -204,6 +209,7 @@ impl std::fmt::Display for ErrorKind {
             )
          }
          Self::ListIsTooLong => write!(f, "list literal has too many elements"),
+         Self::DictIsTooLarge => write!(f, "dict literal has too many pairs"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

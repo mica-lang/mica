@@ -1,4 +1,4 @@
-use mica_language::value::RawValue;
+use mica_language::value::{Dict, RawValue};
 
 use crate::TypeBuilder;
 
@@ -21,4 +21,7 @@ pub trait StandardLibrary {
 
    /// Defines the `List` type using the given type builder.
    fn define_list(&mut self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>>;
+
+   /// Defines the `Dict` type using the given type builder.
+   fn define_dict(&mut self, builder: TypeBuilder<Dict>) -> TypeBuilder<Dict>;
 }

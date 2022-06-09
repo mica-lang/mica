@@ -239,6 +239,11 @@ impl PartialEq for ValueImpl {
                   let b = other.as_gc::<List>().get();
                   return a == b;
                }
+               Self::OBJECT_DICT => {
+                  let a = self.as_gc::<Dict>().get();
+                  let b = other.as_gc::<Dict>().get();
+                  return a == b;
+               }
                _ => (),
             }
          }

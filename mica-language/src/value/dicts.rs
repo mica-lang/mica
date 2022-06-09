@@ -60,30 +60,29 @@ impl Dict {
    /// Removes the value at the given key and returns it (or `nil` if there was no value).
    pub fn remove(&self, key: RawValue) -> RawValue {
       let inner = unsafe { &mut *self.inner.get() };
-      match inner.table.remove_entry(key.hash(inner.state.build_hasher()), equivalent_key(key)) {
+      match inner.table.remove_entry(
+         key.hash(&mut inner.state.build_hasher()),
+         equivalent_key(key),
+      ) {
          Some((_, v)) => v,
          None => RawValue::from(()),
       }
    }
 
-   fn get_impl(&self, key: RawValue) -> Option<RawValue> {
+   /// Returns the value under the given key, or `None` if there is no such value.
+   pub fn get(&self, key: RawValue) -> Option<RawValue> {
       let inner = unsafe { &*self.inner.get() };
       if inner.table.is_empty() {
          None
       } else {
-         let hash = key.hash(inner.state.build_hasher());
+         let hash = key.hash(&mut inner.state.build_hasher());
          inner.table.get(hash, equivalent_key(key)).map(|&(_key, value)| value)
       }
    }
 
-   /// Returns the value at the given key, or `nil` if there is no value.
-   pub fn get(&self, key: RawValue) -> RawValue {
-      self.get_impl(key).unwrap_or(RawValue::from(()))
-   }
-
    /// Returns whether the dict contains a value under the given key.
    pub fn contains_key(&self, key: RawValue) -> bool {
-      self.get_impl(key).is_some()
+      self.get(key).is_some()
    }
 
    /// Returns an iterator over pairs stored in the dict.
@@ -106,31 +105,54 @@ impl Clone for Dict {
    }
 }
 
+impl PartialEq for Dict {
+   fn eq(&self, other: &Self) -> bool {
+      if self.len() != other.len() {
+         return false;
+      }
+      unsafe { self.iter() }.all(|(key, value)| other.get(key).map_or(false, |v| value == v))
+   }
+}
+
 impl RawValue {
    /// Hashes the value.
    /// Note that this is not part of a `std::hash::Hash` implementation because this may get extra
    /// arguments in the future to support overloading hashing from the language itself.
-   pub fn hash<H>(&self, mut state: H) -> u64
+   pub fn hash<H>(&self, state: &mut H) -> u64
    where
       H: Hasher,
    {
-      self.kind().hash(&mut state);
+      self.kind().hash(state);
       unsafe {
          match self.kind() {
             // Primitives are hashed by value.
             ValueKind::Nil => (),
-            ValueKind::Boolean => self.get_boolean_unchecked().hash(&mut state),
+            ValueKind::Boolean => self.get_boolean_unchecked().hash(state),
             // Hashing floats isn't normally considered OK by Rust, but in our case it's the only
             // option because we don't have an integer type (and probably never will).
-            ValueKind::Number => self.get_number_unchecked().to_bits().hash(&mut state),
-            ValueKind::String => self.get_raw_string_unchecked().get().hash(&mut state),
+            ValueKind::Number => self.get_number_unchecked().to_bits().hash(state),
+            ValueKind::String => self.get_raw_string_unchecked().get().hash(state),
             // Objects with interior mutability are hashed by reference.
-            ValueKind::Function => self.get_raw_function_unchecked().get_raw().hash(&mut state),
-            ValueKind::Struct => self.get_raw_struct_unchecked().get_raw().hash(&mut state),
-            // TODO: Consider not hashing lists and dicts by reference.
-            ValueKind::List => self.get_raw_list_unchecked().get_raw().hash(&mut state),
-            ValueKind::Dict => self.get_raw_dict_unchecked().get_raw().hash(&mut state),
-            ValueKind::UserData => self.get_raw_user_data_unchecked().get_raw().hash(&mut state),
+            ValueKind::Function => self.get_raw_function_unchecked().get_raw().hash(state),
+            ValueKind::Struct => self.get_raw_struct_unchecked().get_raw().hash(state),
+            ValueKind::List => {
+               let slice = self.get_raw_list_unchecked().get().as_slice();
+               slice.len().hash(state);
+               for value in slice.iter() {
+                  value.hash(state);
+               }
+            }
+            ValueKind::Dict => {
+               // This is another hash that Rust doesn't want you to have, but I see no reason to
+               // leave it out in Mica. Yes, it's stupid, and nobody in their right mind is gonna
+               // use it, but also, why not?
+               let dict = self.get_raw_dict_unchecked().get();
+               for (key, value) in dict.iter() {
+                  key.hash(state);
+                  value.hash(state);
+               }
+            }
+            ValueKind::UserData => self.get_raw_user_data_unchecked().get_raw().hash(state),
          }
       }
       state.finish()
@@ -138,7 +160,7 @@ impl RawValue {
 }
 
 fn make_hasher(builder: &DictHashBuilder) -> impl Fn(&(RawValue, RawValue)) -> u64 + '_ {
-   move |&(key, _value)| key.hash(builder.build_hasher())
+   move |&(key, _value)| key.hash(&mut builder.build_hasher())
 }
 
 fn equivalent_key(key: RawValue) -> impl Fn(&(RawValue, RawValue)) -> bool {

@@ -22,4 +22,4 @@ trace-vm-calls = []
 trace-gc = []
 
 [dependencies]
-nohash-hasher = "0.2.0"
+hashbrown = { version = "0.12.1", features = ["raw"] }

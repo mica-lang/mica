@@ -1,21 +1,27 @@
+//! Implementation of the `Dict` type based on hashbrown.
+
 use std::cell::UnsafeCell;
 use std::collections::hash_map::RandomState;
-use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash, Hasher};
+use std::mem;
 
-use nohash_hasher::BuildNoHashHasher;
+use hashbrown::raw::RawTable;
 
 use super::{RawValue, ValueKind};
 
-pub type DictMap = HashMap<u64, (RawValue, RawValue), BuildNoHashHasher<u64>>;
+type DictMap = RawTable<(RawValue, RawValue)>;
+type DictHashBuilder = RandomState;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct DictInner {
-   pairs: DictMap,
-   state: RandomState,
+   table: DictMap,
+   state: DictHashBuilder,
 }
 
 /// A dict (dictionary) storing arbitrarily typed keys and values.
+///
+/// Note that this type has interior mutability. This is because dicts in Mica are shared by
+/// reference; creating a new dict requires using `clone`.
 #[derive(Default)]
 pub struct Dict {
    inner: UnsafeCell<DictInner>,
@@ -29,10 +35,8 @@ impl Dict {
 
    /// Returns the number of elements stored in the dict.
    pub fn len(&self) -> usize {
-      unsafe {
-         let inner = &*self.inner.get();
-         inner.pairs.len()
-      }
+      let inner = unsafe { &*self.inner.get() };
+      inner.table.len()
    }
 
    /// Returns whether the dict is empty.
@@ -40,59 +44,70 @@ impl Dict {
       self.len() == 0
    }
 
-   /// Sets the value at the given key. Returns an error if the key cannot be hashed.
-   pub fn insert(&self, key: RawValue, value: RawValue) {
-      unsafe {
-         let inner = &mut *self.inner.get();
-         inner.pairs.insert(key.hash(inner.state.build_hasher()), (key, value));
+   /// Sets the value at the given key. Returns the old value, or `nil` if there was no value.
+   pub fn insert(&self, key: RawValue, value: RawValue) -> RawValue {
+      let inner = unsafe { &mut *self.inner.get() };
+      let hasher = make_hasher(&inner.state);
+      let key_hash = hasher(&(key, value));
+      if let Some((_, item)) = inner.table.get_mut(key_hash, equivalent_key(key)) {
+         mem::replace(item, value)
+      } else {
+         inner.table.insert(key_hash, (key, value), hasher);
+         RawValue::from(())
       }
    }
 
    /// Removes the value at the given key and returns it (or `nil` if there was no value).
    pub fn remove(&self, key: RawValue) -> RawValue {
-      unsafe {
-         let inner = &mut *self.inner.get();
-         inner
-            .pairs
-            .remove(&key.hash(inner.state.build_hasher()))
-            .map(|(_k, v)| v)
-            .unwrap_or(RawValue::from(()))
+      let inner = unsafe { &mut *self.inner.get() };
+      match inner.table.remove_entry(key.hash(inner.state.build_hasher()), equivalent_key(key)) {
+         Some((_, v)) => v,
+         None => RawValue::from(()),
       }
    }
 
-   /// Returns the value at the given key. Returns an error if the key cannot be hashed.
-   pub fn get(&self, key: RawValue) -> RawValue {
-      unsafe {
-         let inner = &*self.inner.get();
-         inner
-            .pairs
-            .get(&key.hash(inner.state.build_hasher()))
-            .map(|&(_k, v)| v)
-            .unwrap_or(RawValue::from(()))
+   fn get_impl(&self, key: RawValue) -> Option<RawValue> {
+      let inner = unsafe { &*self.inner.get() };
+      if inner.table.is_empty() {
+         None
+      } else {
+         let hash = key.hash(inner.state.build_hasher());
+         inner.table.get(hash, equivalent_key(key)).map(|&(_key, value)| value)
       }
+   }
+
+   /// Returns the value at the given key, or `nil` if there is no value.
+   pub fn get(&self, key: RawValue) -> RawValue {
+      self.get_impl(key).unwrap_or(RawValue::from(()))
    }
 
    /// Returns whether the dict contains a value under the given key.
    pub fn contains_key(&self, key: RawValue) -> bool {
-      unsafe {
-         let inner = &*self.inner.get();
-         inner.pairs.contains_key(&key.hash(inner.state.build_hasher()))
-      }
+      self.get_impl(key).is_some()
    }
 
    /// Returns an iterator over pairs stored in the dict.
    ///
-   /// WARNING: The dict must not be modified while iterating over it.
-   pub(crate) fn iter(&self) -> impl Iterator<Item = (RawValue, RawValue)> + '_ {
-      unsafe {
-         let inner = &*self.inner.get();
-         inner.pairs.iter().map(|(_, &(k, v))| (k, v))
+   /// # Safety
+   /// The dict must not be modified while iterating over it. The iterator must not outlive the
+   /// dict.
+   pub(crate) unsafe fn iter(&self) -> impl Iterator<Item = (RawValue, RawValue)> + '_ {
+      let inner = &*self.inner.get();
+      let iterator = inner.table.iter();
+      iterator.map(|bucket| bucket.read())
+   }
+}
+
+impl Clone for Dict {
+   fn clone(&self) -> Self {
+      Self {
+         inner: UnsafeCell::new((unsafe { &*self.inner.get() }).clone()),
       }
    }
 }
 
 impl RawValue {
-   /// Hashes the value. If the value is not hashable, returns an error.
+   /// Hashes the value.
    /// Note that this is not part of a `std::hash::Hash` implementation because this may get extra
    /// arguments in the future to support overloading hashing from the language itself.
    pub fn hash<H>(&self, mut state: H) -> u64
@@ -105,6 +120,8 @@ impl RawValue {
             // Primitives are hashed by value.
             ValueKind::Nil => (),
             ValueKind::Boolean => self.get_boolean_unchecked().hash(&mut state),
+            // Hashing floats isn't normally considered OK by Rust, but in our case it's the only
+            // option because we don't have an integer type (and probably never will).
             ValueKind::Number => self.get_number_unchecked().to_bits().hash(&mut state),
             ValueKind::String => self.get_raw_string_unchecked().get().hash(&mut state),
             // Objects with interior mutability are hashed by reference.
@@ -118,4 +135,12 @@ impl RawValue {
       }
       state.finish()
    }
+}
+
+fn make_hasher(builder: &DictHashBuilder) -> impl Fn(&(RawValue, RawValue)) -> u64 + '_ {
+   move |&(key, _value)| key.hash(builder.build_hasher())
+}
+
+fn equivalent_key(key: RawValue) -> impl Fn(&(RawValue, RawValue)) -> bool {
+   move |&(key2, _value)| key == key2
 }

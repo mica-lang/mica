@@ -35,6 +35,10 @@ false
 "abc"     # String
 "\"hi\""
 \r"C:\Windows\System32"
+[]        # List
+[1, 2]
+[:]       # Dict
+["a": 3]
 ```
 
 #### Numbers
@@ -131,6 +135,97 @@ s =
    \\Hello,
    \\ world!
 assert(s == "Hello,\n world!")
+```
+
+#### Lists
+
+Lists are a data type for storing values in a sequence. Their literals open and close with square
+brackets `[]`, and contain comma-separated values.
+```mica
+cool_languages = ["Rust", "Mica", "Lua"]
+```
+The list stored in the variable `cool_languages` holds three strings, but Mica lists can store any
+data type. They are heterogenous, which means that multiple data types can be stored in the same
+list - including other lists.
+```mica
+identity_mat4 = [
+   [1, 0, 0, 0],
+   [0, 1, 0, 0],
+   [0, 0, 1, 0],
+   [0, 0, 0, 1],  # trailing comma is optional
+]
+```
+Elements can be retrieved using the `get/1` function, and modified using the `set/2` function.
+```mica
+numbers = [1, 2, 3]
+assert(numbers.get(0) == 1)  # elements are indexed starting from 0
+numbers.set(0, 2)
+assert(numbers == [2, 2, 3])
+```
+More functions, for eg. appending and removing elements from lists, can be found in the
+[standard library documentation](./standard-library.md).
+
+Lists are passed by reference, but compared by value. This means that a list copied into two
+separate variables refers to the same data store, but comparing independent lists always compares
+them by individual elements.
+```mica
+a = []
+b = a
+assert(a == b)
+assert(a.is_empty)
+a.push(1)
+assert(a == b)
+# Note that [1] creates a *new* list with a completely new data store, containing 1.
+assert(a == [1] and b == [1])
+```
+
+#### Dicts
+
+Dicts, short for *dict*ionaries, are a data type for storing values associatively - they map one
+value (the key) to another value, just like real world dictionaries map words from one language to
+another language. Dict literals are enclosed in square brackets `[]` just like list literals, but
+instead of bare elements they use pairs of values separated by a colon `:`. The empty list is
+written as `[:]`.
+
+```mica
+dependencies = [
+   "rust": "1.61",
+   "mica": "0.3.0",
+]
+```
+Elements can be retrieved using `get/1`.
+```mica
+assert(dependencies.get("rust") == "1.61")
+```
+Elements can be inserted or overwritten using `insert/2` – which returns the old value, or `nil` if
+there wasn't any value stored previously – and removed using `remove/1`, which returns the removed
+value.
+```mica
+dependencies.insert("lua", "5.4")
+assert(dependencies.insert("mica", "0.4.0") == "0.3.0")
+assert(dependencies.remove("lua") == "5.4")
+```
+
+Just like lists, dicts are heterogenous. Any value can be used as a key or a value - even a dict
+itself.
+```mica
+weird = [
+   "#ffffff": "white",
+   [1, 2]: 0,
+   [3, 4]: 1,
+   ["x": 3]: 5,
+]
+assert(weird.get([1, 2]) == 0)
+assert(weird.get(["x": 3]) == 5)
+```
+
+Just like lists, dicts are passed by reference and compared by value.
+```
+a = [1: 1]
+b = a
+a.insert(1, 2)
+assert(a == b)
+assert(a == [1: 2])
 ```
 
 ### Identifiers

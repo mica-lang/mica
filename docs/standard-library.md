@@ -13,3 +13,5 @@ functions.
 - `Boolean`: no methods
 - [`Number`](../mica-std/src/builtins/number.rs)
 - [`String`](../mica-std/src/builtins/string.rs)
+- [`List`](../mica-std/src/builtins/list.rs)
+- [`Dict`](../mica-std/src/builtins/dict.rs)

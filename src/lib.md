@@ -319,9 +319,7 @@ let get_greeting =
       .start(
          "function.mi",
          r#"
-            (func (x)
-               "Hello, ".cat(x).cat("!")
-            end)
+            (func (x) = "Hello, ".cat(x).cat("!"))
          "#
       )?
       .trampoline()?;
@@ -345,13 +343,12 @@ let greeter_type =
             struct Greeter
 
             impl Greeter
-               func new(template) constructor
+               func new(template) constructor = do
                   @template = template
                end
 
-               func greetings(for_whom)
+               func greetings(for_whom) =
                   @template.replace("{target}", for_whom)
-               end
             end
 
             Greeter

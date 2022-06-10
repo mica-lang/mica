@@ -3,7 +3,7 @@
 struct Garbage
 
 impl Garbage
-   func new() constructor
+   func new() constructor = do
       @trash = 1
    end
 end

@@ -379,9 +379,8 @@ impl Parser {
          .with_children(parameters)
          .done();
 
-      let mut body = Vec::new();
-      self.parse_terminated_block(&func_token, &mut body, |k| *k == TokenKind::End)?;
-      let _end = self.lexer.next_token();
+      let _equals = self.expect(TokenKind::Assign, |_| ErrorKind::MissingFunctionBody)?;
+      let body = vec![self.parse_expression(0)?];
 
       Ok(self
          .ast

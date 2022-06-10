@@ -85,6 +85,7 @@ pub enum ErrorKind {
    CommaExpected,
    ColonExpectedAfterDictKey,
    RightBracketExpectedToCloseEmptyDict,
+   MissingFunctionBody,
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
@@ -169,6 +170,7 @@ impl std::fmt::Display for ErrorKind {
          Self::CommaExpected => write!(f, "comma ',' expected"),
          Self::ColonExpectedAfterDictKey => write!(f, "colon ':' expected after dict key"),
          Self::RightBracketExpectedToCloseEmptyDict => write!(f, "right bracket ']' expected to close empty dict literal [:]"),
+         Self::MissingFunctionBody => write!(f, "missing function body ('= expression')"),
 
          Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),

@@ -3,7 +3,7 @@
 struct LinkedList
 
 impl LinkedList
-   func new(value, next) constructor
+   func new(value, next) constructor = do
       @value = value
       @next = next
    end

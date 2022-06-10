@@ -573,20 +573,24 @@ In fact, a bare `break` is syntax sugar for `break nil`.
 
 A function definition creates a new function and assigns it to a variable. The syntax is:
 ```mica
-func name(param1, param2, param3)
-   # body
-end
+func name(param1, param2, param3) = expression
 ```
 This syntax is almost exactly the same as:
 ```mica
 # Introduce the variable into scope first, so that the function can be called recursively.
 name = nil
-name = func (param1, param2, param3)
-   # body
+name = func (param1, param2, param3) = expression
+```
+However, the `func name() = expression` form is preferred as it assigns a name to the function, which is
+visible in stack traces. Anonymous functions have the name `<anonymous>`.
+
+To create a multiline function, a `do` block can be used as the expression:
+```mica
+func say_nice_things() = do
+   print("Hey!")
+   print("You look great today!")
 end
 ```
-However, the `func name() end` form is preferred as it assigns a name to the function, which is
-visible in stack traces. Anonymous functions have the name `<anonymous>`.
 
 ### Struct definitions
 
@@ -625,9 +629,8 @@ functions can be used as a way of putting functions into namespaces.
 struct Greetings
 
 impl Greetings
-   func get(for_whom) static
+   func get(for_whom) static =
       "Hello, ".cat(for_whom).cat("!")
-   end
 end
 
 assert(Greetings.get("world") == "Hello, world!")
@@ -647,13 +650,13 @@ declared in the first one.
 ```mica
 struct Vector
 impl Vector
-   func new(x, y) constructor
+   func new(x, y) constructor = do
       # Declare fields that will store the X/Y coordinates of the vector.
       @x = x
       @y = y
    end
 
-   func zero() constructor
+   func zero() constructor = do
       # Additional constructors must assign to the same set of fields as the first constructor.
       @x = 0
       @y = 0
@@ -661,15 +664,13 @@ impl Vector
 
    # Now we can declare functions that operate on instances of the type.
 
-   func len2()
+   func len2() =
       @x * @x + @y * @y
-   end
 
-   func len()
+   func len() =
       # The `self` variable may be used to refer to the instance the function was called on, ie.
       # the left-hand side of the dot.
       self.len2.sqrt
-   end
 end
 
 v = Vector.new(3, 4)
@@ -695,9 +696,8 @@ type system.
 The implemented struct can be any expression, so nothing prevents you from doing this:
 ```mica
 struct S
-func obtain_struct()
+func obtain_struct() =
    S
-end
 
 impl obtain_struct()
    # ...
@@ -712,13 +712,11 @@ end
 Apart from this, an `impl` block returns the implemented struct, so eg. returning a newly
 implemented struct from a function is possible.
 ```
-func make_me_a_struct()
+func make_me_a_struct() =
    impl struct TheStruct
-      func say_hi() static
+      func say_hi() static =
          print("Hi!!")
-      end
    end
-end
 
 AStruct = make_me_a_struct()
 AStruct.say_hi()

@@ -248,7 +248,7 @@ dependencies = [
 
 [[package]]
 name = "mica-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "mica",
  "rustyline",

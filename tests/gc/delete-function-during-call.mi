@@ -3,13 +3,13 @@
 struct LinkedList
 
 impl LinkedList
-   func new(value, next) constructor
+   func new(value, next) constructor = do
       @value = value
       @next = next
    end
 end
 
-func make_long_list()
+func make_long_list() = do
    i = 0
    list = nil
    # Allocate enough objects to cause a collection to happen.
@@ -20,7 +20,7 @@ func make_long_list()
    list
 end
 
-func hi()
+func hi() = do
    hi = nil
    make_long_list()
    nil

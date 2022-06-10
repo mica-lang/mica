@@ -1,8 +1,7 @@
 # Tests for Number methods.
 
-func approx_equal(x, y, epsilon)
+func approx_equal(x, y, epsilon) =
    (x - y).abs <= epsilon
-end
 
 assert(Number.nan != Number.nan)
 assert(Number.nan.is_nan)

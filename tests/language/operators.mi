@@ -9,7 +9,7 @@ assert(!!nil == false)
 assert(!!false == false)
 assert(!!1 == true)
 assert(!!"" == true)
-assert(!!func () end == true)
+assert(!!(func () = nil) == true)
 struct S
 assert(!!S == true)
 

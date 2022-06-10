@@ -3,13 +3,13 @@
 struct LinkedList
 
 impl LinkedList
-   func new(value, next) constructor
+   func new(value, next) constructor = do
       @value = value
       @next = next
    end
 end
 
-func make_long_list()
+func make_long_list() = do
    i = 0
    list = nil
    while i < 1000 do

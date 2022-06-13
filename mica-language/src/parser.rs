@@ -429,6 +429,23 @@ impl Parser {
          .done())
    }
 
+   /// Parses a trait declaration.
+   fn parse_trait(&mut self, trait_token: Token) -> Result<NodeId, Error> {
+      let name = self.lexer.next_token()?;
+      let name = self.parse_identifier(name)?;
+      let mut items = Vec::new();
+      // Just like with `impl`, we allow for any item here, and the codegen phase ensures they're
+      // functions.
+      self.parse_terminated_block(&trait_token, &mut items, |k| k == &TokenKind::End)?;
+      let _end = self.lexer.next_token()?;
+      Ok(self
+         .ast
+         .build_node(NodeKind::Trait, name)
+         .with_location(trait_token.location)
+         .with_children(items)
+         .done())
+   }
+
    /// Parses a prefix expression.
    fn parse_prefix(&mut self, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
@@ -468,6 +485,7 @@ impl Parser {
          TokenKind::Func => self.parse_function(token, true),
          TokenKind::Struct => self.parse_struct(token),
          TokenKind::Impl => self.parse_impl(token),
+         TokenKind::Trait => self.parse_trait(token),
 
          _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
       }

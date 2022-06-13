@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::mem::size_of;
+use std::num::NonZeroU16;
 use std::rc::Rc;
 
 use crate::common::{ErrorKind, Location};
@@ -561,6 +562,20 @@ pub struct FunctionSignature {
    pub name: Rc<str>,
    /// This arity number does not include the implicit `self` argument.
    pub arity: Option<u16>,
+   /// The index of the trait this signature belongs to.
+   /// When `None`, the function is free and does not belong to any trait.
+   pub trait_index: Option<NonZeroU16>,
+}
+
+impl FunctionSignature {
+   /// Creates a new function signature for a function that does not belong to a trait.
+   pub fn new(name: impl Into<Rc<str>>, arity: impl Into<Option<u16>>) -> Self {
+      Self {
+         name: name.into(),
+         arity: arity.into(),
+         trait_index: None,
+      }
+   }
 }
 
 impl fmt::Display for FunctionSignature {

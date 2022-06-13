@@ -719,10 +719,7 @@ impl<'e> CodeGenerator<'e> {
                // ↑ Add 1 for the receiver, which is also an argument.
                .try_into()
                .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
-            let signature = FunctionSignature {
-               name: Rc::clone(name),
-               arity: Some(arity as u16),
-            };
+            let signature = FunctionSignature::new(Rc::clone(name), arity as u16);
             let method_index =
                self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
             self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, arity))));
@@ -751,10 +748,7 @@ impl<'e> CodeGenerator<'e> {
       if ast.kind(method) != NodeKind::Identifier {
          return Err(ast.error(method, ErrorKind::InvalidMethodName));
       }
-      let signature = FunctionSignature {
-         name: Rc::clone(ast.string(method).unwrap()),
-         arity: Some(1),
-      };
+      let signature = FunctionSignature::new(Rc::clone(ast.string(method).unwrap()), 1);
       let method_index =
          self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
       self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, 1))));
@@ -1008,10 +1002,7 @@ impl<'e> CodeGenerator<'e> {
                   NodeKind::Static | NodeKind::Constructor => &mut proto.statics,
                   _ => unreachable!(),
                };
-               let signature = FunctionSignature {
-                  name,
-                  arity: Some(1 + function.parameter_count),
-               };
+               let signature = FunctionSignature::new(name, 1 + function.parameter_count);
                let method_id =
                   self.env.get_method_index(&signature).map_err(|kind| ast.error(item, kind))?;
                if map.contains_key(&method_id) {
@@ -1099,6 +1090,7 @@ impl<'e> CodeGenerator<'e> {
 
          NodeKind::Struct => self.generate_struct(ast, node)?,
          NodeKind::Impl => self.generate_impl(ast, node)?,
+         NodeKind::Trait => todo!("trait generation is NYI"),
 
          | NodeKind::DictPair
          | NodeKind::IfBranch

@@ -662,6 +662,7 @@ impl Fiber {
                         FunctionSignature {
                            name: Rc::from("(invalid method index)"),
                            arity: None,
+                           trait_index: None,
                         }
                      });
                   let error_kind = ErrorKind::MethodDoesNotExist {

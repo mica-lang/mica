@@ -114,6 +114,7 @@ where
          FunctionSignature {
             name: Rc::from(name),
             arity: parameter_count,
+            trait_index: None,
          },
          f,
       ));
@@ -141,6 +142,7 @@ where
          FunctionSignature {
             name: Rc::from(name),
             arity: parameter_count,
+            trait_index: None,
          },
          f,
       ));
@@ -168,6 +170,7 @@ where
          FunctionSignature {
             name: Rc::from(name),
             arity: parameter_count,
+            trait_index: None,
          },
          f,
       ));

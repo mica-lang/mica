@@ -85,7 +85,6 @@ pub enum ErrorKind {
    CommaExpected,
    ColonExpectedAfterDictKey,
    RightBracketExpectedToCloseEmptyDict,
-   MissingFunctionBody,
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
@@ -104,6 +103,7 @@ pub enum ErrorKind {
    TooManyMethods,
    InvalidMethodName,
    FunctionKindOutsideImpl,
+   MissingFunctionBody,
    InvalidImplItem,
    MissingMethodName,
    TooManyImpls,

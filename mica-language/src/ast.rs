@@ -274,9 +274,12 @@ pub enum NodeKind {
    /// `break` expression.
    Break,
 
-   /// Function (item or anonymous).
+   /// Function (item or anonymous.)
    Func,
-   /// Function parameters (the RHS of `Function`).
+   /// The head of a function - LHS is the name, RHS are the parameters.
+   /// This is the LHS of `Func`.
+   FunctionHead,
+   /// Function parameters.
    Parameters,
    /// `static` keyword (the LHS of `Parameters`).
    Static,

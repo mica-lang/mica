@@ -762,9 +762,9 @@ impl<'e> CodeGenerator<'e> {
       node: NodeId,
       GenerateFunctionOptions { name, call_conv }: GenerateFunctionOptions,
    ) -> Result<GeneratedFunction, Error> {
-      let (_, parameters) = ast.node_pair(node);
+      let (head, body) = ast.node_pair(node);
+      let (_, parameters) = ast.node_pair(head);
       let parameter_list = ast.children(parameters).unwrap();
-      let body = ast.children(node).unwrap();
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
       // NOTE: Hopefully the allocation from this mem::take gets optimized out.
@@ -811,7 +811,7 @@ impl<'e> CodeGenerator<'e> {
       };
 
       // Generate the body.
-      generator.generate_node_list(ast, body)?;
+      generator.generate_node(ast, body, Expression::Used)?;
 
       // If we're in a constructor we have to backpatch the `CreateStruct` instruction with the
       // number of fields.
@@ -869,21 +869,32 @@ impl<'e> CodeGenerator<'e> {
       })
    }
 
+   /// Ensures that a `Func` node is a valid bare function - without a kind, and with a body.
+   fn ensure_valid_bare_function(ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (head, body) = ast.node_pair(node);
+      let (_name, parameters) = ast.node_pair(head);
+
+      let function_kind = ast.node_pair(parameters).0;
+      if function_kind != NodeId::EMPTY {
+         return Err(ast.error(function_kind, ErrorKind::FunctionKindOutsideImpl));
+      }
+      if body == NodeId::EMPTY {
+         return Err(ast.error(node, ErrorKind::MissingFunctionBody));
+      }
+      Ok(())
+   }
+
    /// Generates code for a bare function declaration.
    fn generate_function_declaration(
       &mut self,
       ast: &Ast,
       node: NodeId,
    ) -> Result<ExpressionResult, Error> {
-      let (name_node, parameters) = ast.node_pair(node);
-      let name = ast.string(name_node).unwrap();
+      Self::ensure_valid_bare_function(ast, node)?;
 
-      if ast.node_pair(parameters).0 != NodeId::EMPTY {
-         return Err(ast.error(
-            ast.node_pair(parameters).0,
-            ErrorKind::FunctionKindOutsideImpl,
-         ));
-      }
+      let (head, _) = ast.node_pair(node);
+      let (name_node, _) = ast.node_pair(head);
+      let name = ast.string(name_node).unwrap();
 
       // Create the variable before compiling the function, to allow for recursion.
       let variable = self
@@ -911,13 +922,8 @@ impl<'e> CodeGenerator<'e> {
       ast: &Ast,
       node: NodeId,
    ) -> Result<ExpressionResult, Error> {
-      let (_, parameters) = ast.node_pair(node);
-      if ast.node_pair(parameters).0 != NodeId::EMPTY {
-         return Err(ast.error(
-            ast.node_pair(parameters).0,
-            ErrorKind::FunctionKindOutsideImpl,
-         ));
-      }
+      Self::ensure_valid_bare_function(ast, node)?;
+
       let function = self.generate_function(
          ast,
          node,
@@ -926,6 +932,7 @@ impl<'e> CodeGenerator<'e> {
             call_conv: FunctionCallConv::Bare,
          },
       )?;
+
       self.chunk.emit((Opcode::CreateClosure, function.id));
       Ok(ExpressionResult::Present)
    }
@@ -974,7 +981,8 @@ impl<'e> CodeGenerator<'e> {
       for &item in items {
          match ast.kind(item) {
             NodeKind::Func => {
-               let (name_node, parameters) = ast.node_pair(item);
+               let (head, _) = ast.node_pair(item);
+               let (name_node, parameters) = ast.node_pair(head);
                if ast.kind(name_node) != NodeKind::Identifier {
                   return Err(ast.error(item, ErrorKind::MissingMethodName));
                }
@@ -1079,7 +1087,9 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Break => self.generate_break(ast, node)?,
 
          NodeKind::Func => {
-            if ast.node_pair(node).0 != NodeId::EMPTY {
+            let (head, _) = ast.node_pair(node);
+            let (name, _) = ast.node_pair(head);
+            if name != NodeId::EMPTY {
                self.generate_function_declaration(ast, node)?
             } else {
                self.generate_function_expression(ast, node)?
@@ -1095,6 +1105,7 @@ impl<'e> CodeGenerator<'e> {
          | NodeKind::DictPair
          | NodeKind::IfBranch
          | NodeKind::ElseBranch
+         | NodeKind::FunctionHead
          | NodeKind::Parameters
          | NodeKind::Static
          | NodeKind::Constructor => {

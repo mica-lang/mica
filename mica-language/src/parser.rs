@@ -378,15 +378,24 @@ impl Parser {
          .with_location(left_paren.location)
          .with_children(parameters)
          .done();
+      let name_location = self.ast.location(name);
+      let head = self
+         .ast
+         .build_node(NodeKind::FunctionHead, (name, parameters))
+         .with_location(name_location)
+         .done();
 
-      let _equals = self.expect(TokenKind::Assign, |_| ErrorKind::MissingFunctionBody)?;
-      let body = vec![self.parse_expression(0)?];
+      let body = if self.lexer.peek_token()?.kind == TokenKind::Assign {
+         let _equals = self.lexer.next_token();
+         self.parse_expression(0)?
+      } else {
+         NodeId::EMPTY
+      };
 
       Ok(self
          .ast
-         .build_node(NodeKind::Func, (name, parameters))
+         .build_node(NodeKind::Func, (head, body))
          .with_location(func_token.location)
-         .with_children(body)
          .done())
    }
 

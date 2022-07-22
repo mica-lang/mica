@@ -5,7 +5,7 @@ use std::hint::unreachable_unchecked;
 use std::mem;
 
 use crate::gc::GcRaw;
-use crate::value::{Closure, Dict, List, Struct, UserData, ValueCommon, ValueKind};
+use crate::value::{Closure, Dict, List, Struct, Trait, UserData, ValueCommon, ValueKind};
 
 /// A portable implementation of values.
 #[derive(Clone, Copy)]
@@ -24,6 +24,8 @@ pub enum ValueImpl {
    Function(GcRaw<Closure>),
    /// A struct.
    Struct(GcRaw<Struct>),
+   /// A trait.
+   Trait(GcRaw<Trait>),
    /// A list.
    List(GcRaw<List>),
    /// A dict.
@@ -60,6 +62,10 @@ impl ValueCommon for ValueImpl {
       Self::Struct(s)
    }
 
+   fn new_trait(t: GcRaw<Trait>) -> Self {
+      Self::Trait(t)
+   }
+
    fn new_list(l: GcRaw<List>) -> Self {
       Self::List(l)
    }
@@ -80,6 +86,7 @@ impl ValueCommon for ValueImpl {
          ValueImpl::String(_) => ValueKind::String,
          ValueImpl::Function(_) => ValueKind::Function,
          ValueImpl::Struct(_) => ValueKind::Struct,
+         ValueImpl::Trait(_) => ValueKind::Trait,
          ValueImpl::List(_) => ValueKind::List,
          ValueImpl::Dict(_) => ValueKind::Dict,
          ValueImpl::UserData(_) => ValueKind::UserData,
@@ -121,6 +128,14 @@ impl ValueCommon for ValueImpl {
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
       if let Self::Struct(s) = self {
          *s
+      } else {
+         unreachable_unchecked()
+      }
+   }
+
+   unsafe fn get_raw_trait_unchecked(&self) -> GcRaw<Trait> {
+      if let Self::Trait(t) = self {
+         *t
       } else {
          unreachable_unchecked()
       }

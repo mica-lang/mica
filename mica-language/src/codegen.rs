@@ -1039,6 +1039,56 @@ impl<'e> CodeGenerator<'e> {
       Ok(ExpressionResult::Present)
    }
 
+   fn generate_trait(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
+      let (trait_name, _) = ast.node_pair(node);
+      let trait_name = ast.string(trait_name).unwrap();
+      let items = ast.children(node).unwrap();
+
+      let trait_index =
+         self.env.create_trait(Rc::clone(trait_name)).map_err(|k| ast.error(node, k))?;
+      let mut required_methods = HashSet::new();
+
+      for &item in items {
+         match ast.kind(item) {
+            NodeKind::Func => {
+               let (head, body) = ast.node_pair(item);
+               let (name, params) = ast.node_pair(head);
+               if body != NodeId::EMPTY {
+                  return Err(ast.error(body, ErrorKind::TraitMethodCannotHaveBody));
+               }
+               if name == NodeId::EMPTY {
+                  return Err(ast.error(head, ErrorKind::MissingMethodName));
+               }
+               let signature = FunctionSignature {
+                  name: Rc::clone(ast.string(name).unwrap()),
+                  arity: Some(
+                     1 + u16::try_from(ast.len(params).unwrap())
+                        .map_err(|_| ast.error(params, ErrorKind::TooManyParameters))?,
+                  ),
+                  trait_index: Some(trait_index),
+               };
+               let method_id =
+                  self.env.get_method_index(&signature).map_err(|e| ast.error(item, e))?;
+               if !required_methods.insert(method_id) {
+                  return Err(ast.error(item, ErrorKind::TraitAlreadyHasMethod(signature)));
+               }
+            }
+            _ => return Err(ast.error(item, ErrorKind::InvalidTraitItem)),
+         }
+      }
+
+      let prototype = self.env.get_trait_mut(trait_index).unwrap();
+      prototype.required = required_methods.into_iter().collect();
+
+      self.chunk.emit((Opcode::CreateTrait, trait_index));
+      let variable = self
+         .create_variable(trait_name, VariableAllocation::Allocate)
+         .map_err(|k| ast.error(node, k))?;
+      self.generate_variable_assign(variable);
+
+      Ok(ExpressionResult::Present)
+   }
+
    /// Generates code for a single node.
    fn generate_node(&mut self, ast: &Ast, node: NodeId, expr: Expression) -> Result<(), Error> {
       let previous_codegen_location = self.chunk.codegen_location;
@@ -1100,7 +1150,7 @@ impl<'e> CodeGenerator<'e> {
 
          NodeKind::Struct => self.generate_struct(ast, node)?,
          NodeKind::Impl => self.generate_impl(ast, node)?,
-         NodeKind::Trait => todo!("trait generation is NYI"),
+         NodeKind::Trait => self.generate_trait(ast, node)?,
 
          | NodeKind::DictPair
          | NodeKind::IfBranch
@@ -1193,10 +1243,10 @@ enum Expression {
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExpressionResult {
-   /// The result is still on the stack.
+   /// The generated code leaves a value on the stack.
    Present,
-   /// The result was discarded previously.
+   /// The generated code does not generate a value.
    Absent,
-   /// The expression does not return to the original place and unwinds the stack.
+   /// The generated code does not return to the original place and unwinds the stack.
    NoReturn,
 }

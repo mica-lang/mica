@@ -10,7 +10,7 @@ use crate::bytecode::{
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
-use crate::value::{Closure, Dict, List, RawValue, Struct, Upvalue, ValueKind};
+use crate::value::{Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -381,6 +381,7 @@ impl Fiber {
             ValueKind::List => &env.builtin_dtables.list,
             ValueKind::Dict => &env.builtin_dtables.dict,
             ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
+            ValueKind::Trait => value.get_raw_trait_unchecked().get().dtable(),
             ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
          }
       }
@@ -473,7 +474,7 @@ impl Fiber {
             Opcode::CreateType => {
                let name = unsafe { self.chunk.read_string(&mut self.pc) };
                let mut dispatch_table = DispatchTable::new_for_type(name);
-               dispatch_table.pretty_name = Rc::from(format!("unit {}", name));
+               dispatch_table.pretty_name = Rc::from(format!("unimplemented type {name}"));
                let dispatch_table = gc.allocate(dispatch_table);
                let struct_v = Struct::new_type(dispatch_table);
                self.stack.push(RawValue::from(gc.allocate(struct_v)));
@@ -490,6 +491,24 @@ impl Fiber {
                let field_count = u32::from(operand) as usize;
                let instance = unsafe { type_struct.get().new_instance(field_count) };
                let instance = gc.allocate(instance);
+               self.push(RawValue::from(instance));
+            }
+            Opcode::CreateTrait => {
+               let prototype = env.get_trait(operand).expect("trait with given ID does not exist");
+               let name = &prototype.name;
+               let mut dispatch_table = DispatchTable::new_for_type(format!("{name}"));
+               dispatch_table.pretty_name = Rc::from(format!("trait {name}"));
+               for &(function_id, method_id) in &prototype.shims {
+                  let closure = gc.allocate(Closure {
+                     function_id,
+                     captures: vec![],
+                  });
+                  dispatch_table.set_method(method_id, closure);
+               }
+               let dispatch_table = gc.allocate(dispatch_table);
+               let instance = gc.allocate(Trait {
+                  dtable: dispatch_table,
+               });
                self.push(RawValue::from(instance));
             }
             Opcode::CreateList => {

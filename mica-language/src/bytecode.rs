@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::mem::size_of;
-use std::num::NonZeroU16;
 use std::rc::Rc;
 
 use crate::common::{ErrorKind, Location};
@@ -69,6 +68,12 @@ impl From<Opr24> for u32 {
    }
 }
 
+impl From<Opr24> for usize {
+   fn from(opr: Opr24) -> usize {
+      (opr.bytes[0] as usize) | ((opr.bytes[1] as usize) << 8) | ((opr.bytes[2] as usize) << 16)
+   }
+}
+
 impl std::fmt::Debug for Opr24 {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       write!(f, "{:x}", u32::from(*self))
@@ -128,6 +133,8 @@ pub enum Opcode {
    /// Creates a struct instance from the type at the top of the stack, with the specified amount
    /// of fields.
    CreateStruct,
+   /// Creates an instance of the trait with the given ID and pushes it onto the stack.
+   CreateTrait,
    /// Creates a list from `operand` values that are at the top of the stack.
    CreateList,
    /// Creates a dict from `operand * 2` values that are at the top of the stack. The values have
@@ -564,7 +571,7 @@ pub struct FunctionSignature {
    pub arity: Option<u16>,
    /// The index of the trait this signature belongs to.
    /// When `None`, the function is free and does not belong to any trait.
-   pub trait_index: Option<NonZeroU16>,
+   pub trait_index: Option<Opr24>,
 }
 
 impl FunctionSignature {
@@ -605,6 +612,8 @@ pub struct Environment {
    prototypes: Vec<Option<Prototype>>,
    /// `prototypes` indices that have been taken out of the vec.
    free_prototypes: Vec<Opr24>,
+   /// Trait prototypes.
+   traits: Vec<TraitPrototype>,
 }
 
 impl Environment {
@@ -618,14 +627,14 @@ impl Environment {
          builtin_dtables,
          prototypes: Vec::new(),
          free_prototypes: Vec::new(),
+         traits: Vec::new(),
       }
    }
 
    /// Tries to create a global. Returns the global slot number, or an error if there are too many
    /// globals.
    pub fn create_global(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
-      let slot = Opr24::new(self.globals.len().try_into().map_err(|_| ErrorKind::TooManyGlobals)?)
-         .map_err(|_| ErrorKind::TooManyGlobals)?;
+      let slot = Opr24::try_from(self.globals.len()).map_err(|_| ErrorKind::TooManyGlobals)?;
       self.globals.insert(name.to_owned(), slot);
       Ok(slot)
    }
@@ -699,6 +708,28 @@ impl Environment {
          self.prototypes.get_unchecked_mut(u32::from(id) as usize).take().unwrap_unchecked();
       self.free_prototypes.push(id);
       proto
+   }
+
+   /// Creates a trait and returns its ID. Use `get_trait_mut` afterwards to modify the trait.
+   pub fn create_trait(&mut self, name: Rc<str>) -> Result<Opr24, ErrorKind> {
+      let slot_index = self.traits.len();
+      let slot = Opr24::try_from(slot_index).map_err(|_| ErrorKind::TooManyTraits)?;
+      self.traits.push(TraitPrototype {
+         name,
+         required: vec![],
+         shims: vec![],
+      });
+      Ok(slot)
+   }
+
+   /// Returns a reference to the trait with the given ID.
+   pub fn get_trait(&self, id: Opr24) -> Option<&TraitPrototype> {
+      self.traits.get(usize::from(id))
+   }
+
+   /// Returns a mutable reference to the trait with the given ID.
+   pub fn get_trait_mut(&mut self, id: Opr24) -> Option<&mut TraitPrototype> {
+      self.traits.get_mut(usize::from(id))
    }
 }
 
@@ -791,4 +822,12 @@ impl BuiltinDispatchTables {
 pub(crate) struct Prototype {
    pub(crate) instance: HashMap<u16, Opr24>,
    pub(crate) statics: HashMap<u16, Opr24>,
+}
+
+/// The prototype of a trait. Contains a list of all method IDs the trait must implement.
+#[derive(Debug)]
+pub struct TraitPrototype {
+   pub name: Rc<str>,
+   pub required: Vec<u16>,
+   pub shims: Vec<(Opr24, u16)>,
 }

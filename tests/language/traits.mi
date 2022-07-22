@@ -1,0 +1,17 @@
+# Checks that traits work.
+
+# It should be possible to define an empty trait.
+trait NothingDoer end
+
+# A trait declaration returns the trait defined.
+assert(trait Ergonomics end == Ergonomics)
+
+# A trait is equal to itself, but two traits are not equal to each other.
+assert(Ergonomics == Ergonomics)
+assert(NothingDoer != Ergonomics)
+
+# A trait can declare required functions.
+trait Animal
+   func speak()
+   func eat(food)
+end

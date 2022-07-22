@@ -103,6 +103,12 @@ impl Ast {
       None
    }
 
+   /// Returns the length of the node's children, or `None` if the node has no children.
+   #[allow(clippy::len_without_is_empty)]
+   pub fn len(&self, node: NodeId) -> Option<usize> {
+      self.children(node).map(|c| c.len())
+   }
+
    /// Returns the pair of nodes this node points to.
    pub fn node_pair(&self, node: NodeId) -> (NodeId, NodeId) {
       let (left, right) = self.pair(node);

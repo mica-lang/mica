@@ -4,7 +4,7 @@
 use std::hint::unreachable_unchecked;
 
 use crate::gc::{GcMem, GcRaw};
-use crate::value::{Closure, Dict, List, Struct, UserData, ValueCommon, ValueKind};
+use crate::value::{Closure, Dict, List, Struct, Trait, UserData, ValueCommon, ValueKind};
 
 fn _size_and_alignment_checks() {
    // If any of these checks fail, your platform cannot use NaN boxing.
@@ -45,9 +45,10 @@ impl ValueImpl {
    const OBJECT_STRING: u64 = 0;
    const OBJECT_FUNCTION: u64 = 1;
    const OBJECT_STRUCT: u64 = 2;
-   const OBJECT_USER_DATA: u64 = 3;
-   const OBJECT_LIST: u64 = 4;
-   const OBJECT_DICT: u64 = 5;
+   const OBJECT_TRAIT: u64 = 3;
+   const OBJECT_USER_DATA: u64 = 4;
+   const OBJECT_LIST: u64 = 5;
+   const OBJECT_DICT: u64 = 6;
    // NOTE: Be careful with adding more types! We're limited to supporting up to eight (the enum
    // value must be <= 7), consider using user data whenever it would make sense.
 
@@ -153,6 +154,10 @@ impl ValueCommon for ValueImpl {
       unsafe { Self::new_object_nan(Self::OBJECT_STRUCT, s) }
    }
 
+   fn new_trait(t: GcRaw<Trait>) -> Self {
+      unsafe { Self::new_object_nan(Self::OBJECT_TRAIT, t) }
+   }
+
    fn new_list(l: GcRaw<List>) -> Self {
       unsafe { Self::new_object_nan(Self::OBJECT_LIST, l) }
    }
@@ -174,6 +179,7 @@ impl ValueCommon for ValueImpl {
                Self::OBJECT_STRING => ValueKind::String,
                Self::OBJECT_FUNCTION => ValueKind::Function,
                Self::OBJECT_STRUCT => ValueKind::Struct,
+               Self::OBJECT_TRAIT => ValueKind::Trait,
                Self::OBJECT_USER_DATA => ValueKind::UserData,
                Self::OBJECT_LIST => ValueKind::List,
                Self::OBJECT_DICT => ValueKind::Dict,
@@ -202,6 +208,10 @@ impl ValueCommon for ValueImpl {
    }
 
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
+      self.as_gc()
+   }
+
+   unsafe fn get_raw_trait_unchecked(&self) -> GcRaw<Trait> {
       self.as_gc()
    }
 

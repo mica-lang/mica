@@ -114,6 +114,10 @@ pub enum ErrorKind {
    MissingFields(Vec<Rc<str>>),
    ListIsTooLong,
    DictIsTooLarge,
+   TooManyTraits,
+   InvalidTraitItem,
+   TraitMethodCannotHaveBody,
+   TraitAlreadyHasMethod(FunctionSignature),
 
    // Runtime
    TypeError {
@@ -212,6 +216,12 @@ impl std::fmt::Display for ErrorKind {
          }
          Self::ListIsTooLong => write!(f, "list literal has too many elements"),
          Self::DictIsTooLarge => write!(f, "dict literal has too many pairs"),
+         Self::TooManyTraits => write!(f, "too many traits"),
+         Self::InvalidTraitItem => write!(f, "only function prototypes are allowed in traits"),
+         Self::TraitMethodCannotHaveBody => write!(f, "trait functions cannot have bodies"),
+         Self::TraitAlreadyHasMethod(signature) => {
+            write!(f, "trait already declares the method {signature}")
+         }
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

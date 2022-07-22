@@ -135,6 +135,7 @@ impl RawValue {
             // Objects with interior mutability are hashed by reference.
             ValueKind::Function => self.get_raw_function_unchecked().get_raw().hash(state),
             ValueKind::Struct => self.get_raw_struct_unchecked().get_raw().hash(state),
+            ValueKind::Trait => self.get_raw_trait_unchecked().get_raw().hash(state),
             ValueKind::List => {
                let slice = self.get_raw_list_unchecked().get().as_slice();
                slice.len().hash(state);

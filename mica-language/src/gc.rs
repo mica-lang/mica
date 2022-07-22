@@ -203,6 +203,13 @@ impl Memory {
                   }
                }
             }
+            ValueKind::Trait => {
+               let raw = value.get_raw_trait_unchecked();
+               if !raw.get_mem().reachable.get() {
+                  raw.mark_reachable();
+                  self.mark_dtable_reachable_rec(raw.get().dtable);
+               }
+            }
             // TODO: Allow user data to specify its own references.
             ValueKind::UserData => {
                let raw = value.get_raw_user_data_unchecked();
@@ -219,7 +226,7 @@ impl Memory {
    /// Performs an _automatic_ collection.
    ///
    /// Automatic collections only trigger upon specific conditions, such as a specific amount of
-   /// generations passing. Though right now there are no such conditions.
+   /// generations passing.
    pub(crate) unsafe fn auto_collect(&mut self, roots: impl Iterator<Item = RawValue>) {
       #[cfg(feature = "trace-gc")]
       {

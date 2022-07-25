@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use libtest_mimic::{Arguments, Outcome, Test};
@@ -88,35 +89,52 @@ fn test_mica_file_impl(testname: &str, code: &str) -> Result<(), Error> {
 }
 
 /// Collects all files ending with `.mi` in a directory.
-fn collect_mi_files(base_path: &str) -> Vec<String> {
-   let mut tests = Vec::new();
-
+fn collect_mi_files(base_path: &str) -> HashMap<String, Vec<String>> {
    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
    path.push(base_path);
 
    assert!(path.is_dir());
 
+   let mut ret = HashMap::new();
+
    for entry in std::fs::read_dir(path).unwrap() {
       let entry = entry.unwrap();
       let path = entry.path();
-      if path.is_dir() {
-         tests.extend(collect_mi_files(path.to_str().unwrap()));
-      } else if path.extension() == Some(std::ffi::OsStr::new("mi")) {
+      if !path.is_dir() {
+         continue;
+      }
+
+      let suite_name = path.file_name().unwrap().to_str().unwrap();
+      let mut tests = Vec::new();
+
+      for entry in std::fs::read_dir(&path).unwrap() {
+         let entry = entry.unwrap();
+         let path = entry.path();
+         if path.is_dir() {
+            eprintln!("Found directory in test suite: {}", entry.path().display());
+            continue;
+         }
+         if path.extension().unwrap() != "mi" {
+            eprintln!("Found non-mica file in test suite: {}", path.display());
+            continue;
+         }
+
          tests.push(path.to_str().unwrap().to_string());
       }
+      ret.insert(suite_name.to_string(), tests);
    }
 
-   tests
+   ret
 }
 
-fn generate_tests(mi_files: &[String]) -> Vec<Test<PathBuf>> {
+fn generate_tests(suite_name: &str, mi_files: &[String]) -> Vec<Test<PathBuf>> {
    mi_files
       .iter()
       .map(|file| {
          let path = PathBuf::from(file);
          Test {
             name: path.file_stem().unwrap().to_str().unwrap().to_string(),
-            kind: "Sample Test".to_string(),
+            kind: suite_name.to_string(),
             is_bench: false,
             data: path,
             is_ignored: file.ends_with(".skip.mi"),
@@ -129,7 +147,13 @@ fn main() {
    let args = Arguments::from_args();
 
    let files = collect_mi_files("tests");
-   let tests = generate_tests(&files);
 
-   libtest_mimic::run_tests(&args, tests, test_mica_file).exit();
+   let mut all_tests = Vec::new();
+
+   for (name, tests) in &files {
+      let tests = generate_tests(name, tests);
+      all_tests.extend(tests);
+   }
+
+   libtest_mimic::run_tests(&args, all_tests, test_mica_file).exit();
 }

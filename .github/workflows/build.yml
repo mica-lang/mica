@@ -16,7 +16,5 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --release -p mica-cli
-    - name: Run API tests
+    - name: Run Language and API tests
       run: cargo test
-    - name: Run language tests
-      run: ./tests/runner.sh

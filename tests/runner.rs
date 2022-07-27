@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use libtest_mimic::{Arguments, Outcome, Test};
@@ -31,13 +30,10 @@ fn interpret<'e>(
 /// Returns Some(Assertion) if the test should fail.
 /// The assertion here is what the error message should contain.
 /// (This is inspired by SerenityOS/jakt tests.)
-fn test_should_fail(code: &str) -> Option<String> {
+fn test_should_fail(code: &str) -> Option<&str> {
    for line in code.lines() {
-      if !line.starts_with('#') {
-         return None;
-      }
-      if line.contains("# Exception: ") {
-         return Some(line.replace("# Exception: ", ""));
+      if line.starts_with("# Exception: ") {
+         return line.strip_prefix("# Exception: ");
       }
    }
    None
@@ -79,9 +75,7 @@ fn test_mica_file(test: &Test<PathBuf>) -> Outcome {
 fn test_mica_file_impl(testname: &str, code: &str) -> Result<(), Error> {
    let mut engine = engine()?;
 
-   let res = interpret(&mut engine, testname, code)?;
-
-   for result in res {
+   for result in interpret(&mut engine, testname, code)? {
       result?;
    }
 
@@ -89,13 +83,13 @@ fn test_mica_file_impl(testname: &str, code: &str) -> Result<(), Error> {
 }
 
 /// Collects all files ending with `.mi` in a directory.
-fn collect_mi_files(base_path: &str) -> HashMap<String, Vec<String>> {
+fn collect_mi_files(base_path: &str) -> Vec<(String, Vec<PathBuf>)> {
    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
    path.push(base_path);
 
    assert!(path.is_dir());
 
-   let mut ret = HashMap::new();
+   let mut ret = Vec::new();
 
    for entry in std::fs::read_dir(path).unwrap() {
       let entry = entry.unwrap();
@@ -119,25 +113,24 @@ fn collect_mi_files(base_path: &str) -> HashMap<String, Vec<String>> {
             continue;
          }
 
-         tests.push(path.to_str().unwrap().to_string());
+         tests.push(path);
       }
-      ret.insert(suite_name.to_string(), tests);
+	  ret.push((suite_name.to_string(), tests));
    }
 
    ret
 }
 
-fn generate_tests(suite_name: &str, mi_files: &[String]) -> Vec<Test<PathBuf>> {
+fn generate_tests(suite_name: &str, mi_files: &[PathBuf]) -> Vec<Test<PathBuf>> {
    mi_files
       .iter()
       .map(|file| {
-         let path = PathBuf::from(file);
          Test {
-            name: path.file_stem().unwrap().to_str().unwrap().to_string(),
+            name: file.file_stem().unwrap().to_str().unwrap().to_string(),
             kind: suite_name.to_string(),
             is_bench: false,
-            data: path,
-            is_ignored: file.ends_with(".skip.mi"),
+            data: file.clone(),
+            is_ignored: file.file_name().unwrap().to_str().unwrap().ends_with(".skip.mi"),
          }
       })
       .collect()

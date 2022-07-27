@@ -6,3 +6,8 @@ of this repository and run:
 cargo test
 ```
 (You can also restrict the tests to only these tests by running `cargo test samples`)
+
+To run skipped tests (mainly tests that take very long to run and are therefore skipped by default), run:
+```
+cargo test -- --ignored
+```

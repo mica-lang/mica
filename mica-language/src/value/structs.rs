@@ -66,7 +66,7 @@ impl Struct {
    /// # Safety
    /// This does not perform any borrow checks or bounds checks.
    pub(crate) unsafe fn get_field(&self, index: usize) -> RawValue {
-      *(&*self.fields.get()).get_unchecked(index)
+      *(*self.fields.get()).get_unchecked(index)
    }
 
    /// Sets the value of a field.
@@ -74,10 +74,10 @@ impl Struct {
    /// # Safety
    /// This does not perform any borrow checks or bounds checks.
    pub(crate) unsafe fn set_field(&self, index: usize, value: RawValue) {
-      *(&mut *self.fields.get()).get_unchecked_mut(index) = value;
+      *(*self.fields.get()).get_unchecked_mut(index) = value;
    }
 
    pub(crate) unsafe fn fields(&self) -> impl Iterator<Item = RawValue> + '_ {
-      (&*self.fields.get()).iter().copied()
+      (*self.fields.get()).iter().copied()
    }
 }

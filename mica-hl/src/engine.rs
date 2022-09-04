@@ -435,10 +435,10 @@ impl GlobalName for GlobalId {
 
 impl GlobalName for &str {
    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalId, Error> {
-      Ok(if let Some(slot) = env.get_global(*self) {
+      Ok(if let Some(slot) = env.get_global(self) {
          GlobalId(slot)
       } else {
-         env.create_global(*self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
+         env.create_global(self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
       })
    }
 }
@@ -457,7 +457,7 @@ impl OptionalGlobalName for GlobalId {
 
 impl OptionalGlobalName for &str {
    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId> {
-      env.get_global(*self).map(GlobalId)
+      env.get_global(self).map(GlobalId)
    }
 }
 

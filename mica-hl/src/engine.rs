@@ -230,7 +230,7 @@ impl Engine {
       let method_id = signature.to_method_id(&mut self.env)?;
       // Unwrapping here is fine because `to_method_id` ensures that a method with a given ID
       // exists.
-      let signature = self.env.get_function_signature(method_id.0).unwrap();
+      let signature = self.env.get_method_signature(method_id.0).unwrap();
       let stack: Vec<_> =
          Some(receiver).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
       let argument_count = u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?;

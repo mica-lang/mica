@@ -1,9 +1,8 @@
 //! Common things, mostly error handling-related.
 
 use std::borrow::Cow;
+use std::fmt;
 use std::rc::Rc;
-
-use crate::bytecode::FunctionSignature;
 
 /// A source location.
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +41,34 @@ impl Default for Location {
 impl std::fmt::Display for Location {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       write!(f, "{}:{}", self.line, self.column)
+   }
+}
+
+/// A [`FunctionSignature`] that can be rendered into text. One can be obtained by calling
+/// [`FunctionSignature::render`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenderedSignature {
+   pub name: Rc<str>,
+   /// This arity number does not include the implicit `self` argument.
+   pub arity: Option<u16>,
+   /// The index of the trait this signature belongs to.
+   /// When `None`, the function is free and does not belong to any trait.
+   pub trait_name: Option<Rc<str>>,
+}
+
+impl fmt::Display for RenderedSignature {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      if let Some(arity) = self.arity {
+         write!(f, "{}/{arity}", self.name)?;
+      } else {
+         write!(f, "{}/...", self.name)?;
+      }
+
+      if let Some(trait_name) = &self.trait_name {
+         write!(f, " <as {trait_name}>")?;
+      }
+
+      Ok(())
    }
 }
 
@@ -107,7 +134,7 @@ pub enum ErrorKind {
    InvalidImplItem,
    MissingMethodName,
    TooManyImpls,
-   MethodAlreadyImplemented(FunctionSignature),
+   MethodAlreadyImplemented(RenderedSignature),
    TooManyFields,
    FieldDoesNotExist(Rc<str>),
    FieldOutsideOfImpl,
@@ -117,7 +144,7 @@ pub enum ErrorKind {
    TooManyTraits,
    InvalidTraitItem,
    TraitMethodCannotHaveBody,
-   TraitAlreadyHasMethod(FunctionSignature),
+   TraitAlreadyHasMethod(RenderedSignature),
 
    // Runtime
    TypeError {
@@ -126,7 +153,7 @@ pub enum ErrorKind {
    },
    MethodDoesNotExist {
       type_name: Rc<str>,
-      signature: FunctionSignature,
+      signature: RenderedSignature,
    },
    StructAlreadyImplemented,
    UserDataAlreadyBorrowed,
@@ -285,7 +312,7 @@ impl std::fmt::Display for Error {
             module_name,
             location,
          } => {
-            write!(f, "{}:{}: error: {}", module_name, location, kind)
+            write!(f, "{module_name}:{location}: error: {kind}")
          }
          Error::Runtime { kind, call_stack } => {
             writeln!(f, "error: {}", kind)?;

@@ -1,11 +1,11 @@
 //! The bytecode representation of Mica.
 
 use std::collections::HashMap;
-use std::fmt::{self, Debug};
+use std::fmt::Debug;
 use std::mem::size_of;
 use std::rc::Rc;
 
-use crate::common::{ErrorKind, Location};
+use crate::common::{ErrorKind, Location, RenderedSignature};
 use crate::gc::{Gc, GcRaw, Memory};
 use crate::value::{Closure, RawValue};
 
@@ -51,6 +51,14 @@ impl Opr24 {
       T: PackableToOpr24,
    {
       T::unpack_from_opr24(self)
+   }
+}
+
+impl From<u8> for Opr24 {
+   fn from(value: u8) -> Self {
+      Self {
+         bytes: [value, 0, 0],
+      }
    }
 }
 
@@ -563,7 +571,7 @@ pub struct Function {
    pub kind: FunctionKind,
 }
 
-/// The signature of a function (its name and argument count).
+/// The signature of a function (its name, argument count, and enclosing trait).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
    pub name: Rc<str>,
@@ -583,14 +591,16 @@ impl FunctionSignature {
          trait_index: None,
       }
    }
-}
 
-impl fmt::Display for FunctionSignature {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      if let Some(arity) = self.arity {
-         write!(f, "{}/{}", self.name, arity)
-      } else {
-         write!(f, "{}/...", self.name)
+   /// Renders this signature into one that can be formatted.
+   pub fn render(&self, env: &Environment) -> RenderedSignature {
+      RenderedSignature {
+         name: Rc::clone(&self.name),
+         arity: self.arity,
+         trait_name: self
+            .trait_index
+            .and_then(|index| env.get_trait(index))
+            .map(|prototype| Rc::clone(&prototype.name)),
       }
    }
 }
@@ -605,7 +615,7 @@ pub struct Environment {
    /// Mapping from named function signatures to method indices.
    method_indices: HashMap<FunctionSignature, u16>,
    /// Mapping from method indices to function signatures.
-   function_signatures: Vec<FunctionSignature>,
+   method_signatures: Vec<FunctionSignature>,
    /// Dispatch tables for builtin types.
    pub builtin_dtables: BuiltinDispatchTables,
    /// `impl` prototypes.
@@ -623,7 +633,7 @@ impl Environment {
          globals: HashMap::new(),
          functions: Vec::new(),
          method_indices: HashMap::new(),
-         function_signatures: Vec::new(),
+         method_signatures: Vec::new(),
          builtin_dtables,
          prototypes: Vec::new(),
          free_prototypes: Vec::new(),
@@ -677,14 +687,15 @@ impl Environment {
          let index =
             u16::try_from(self.method_indices.len()).map_err(|_| ErrorKind::TooManyMethods)?;
          self.method_indices.insert(signature.clone(), index);
-         self.function_signatures.push(signature.clone());
+         self.method_signatures.push(signature.clone());
          Ok(index)
       }
    }
 
-   /// Returns the function with the given signature, or `None` if the method index is invalid.
-   pub fn get_function_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
-      self.function_signatures.get(method_index as usize)
+   /// Returns the signature for the method with the given ID, or `None` if the method index is
+   /// invalid.
+   pub fn get_method_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
+      self.method_signatures.get(method_index as usize)
    }
 
    /// Creates a prototype and returns its ID.
@@ -828,6 +839,8 @@ pub(crate) struct Prototype {
 #[derive(Debug)]
 pub struct TraitPrototype {
    pub name: Rc<str>,
+   /// List of method IDs that this trait requires.
    pub required: Vec<u16>,
-   pub shims: Vec<(Opr24, u16)>,
+   /// List of `(method_id, function_id)` mappings that make up the dtable of shims for the trait.
+   pub shims: Vec<(u16, Opr24)>,
 }

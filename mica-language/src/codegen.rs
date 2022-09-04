@@ -9,7 +9,7 @@ use crate::bytecode::{
    CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
    Prototype,
 };
-use crate::common::{Error, ErrorKind};
+use crate::common::{Error, ErrorKind, RenderedSignature};
 
 /// Info about a local variable on the stack.
 #[derive(Debug)]
@@ -1016,9 +1016,10 @@ impl<'e> CodeGenerator<'e> {
                if map.contains_key(&method_id) {
                   return Err(ast.error(
                      name_node,
-                     ErrorKind::MethodAlreadyImplemented(FunctionSignature {
+                     ErrorKind::MethodAlreadyImplemented(RenderedSignature {
+                        name: signature.name,
                         arity: signature.arity.map(|x| x - 1),
-                        ..signature
+                        trait_name: None,
                      }),
                   ));
                }
@@ -1039,6 +1040,46 @@ impl<'e> CodeGenerator<'e> {
       Ok(ExpressionResult::Present)
    }
 
+   /// Generates the *shim* for a trait method. The shim is responsible for calling the actual
+   /// method.
+   fn generate_trait_method_shim(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      trait_name: &str,
+      method_id: u16,
+      method_signature: &FunctionSignature,
+   ) -> Result<Opr24, Error> {
+      // NOTE: Overflow here should never happen because we're referring to
+      let arity = method_signature.arity.unwrap() as u8;
+
+      let mut chunk = Chunk::new(Rc::clone(&self.chunk.module_name));
+      chunk.codegen_location = self.chunk.codegen_location;
+      for arg in 1..arity {
+         chunk.emit((Opcode::GetLocal, Opr24::from(arg)));
+      }
+      chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
+
+      let shim_name = Rc::from(format!(
+         "trait {trait_name}.{} <shim>",
+         method_signature.name
+      ));
+      let chunk = Rc::new(chunk);
+      let function_id = self
+         .env
+         .create_function(Function {
+            name: shim_name,
+            parameter_count: method_signature.arity,
+            kind: FunctionKind::Bytecode {
+               chunk,
+               captured_locals: vec![],
+            },
+         })
+         .map_err(|e| ast.error(node, e))?;
+
+      Ok(function_id)
+   }
+
    fn generate_trait(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (trait_name, _) = ast.node_pair(node);
       let trait_name = ast.string(trait_name).unwrap();
@@ -1047,6 +1088,7 @@ impl<'e> CodeGenerator<'e> {
       let trait_index =
          self.env.create_trait(Rc::clone(trait_name)).map_err(|k| ast.error(node, k))?;
       let mut required_methods = HashSet::new();
+      let mut shims = Vec::new();
 
       for &item in items {
          match ast.kind(item) {
@@ -1071,8 +1113,28 @@ impl<'e> CodeGenerator<'e> {
                let method_id =
                   self.env.get_method_index(&signature).map_err(|e| ast.error(item, e))?;
 
+               let shim_signature = FunctionSignature {
+                  // Need to add 1 to the arity for the receiving trait.
+                  arity: signature.arity.map(|x| x + 1),
+                  trait_index: None,
+                  ..signature.clone()
+               };
+               let shim_method_id =
+                  self.env.get_method_index(&shim_signature).map_err(|e| ast.error(item, e))?;
+               let shim_function_id =
+                  self.generate_trait_method_shim(ast, item, trait_name, method_id, &signature)?;
+               shims.push((shim_method_id, shim_function_id));
+
                if !required_methods.insert(method_id) {
-                  return Err(ast.error(item, ErrorKind::TraitAlreadyHasMethod(signature)));
+                  return Err(ast.error(
+                     item,
+                     ErrorKind::TraitAlreadyHasMethod(RenderedSignature {
+                        name: signature.name,
+                        arity: signature.arity,
+                        // Do not duplicate the trait name in the error message.
+                        trait_name: None,
+                     }),
+                  ));
                }
             }
             _ => return Err(ast.error(item, ErrorKind::InvalidTraitItem)),
@@ -1081,6 +1143,7 @@ impl<'e> CodeGenerator<'e> {
 
       let prototype = self.env.get_trait_mut(trait_index).unwrap();
       prototype.required = required_methods.into_iter().collect();
+      prototype.shims = shims;
 
       self.chunk.emit((Opcode::CreateTrait, trait_index));
       let variable = self

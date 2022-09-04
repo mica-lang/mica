@@ -498,7 +498,12 @@ impl Fiber {
                let name = &prototype.name;
                let mut dispatch_table = DispatchTable::new_for_type(format!("{name}"));
                dispatch_table.pretty_name = Rc::from(format!("trait {name}"));
-               for &(function_id, method_id) in &prototype.shims {
+               for &(method_id, function_id) in &prototype.shims {
+                  println!("shim {method_id} -> {function_id}");
+                  println!("* method: {:#?}", env.get_method_signature(method_id));
+                  println!("* function: {:#?}", unsafe {
+                     env.get_function_unchecked(function_id)
+                  });
                   let closure = gc.allocate(Closure {
                      function_id,
                      captures: vec![],
@@ -670,14 +675,14 @@ impl Fiber {
                      "call # m. idx={}, argc={}; {:?}",
                      method_index,
                      argument_count,
-                     env.get_function_signature(method_index)
+                     env.get_method_signature(method_index)
                   );
                }
                if let Some(closure) = dtable.get_method(method_index) {
                   self.enter_function(env, globals, gc, closure, argument_count as usize)?;
                } else {
                   let signature =
-                     env.get_function_signature(method_index).cloned().unwrap_or_else(|| {
+                     env.get_method_signature(method_index).cloned().unwrap_or_else(|| {
                         FunctionSignature {
                            name: Rc::from("(invalid method index)"),
                            arity: None,
@@ -690,7 +695,8 @@ impl Fiber {
                         // Subtract 1 to omit the receiver from error messages.
                         arity: signature.arity.map(|x| x - 1),
                         ..signature
-                     },
+                     }
+                     .render(env),
                   };
                   return Err(self.error_outside_function_call(None, env, error_kind));
                }

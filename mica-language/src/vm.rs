@@ -117,24 +117,29 @@ impl Fiber {
          call_stack: self
             .call_stack
             .iter()
-            .map(|return_point| StackTraceEntry {
-               function_name: if let Some(closure) = &return_point.closure {
-                  let closure = unsafe { closure.get() };
-                  let function = unsafe { env.get_function_unchecked(closure.function_id) };
-                  Rc::clone(&function.name)
-               } else {
-                  Rc::from("<main>")
-               },
-               module_name: if let Some(chunk) = &return_point.chunk {
-                  Rc::clone(&chunk.module_name)
-               } else {
-                  Rc::from("<FFI>")
-               },
-               location: if let Some(chunk) = &return_point.chunk {
-                  chunk.location(return_point.pc - Opcode::INSTRUCTION_SIZE)
-               } else {
-                  Location::UNINIT
-               },
+            .filter_map(|return_point| {
+               Some(StackTraceEntry {
+                  function_name: if let Some(closure) = &return_point.closure {
+                     let closure = unsafe { closure.get() };
+                     let function = unsafe { env.get_function_unchecked(closure.function_id) };
+                     if function.hidden_in_stack_traces {
+                        return None;
+                     }
+                     Rc::clone(&function.name)
+                  } else {
+                     Rc::from("<main>")
+                  },
+                  module_name: if let Some(chunk) = &return_point.chunk {
+                     Rc::clone(&chunk.module_name)
+                  } else {
+                     Rc::from("<FFI>")
+                  },
+                  location: if let Some(chunk) = &return_point.chunk {
+                     chunk.location(return_point.pc - Opcode::INSTRUCTION_SIZE)
+                  } else {
+                     Location::UNINIT
+                  },
+               })
             })
             .collect(),
       }
@@ -499,11 +504,6 @@ impl Fiber {
                let mut dispatch_table = DispatchTable::new_for_type(format!("{name}"));
                dispatch_table.pretty_name = Rc::from(format!("trait {name}"));
                for &(method_id, function_id) in &prototype.shims {
-                  println!("shim {method_id} -> {function_id}");
-                  println!("* method: {:#?}", env.get_method_signature(method_id));
-                  println!("* function: {:#?}", unsafe {
-                     env.get_function_unchecked(function_id)
-                  });
                   let closure = gc.allocate(Closure {
                      function_id,
                      captures: vec![],

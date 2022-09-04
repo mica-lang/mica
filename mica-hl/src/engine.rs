@@ -332,6 +332,7 @@ impl Engine {
             name: Rc::from(name),
             parameter_count: parameter_count.into(), // doesn't matter for non-methods
             kind: f,
+            hidden_in_stack_traces: false,
          })
          .map_err(|_| Error::TooManyFunctions)?;
       let function = RawValue::from(self.gc.allocate(Closure {

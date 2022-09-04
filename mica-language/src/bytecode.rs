@@ -569,6 +569,8 @@ pub struct Function {
    pub name: Rc<str>,
    pub parameter_count: Option<u16>,
    pub kind: FunctionKind,
+   /// Set to `true` if the function is to be hidden in stack traces.
+   pub hidden_in_stack_traces: bool,
 }
 
 /// The signature of a function (its name, argument count, and enclosing trait).

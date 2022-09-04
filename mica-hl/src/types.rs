@@ -35,6 +35,7 @@ impl DispatchTableDescriptor {
             name: Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name)),
             parameter_count: signature.arity,
             kind: f,
+            hidden_in_stack_traces: false,
          })
          .map_err(|_| Error::TooManyFunctions)?;
       let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;

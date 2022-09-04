@@ -65,7 +65,7 @@ impl fmt::Display for RenderedSignature {
       }
 
       if let Some(trait_name) = &self.trait_name {
-         write!(f, " <as {trait_name}>")?;
+         write!(f, " (as {trait_name})")?;
       }
 
       Ok(())

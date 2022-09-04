@@ -16,8 +16,6 @@ trait Animal
    func eat(food)
 end
 
-print(Animal)
-
 # A trait can be implemented by a struct.
 impl struct Dog
    func new(name) constructor = do

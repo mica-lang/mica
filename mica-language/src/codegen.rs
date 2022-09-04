@@ -1059,6 +1059,7 @@ impl<'e> CodeGenerator<'e> {
                if name == NodeId::EMPTY {
                   return Err(ast.error(head, ErrorKind::MissingMethodName));
                }
+
                let signature = FunctionSignature {
                   name: Rc::clone(ast.string(name).unwrap()),
                   arity: Some(
@@ -1069,6 +1070,7 @@ impl<'e> CodeGenerator<'e> {
                };
                let method_id =
                   self.env.get_method_index(&signature).map_err(|e| ast.error(item, e))?;
+
                if !required_methods.insert(method_id) {
                   return Err(ast.error(item, ErrorKind::TraitAlreadyHasMethod(signature)));
                }

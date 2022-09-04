@@ -1061,7 +1061,10 @@ impl<'e> CodeGenerator<'e> {
       }
       chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
 
-      let shim_name = Rc::from(format!("trait {trait_name}.{}", method_signature.name));
+      let shim_name = Rc::from(format!(
+         "trait {trait_name}.{} <shim>",
+         method_signature.name
+      ));
       let chunk = Rc::new(chunk);
       let function_id = self
          .env

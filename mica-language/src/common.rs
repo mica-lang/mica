@@ -145,6 +145,7 @@ pub enum ErrorKind {
    InvalidTraitItem,
    TraitMethodCannotHaveBody,
    TraitAlreadyHasMethod(RenderedSignature),
+   AsOutsideOfImpl,
 
    // Runtime
    TypeError {
@@ -222,7 +223,7 @@ impl std::fmt::Display for ErrorKind {
             f,
             "function kinds (static, constructor) can only be used in 'impl' blocks"
          ),
-         Self::InvalidImplItem => write!(f, "only functions are allowed in 'impl' blocks"),
+         Self::InvalidImplItem => write!(f, "only functions and 'as' blocks are allowed in 'impl' blocks"),
          Self::MissingMethodName => write!(f, "missing method name"),
          Self::TooManyImpls => write!(f, "too many 'impl' blocks"),
          Self::MethodAlreadyImplemented(signature) => {
@@ -249,6 +250,7 @@ impl std::fmt::Display for ErrorKind {
          Self::TraitAlreadyHasMethod(signature) => {
             write!(f, "trait already declares the method {signature}")
          }
+         Self::AsOutsideOfImpl => write!(f, "'as' is not allowed outside of 'impl' blocks"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

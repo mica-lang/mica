@@ -1026,6 +1026,9 @@ impl<'e> CodeGenerator<'e> {
                }
                map.insert(method_id, function.id);
             }
+
+            NodeKind::ImplAs => todo!("as is NYI"),
+
             // NB: If other item types are allowed, don't forget to change the error message for
             // InvalidImplItem.
             _ => return Err(ast.error(item, ErrorKind::InvalidImplItem)),
@@ -1218,6 +1221,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Struct => self.generate_struct(ast, node)?,
          NodeKind::Impl => self.generate_impl(ast, node)?,
          NodeKind::Trait => self.generate_trait(ast, node)?,
+         NodeKind::ImplAs => return Err(ast.error(node, ErrorKind::AsOutsideOfImpl)),
 
          | NodeKind::DictPair
          | NodeKind::IfBranch

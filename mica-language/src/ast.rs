@@ -302,6 +302,8 @@ pub enum NodeKind {
    Impl,
    /// A trait declaration.
    Trait,
+   /// `as` block in an `impl`.
+   ImplAs,
 }
 
 /// A `Debug` formatter that pretty-prints ASTs.

@@ -1,9 +1,13 @@
 This directory contains tests aiming to check for correctness of the implementation.
 
-Tests are run using the test runner provided. To run the test suite, navigate to the root directory
-of this repository, compile `mica-cli` in release mode, and run:
+Tests are run using the a custom rust test harness. To run the test suite, navigate to the root directory
+of this repository and run:
 ```
-./tests/runner.sh
+cargo test
 ```
-Additional arguments to be passed to `mica-cli` can be provided in the `MICAFLAGS` environment
-variable.
+(You can also restrict the tests to only these tests by running `cargo test samples`)
+
+To run skipped tests (mainly tests that take very long to run and are therefore skipped by default), run:
+```
+cargo test -- --ignored
+```

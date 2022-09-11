@@ -1121,10 +1121,8 @@ impl<'e> CodeGenerator<'e> {
 
       let mut chunk = Chunk::new(Rc::clone(&self.chunk.module_name));
       chunk.codegen_location = self.chunk.codegen_location;
-      for arg in 1..arity {
-         chunk.emit((Opcode::GetLocal, Opr24::from(arg)));
-      }
       chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
+      chunk.emit(Opcode::Return);
 
       let shim_name = Rc::from(format!(
          "trait {trait_name}.{} <shim>",

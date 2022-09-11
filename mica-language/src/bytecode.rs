@@ -1,6 +1,6 @@
 //! The bytecode representation of Mica.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::mem::size_of;
 use std::rc::Rc;
@@ -568,8 +568,12 @@ impl std::fmt::Debug for FunctionKind {
 pub struct Function {
    pub name: Rc<str>,
    pub parameter_count: Option<u16>,
+
    pub kind: FunctionKind,
+
    /// Set to `true` if the function is to be hidden in stack traces.
+   ///
+   /// This is useful for functions that are implementation details, such as trait function shims.
    pub hidden_in_stack_traces: bool,
 }
 
@@ -581,7 +585,7 @@ pub struct FunctionSignature {
    pub arity: Option<u16>,
    /// The index of the trait this signature belongs to.
    /// When `None`, the function is free and does not belong to any trait.
-   pub trait_index: Option<Opr24>,
+   pub trait_id: Option<Opr24>,
 }
 
 impl FunctionSignature {
@@ -590,7 +594,7 @@ impl FunctionSignature {
       Self {
          name: name.into(),
          arity: arity.into(),
-         trait_index: None,
+         trait_id: None,
       }
    }
 
@@ -600,7 +604,7 @@ impl FunctionSignature {
          name: Rc::clone(&self.name),
          arity: self.arity,
          trait_name: self
-            .trait_index
+            .trait_id
             .and_then(|index| env.get_trait(index))
             .map(|prototype| Rc::clone(&prototype.name)),
       }
@@ -729,7 +733,7 @@ impl Environment {
       let slot = Opr24::try_from(slot_index).map_err(|_| ErrorKind::TooManyTraits)?;
       self.traits.push(TraitPrototype {
          name,
-         required: vec![],
+         required: HashSet::new(),
          shims: vec![],
       });
       Ok(slot)
@@ -833,8 +837,24 @@ impl BuiltinDispatchTables {
 /// constructed at runtime to form a dispatch table.
 #[derive(Debug, Default)]
 pub(crate) struct Prototype {
+   /// Map of method IDs to instance methods. This doesn't include trait methods, which have
+   /// to be resolved dynamically.
    pub(crate) instance: HashMap<u16, Opr24>,
+
+   /// List of implemented trait methods. Because an implemented trait in `as` can be any
+   /// expression, we have no way of knowing what the method ID is going to be, so we have to map
+   /// trait methods by `(name, arity, trait_index)` pairs rather than method ID.
+   pub(crate) trait_instance: HashMap<(Rc<str>, u16, u16), Opr24>,
+
+   /// Same as `instance`, but lists methods that are added to the type dtable rather than the
+   /// instance dtable.
+   ///
+   /// Even though we don't support `static` methods in traits, the type is kept the same to reduce
+   /// code duplication.
    pub(crate) statics: HashMap<u16, Opr24>,
+
+   /// The total number of traits implemented by this struct.
+   pub(crate) implemented_trait_count: u16,
 }
 
 /// The prototype of a trait. Contains a list of all method IDs the trait must implement.
@@ -842,7 +862,7 @@ pub(crate) struct Prototype {
 pub struct TraitPrototype {
    pub name: Rc<str>,
    /// List of method IDs that this trait requires.
-   pub required: Vec<u16>,
+   pub required: HashSet<u16>,
    /// List of `(method_id, function_id)` mappings that make up the dtable of shims for the trait.
    pub shims: Vec<(u16, Opr24)>,
 }

@@ -409,6 +409,34 @@ impl Fiber {
       }
    }
 
+   fn initialize_dtable_with_trait_methods(
+      &mut self,
+      methods: impl Iterator<Item = (Rc<str>, u16, u16, Opr24)>,
+      traits: &[GcRaw<Trait>],
+      env: &mut Environment,
+      gc: &mut Memory,
+      dtable: &mut DispatchTable,
+   ) -> Result<(), ErrorKind> {
+      for (name, arity, trait_index, function_id) in methods {
+         dbg!((&name, arity, trait_index, function_id));
+         let trait_handle = unsafe { traits[trait_index as usize].get() };
+         let trait_id = trait_handle.id;
+         let method_signature = FunctionSignature {
+            name,
+            arity: Some(arity),
+            trait_id: Some(trait_id),
+         };
+         dbg!(&method_signature);
+         // NOTE: This should never panic because trait method indices are created during the
+         // trait's declaration. New method indices should not be made here.
+         let method_id =
+            env.get_method_index(&method_signature).expect("existing method index must be found");
+         let closure = self.create_closure(env, gc, function_id);
+         dtable.set_method(method_id, closure);
+      }
+      Ok(())
+   }
+
    /// Returns an iterator over all GC roots.
    fn roots<'a>(&'a self, globals: &'a mut Globals) -> impl Iterator<Item = RawValue> + 'a {
       globals.iter().chain(self.stack.iter().copied()).chain(self.closure.map(RawValue::from))
@@ -512,6 +540,7 @@ impl Fiber {
                }
                let dispatch_table = gc.allocate(dispatch_table);
                let instance = gc.allocate(Trait {
+                  id: operand,
                   dtable: dispatch_table,
                });
                self.push(RawValue::from(instance));
@@ -686,7 +715,7 @@ impl Fiber {
                         FunctionSignature {
                            name: Rc::from("(invalid method index)"),
                            arity: None,
-                           trait_index: None,
+                           trait_id: None,
                         }
                      });
                   let error_kind = ErrorKind::MethodDoesNotExist {
@@ -708,10 +737,21 @@ impl Fiber {
             }
 
             Opcode::Implement => {
-               let st = wrap_error!(self.stack_top_mut().ensure_raw_struct());
-               let st = unsafe { st.get() };
-               let type_name = Rc::clone(&unsafe { st.dtable() }.type_name);
                let proto = unsafe { env.take_prototype_unchecked(operand) };
+               let struct_position = proto.implemented_trait_count as usize;
+               let traits: Vec<_> = {
+                  // TODO: Maybe get rid of this allocation, or hoist it into the fiber?
+                  let mut traits = vec![];
+                  for trait_value in &self.stack[self.stack.len() - struct_position..] {
+                     traits.push(wrap_error!(trait_value.ensure_raw_trait()));
+                  }
+                  traits
+               };
+
+               let impld_struct =
+                  wrap_error!(self.nth_from_top(struct_position + 1).ensure_raw_struct());
+               let impld_struct = unsafe { impld_struct.get() };
+               let type_name = Rc::clone(&unsafe { impld_struct.dtable() }.type_name);
 
                let mut type_dtable = DispatchTable::new_for_type(Rc::clone(&type_name));
                self.initialize_dtable(
@@ -728,17 +768,25 @@ impl Fiber {
                   gc,
                   &mut instance_dtable,
                );
+               wrap_error!(self.initialize_dtable_with_trait_methods(
+                  proto.trait_instance.iter().map(
+                     |((name, arity, trait_index), &function_index)| {
+                        (Rc::clone(name), *arity, *trait_index, function_index)
+                     },
+                  ),
+                  &traits,
+                  env,
+                  gc,
+                  &mut instance_dtable,
+               ));
 
                let instance_dtable = gc.allocate(instance_dtable);
                type_dtable.instance = Some(instance_dtable);
                let type_dtable = gc.allocate(type_dtable);
 
-               unsafe {
-                  let st = self.stack_top().get_raw_struct_unchecked();
-                  st.get()
-                     .implement(type_dtable)
-                     .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
-               }
+               impld_struct
+                  .implement(type_dtable)
+                  .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
             }
 
             Opcode::Negate => {

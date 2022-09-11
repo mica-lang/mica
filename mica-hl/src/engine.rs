@@ -499,7 +499,7 @@ impl MethodSignature for (&str, u8) {
       env.get_method_index(&FunctionSignature {
          name: Rc::from(self.0),
          arity: Some(self.1 as u16 + 1),
-         trait_index: None,
+         trait_id: None,
       })
       .map(MethodId)
       .map_err(|_| Error::TooManyMethods)

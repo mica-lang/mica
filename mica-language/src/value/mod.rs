@@ -242,7 +242,16 @@ impl RawValue {
       if self.0.kind() == ValueKind::Struct {
          Ok(unsafe { self.0.get_raw_struct_unchecked() })
       } else {
-         Err(self.type_error("(any struct)"))
+         Err(self.type_error("any struct"))
+      }
+   }
+
+   /// Ensures the value is a `Trait`, returning a type mismatch error if that's not the case.
+   pub fn ensure_raw_trait(&self) -> Result<GcRaw<Trait>, ErrorKind> {
+      if self.0.kind() == ValueKind::Trait {
+         Ok(unsafe { self.0.get_raw_trait_unchecked() })
+      } else {
+         Err(self.type_error("any trait"))
       }
    }
 

@@ -1,8 +1,9 @@
-use crate::bytecode::DispatchTable;
+use crate::bytecode::{DispatchTable, Opr24};
 use crate::gc::GcRaw;
 
 /// Instance of a trait.
 pub struct Trait {
+   pub(crate) id: Opr24,
    pub(crate) dtable: GcRaw<DispatchTable>,
 }
 

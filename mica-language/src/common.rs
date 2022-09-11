@@ -146,6 +146,9 @@ pub enum ErrorKind {
    TraitMethodCannotHaveBody,
    TraitAlreadyHasMethod(RenderedSignature),
    AsOutsideOfImpl,
+   TooManyTraitsInImpl,
+   AsCannotNest,
+   FunctionKindInTrait,
 
    // Runtime
    TypeError {
@@ -251,6 +254,9 @@ impl std::fmt::Display for ErrorKind {
             write!(f, "trait already declares the method {signature}")
          }
          Self::AsOutsideOfImpl => write!(f, "'as' is not allowed outside of 'impl' blocks"),
+         Self::TooManyTraitsInImpl => write!(f, "too many 'as' blocks in 'impl'"),
+         Self::AsCannotNest => write!(f, "'as' blocks cannot nest"),
+         Self::FunctionKindInTrait => write!(f, "trait functions must be instance methods (cannot be constructors nor statics)"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

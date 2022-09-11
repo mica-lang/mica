@@ -1,9 +1,8 @@
 //! Common things, mostly error handling-related.
 
 use std::borrow::Cow;
+use std::fmt;
 use std::rc::Rc;
-
-use crate::bytecode::FunctionSignature;
 
 /// A source location.
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +41,34 @@ impl Default for Location {
 impl std::fmt::Display for Location {
    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       write!(f, "{}:{}", self.line, self.column)
+   }
+}
+
+/// A [`FunctionSignature`] that can be rendered into text. One can be obtained by calling
+/// [`FunctionSignature::render`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RenderedSignature {
+   pub name: Rc<str>,
+   /// This arity number does not include the implicit `self` argument.
+   pub arity: Option<u16>,
+   /// The index of the trait this signature belongs to.
+   /// When `None`, the function is free and does not belong to any trait.
+   pub trait_name: Option<Rc<str>>,
+}
+
+impl fmt::Display for RenderedSignature {
+   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      if let Some(arity) = self.arity {
+         write!(f, "{}/{arity}", self.name)?;
+      } else {
+         write!(f, "{}/...", self.name)?;
+      }
+
+      if let Some(trait_name) = &self.trait_name {
+         write!(f, " (as {trait_name})")?;
+      }
+
+      Ok(())
    }
 }
 
@@ -85,7 +112,6 @@ pub enum ErrorKind {
    CommaExpected,
    ColonExpectedAfterDictKey,
    RightBracketExpectedToCloseEmptyDict,
-   MissingFunctionBody,
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
@@ -104,16 +130,25 @@ pub enum ErrorKind {
    TooManyMethods,
    InvalidMethodName,
    FunctionKindOutsideImpl,
+   MissingFunctionBody,
    InvalidImplItem,
    MissingMethodName,
    TooManyImpls,
-   MethodAlreadyImplemented(FunctionSignature),
+   MethodAlreadyImplemented(RenderedSignature),
    TooManyFields,
    FieldDoesNotExist(Rc<str>),
    FieldOutsideOfImpl,
    MissingFields(Vec<Rc<str>>),
    ListIsTooLong,
    DictIsTooLarge,
+   TooManyTraits,
+   InvalidTraitItem,
+   TraitMethodCannotHaveBody,
+   TraitAlreadyHasMethod(RenderedSignature),
+   AsOutsideOfImpl,
+   TooManyTraitsInImpl,
+   AsCannotNest,
+   FunctionKindInTrait,
 
    // Runtime
    TypeError {
@@ -122,7 +157,7 @@ pub enum ErrorKind {
    },
    MethodDoesNotExist {
       type_name: Rc<str>,
-      signature: FunctionSignature,
+      signature: RenderedSignature,
    },
    StructAlreadyImplemented,
    UserDataAlreadyBorrowed,
@@ -191,7 +226,7 @@ impl std::fmt::Display for ErrorKind {
             f,
             "function kinds (static, constructor) can only be used in 'impl' blocks"
          ),
-         Self::InvalidImplItem => write!(f, "only functions are allowed in 'impl' blocks"),
+         Self::InvalidImplItem => write!(f, "only functions and 'as' blocks are allowed in 'impl' blocks"),
          Self::MissingMethodName => write!(f, "missing method name"),
          Self::TooManyImpls => write!(f, "too many 'impl' blocks"),
          Self::MethodAlreadyImplemented(signature) => {
@@ -212,6 +247,16 @@ impl std::fmt::Display for ErrorKind {
          }
          Self::ListIsTooLong => write!(f, "list literal has too many elements"),
          Self::DictIsTooLarge => write!(f, "dict literal has too many pairs"),
+         Self::TooManyTraits => write!(f, "too many traits"),
+         Self::InvalidTraitItem => write!(f, "only function prototypes are allowed in traits"),
+         Self::TraitMethodCannotHaveBody => write!(f, "trait functions cannot have bodies"),
+         Self::TraitAlreadyHasMethod(signature) => {
+            write!(f, "trait already declares the method {signature}")
+         }
+         Self::AsOutsideOfImpl => write!(f, "'as' is not allowed outside of 'impl' blocks"),
+         Self::TooManyTraitsInImpl => write!(f, "too many 'as' blocks in 'impl'"),
+         Self::AsCannotNest => write!(f, "'as' blocks cannot nest"),
+         Self::FunctionKindInTrait => write!(f, "trait functions must be instance methods (cannot be constructors nor statics)"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
@@ -275,7 +320,7 @@ impl std::fmt::Display for Error {
             module_name,
             location,
          } => {
-            write!(f, "{}:{}: error: {}", module_name, location, kind)
+            write!(f, "{module_name}:{location}: error: {kind}")
          }
          Error::Runtime { kind, call_stack } => {
             writeln!(f, "error: {}", kind)?;

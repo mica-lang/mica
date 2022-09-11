@@ -230,7 +230,7 @@ impl Engine {
       let method_id = signature.to_method_id(&mut self.env)?;
       // Unwrapping here is fine because `to_method_id` ensures that a method with a given ID
       // exists.
-      let signature = self.env.get_function_signature(method_id.0).unwrap();
+      let signature = self.env.get_method_signature(method_id.0).unwrap();
       let stack: Vec<_> =
          Some(receiver).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
       let argument_count = u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?;
@@ -332,6 +332,7 @@ impl Engine {
             name: Rc::from(name),
             parameter_count: parameter_count.into(), // doesn't matter for non-methods
             kind: f,
+            hidden_in_stack_traces: false,
          })
          .map_err(|_| Error::TooManyFunctions)?;
       let function = RawValue::from(self.gc.allocate(Closure {
@@ -435,10 +436,10 @@ impl GlobalName for GlobalId {
 
 impl GlobalName for &str {
    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalId, Error> {
-      Ok(if let Some(slot) = env.get_global(*self) {
+      Ok(if let Some(slot) = env.get_global(self) {
          GlobalId(slot)
       } else {
-         env.create_global(*self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
+         env.create_global(self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
       })
    }
 }
@@ -457,7 +458,7 @@ impl OptionalGlobalName for GlobalId {
 
 impl OptionalGlobalName for &str {
    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId> {
-      env.get_global(*self).map(GlobalId)
+      env.get_global(self).map(GlobalId)
    }
 }
 
@@ -498,6 +499,7 @@ impl MethodSignature for (&str, u8) {
       env.get_method_index(&FunctionSignature {
          name: Rc::from(self.0),
          arity: Some(self.1 as u16 + 1),
+         trait_id: None,
       })
       .map(MethodId)
       .map_err(|_| Error::TooManyMethods)

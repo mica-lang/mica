@@ -9,7 +9,7 @@ use crate::bytecode::{
    CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
    Prototype,
 };
-use crate::common::{Error, ErrorKind};
+use crate::common::{Error, ErrorKind, RenderedSignature};
 
 /// Info about a local variable on the stack.
 #[derive(Debug)]
@@ -719,10 +719,7 @@ impl<'e> CodeGenerator<'e> {
                // ↑ Add 1 for the receiver, which is also an argument.
                .try_into()
                .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
-            let signature = FunctionSignature {
-               name: Rc::clone(name),
-               arity: Some(arity as u16),
-            };
+            let signature = FunctionSignature::new(Rc::clone(name), arity as u16);
             let method_index =
                self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
             self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, arity))));
@@ -751,10 +748,7 @@ impl<'e> CodeGenerator<'e> {
       if ast.kind(method) != NodeKind::Identifier {
          return Err(ast.error(method, ErrorKind::InvalidMethodName));
       }
-      let signature = FunctionSignature {
-         name: Rc::clone(ast.string(method).unwrap()),
-         arity: Some(1),
-      };
+      let signature = FunctionSignature::new(Rc::clone(ast.string(method).unwrap()), 1);
       let method_index =
          self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
       self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, 1))));
@@ -768,9 +762,9 @@ impl<'e> CodeGenerator<'e> {
       node: NodeId,
       GenerateFunctionOptions { name, call_conv }: GenerateFunctionOptions,
    ) -> Result<GeneratedFunction, Error> {
-      let (_, parameters) = ast.node_pair(node);
+      let (head, body) = ast.node_pair(node);
+      let (_, parameters) = ast.node_pair(head);
       let parameter_list = ast.children(parameters).unwrap();
-      let body = ast.children(node).unwrap();
 
       let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
       // NOTE: Hopefully the allocation from this mem::take gets optimized out.
@@ -817,7 +811,7 @@ impl<'e> CodeGenerator<'e> {
       };
 
       // Generate the body.
-      generator.generate_node_list(ast, body)?;
+      generator.generate_node(ast, body, Expression::Used)?;
 
       // If we're in a constructor we have to backpatch the `CreateStruct` instruction with the
       // number of fields.
@@ -866,6 +860,7 @@ impl<'e> CodeGenerator<'e> {
             chunk: Rc::new(generator.chunk),
             captured_locals: generator.locals.captures,
          },
+         hidden_in_stack_traces: false,
       };
       let function_id = self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
 
@@ -875,21 +870,32 @@ impl<'e> CodeGenerator<'e> {
       })
    }
 
+   /// Ensures that a `Func` node is a valid bare function - without a kind, and with a body.
+   fn ensure_valid_bare_function(ast: &Ast, node: NodeId) -> Result<(), Error> {
+      let (head, body) = ast.node_pair(node);
+      let (_name, parameters) = ast.node_pair(head);
+
+      let function_kind = ast.node_pair(parameters).0;
+      if function_kind != NodeId::EMPTY {
+         return Err(ast.error(function_kind, ErrorKind::FunctionKindOutsideImpl));
+      }
+      if body == NodeId::EMPTY {
+         return Err(ast.error(node, ErrorKind::MissingFunctionBody));
+      }
+      Ok(())
+   }
+
    /// Generates code for a bare function declaration.
    fn generate_function_declaration(
       &mut self,
       ast: &Ast,
       node: NodeId,
    ) -> Result<ExpressionResult, Error> {
-      let (name_node, parameters) = ast.node_pair(node);
-      let name = ast.string(name_node).unwrap();
+      Self::ensure_valid_bare_function(ast, node)?;
 
-      if ast.node_pair(parameters).0 != NodeId::EMPTY {
-         return Err(ast.error(
-            ast.node_pair(parameters).0,
-            ErrorKind::FunctionKindOutsideImpl,
-         ));
-      }
+      let (head, _) = ast.node_pair(node);
+      let (name_node, _) = ast.node_pair(head);
+      let name = ast.string(name_node).unwrap();
 
       // Create the variable before compiling the function, to allow for recursion.
       let variable = self
@@ -917,13 +923,8 @@ impl<'e> CodeGenerator<'e> {
       ast: &Ast,
       node: NodeId,
    ) -> Result<ExpressionResult, Error> {
-      let (_, parameters) = ast.node_pair(node);
-      if ast.node_pair(parameters).0 != NodeId::EMPTY {
-         return Err(ast.error(
-            ast.node_pair(parameters).0,
-            ErrorKind::FunctionKindOutsideImpl,
-         ));
-      }
+      Self::ensure_valid_bare_function(ast, node)?;
+
       let function = self.generate_function(
          ast,
          node,
@@ -932,6 +933,7 @@ impl<'e> CodeGenerator<'e> {
             call_conv: FunctionCallConv::Bare,
          },
       )?;
+
       self.chunk.emit((Opcode::CreateClosure, function.id));
       Ok(ExpressionResult::Present)
    }
@@ -970,69 +972,25 @@ impl<'e> CodeGenerator<'e> {
       let (implementee, _) = ast.node_pair(node);
       let items = ast.children(node).unwrap();
 
-      let mut proto = Prototype::default();
+      // Push the implementee onto the stack first. Implemented traits follow.
+      self.generate_node(ast, implementee, Expression::Used)?;
+
       // There's no need to save any old struct data because `impl` blocks don't nest freely.
       // Yes, you can create an `impl` block in a function inside this `impl` block, but that
       // function is handled by a different generator.
       self.struct_data = Some(Box::new(StructData::default()));
 
-      let mut has_constructor = false;
-      for &item in items {
-         match ast.kind(item) {
-            NodeKind::Func => {
-               let (name_node, parameters) = ast.node_pair(item);
-               if ast.kind(name_node) != NodeKind::Identifier {
-                  return Err(ast.error(item, ErrorKind::MissingMethodName));
-               }
-               let name = Rc::clone(ast.string(name_node).unwrap());
-               let (kind, _) = ast.node_pair(parameters);
-               let function = self.generate_function(
-                  ast,
-                  item,
-                  GenerateFunctionOptions {
-                     name: Rc::clone(&name),
-                     call_conv: match ast.kind(kind) {
-                        NodeKind::Empty => FunctionCallConv::Instance,
-                        NodeKind::Static => FunctionCallConv::Static,
-                        NodeKind::Constructor => {
-                           let allow_new_fields = !has_constructor;
-                           has_constructor = true;
-                           FunctionCallConv::Constructor { allow_new_fields }
-                        }
-                        _ => unreachable!(),
-                     },
-                  },
-               )?;
-               let map = match ast.kind(kind) {
-                  NodeKind::Empty => &mut proto.instance,
-                  NodeKind::Static | NodeKind::Constructor => &mut proto.statics,
-                  _ => unreachable!(),
-               };
-               let signature = FunctionSignature {
-                  name,
-                  arity: Some(1 + function.parameter_count),
-               };
-               let method_id =
-                  self.env.get_method_index(&signature).map_err(|kind| ast.error(item, kind))?;
-               if map.contains_key(&method_id) {
-                  return Err(ast.error(
-                     name_node,
-                     ErrorKind::MethodAlreadyImplemented(FunctionSignature {
-                        arity: signature.arity.map(|x| x - 1),
-                        ..signature
-                     }),
-                  ));
-               }
-               map.insert(method_id, function.id);
-            }
-            // NB: If other item types are allowed, don't forget to change the error message for
-            // InvalidImplItem.
-            _ => return Err(ast.error(item, ErrorKind::InvalidImplItem)),
-         }
+      let mut proto = Prototype::default();
+      let mut state = ImplGenerationState {
+         proto: &mut proto,
+         has_constructor: false,
+         trait_index: None,
+      };
+      for &node in items {
+         self.generate_impl_item(ast, node, &mut state, true)?;
       }
 
       let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
-      self.generate_node(ast, implementee, Expression::Used)?;
       self.chunk.emit((Opcode::Implement, proto_id));
 
       self.struct_data = None;
@@ -1040,7 +998,234 @@ impl<'e> CodeGenerator<'e> {
       Ok(ExpressionResult::Present)
    }
 
-   /// Generates code for a single node.
+   /// Generates code for a single item in an `impl` block.
+   fn generate_impl_item(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      state: &mut ImplGenerationState,
+      allow_as: bool,
+   ) -> Result<(), Error> {
+      match ast.kind(node) {
+         NodeKind::Func => {
+            let (head, _) = ast.node_pair(node);
+            let (name_node, parameters) = ast.node_pair(head);
+            if ast.kind(name_node) != NodeKind::Identifier {
+               return Err(ast.error(node, ErrorKind::MissingMethodName));
+            }
+            let name = Rc::clone(ast.string(name_node).unwrap());
+            let (kind, _) = ast.node_pair(parameters);
+
+            let call_conv = match ast.kind(kind) {
+               NodeKind::Empty => FunctionCallConv::Instance,
+               NodeKind::Static => FunctionCallConv::Static,
+               NodeKind::Constructor => {
+                  let allow_new_fields = !state.has_constructor;
+                  state.has_constructor = true;
+                  FunctionCallConv::Constructor { allow_new_fields }
+               }
+               _ => unreachable!(),
+            };
+            let function = self.generate_function(
+               ast,
+               node,
+               GenerateFunctionOptions {
+                  name: Rc::clone(&name),
+                  call_conv,
+               },
+            )?;
+
+            if let Some(trait_index) = state.trait_index {
+               // For trait instance methods, method ID resolution is performed at runtime.
+               let key = (Rc::clone(&name), 1 + function.parameter_count, trait_index);
+               if state.proto.trait_instance.insert(key, function.id).is_some() {
+                  return Err(ast.error(
+                     name_node,
+                     ErrorKind::MethodAlreadyImplemented(RenderedSignature {
+                        name,
+                        arity: Some(function.parameter_count),
+                        // Note that we do not have a way of knowing the actual name of the trait,
+                        // so we simply don't display it.
+                        trait_name: None,
+                     }),
+                  ));
+               }
+            } else {
+               // For regular instance methods, method ID resolution is performed during
+               // compilation.
+               let signature = FunctionSignature::new(name, 1 + function.parameter_count);
+               let method_id =
+                  self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+
+               let map = match ast.kind(kind) {
+                  NodeKind::Empty => &mut state.proto.instance,
+                  NodeKind::Static | NodeKind::Constructor => &mut state.proto.statics,
+                  _ => unreachable!(),
+               };
+               if map.insert(method_id, function.id).is_some() {
+                  return Err(ast.error(
+                     name_node,
+                     ErrorKind::MethodAlreadyImplemented(RenderedSignature {
+                        name: signature.name,
+                        arity: Some(function.parameter_count),
+                        trait_name: None,
+                     }),
+                  ));
+               }
+            }
+         }
+
+         NodeKind::ImplAs => {
+            if !allow_as {
+               return Err(ast.error(node, ErrorKind::AsCannotNest));
+            }
+            let (trait_expr, _) = ast.node_pair(node);
+            let as_items = ast.children(node).unwrap();
+            self.generate_node(ast, trait_expr, Expression::Used)?;
+            let trait_index = state.proto.implemented_trait_count;
+            state.proto.implemented_trait_count = state
+               .proto
+               .implemented_trait_count
+               .checked_add(1)
+               .ok_or_else(|| ast.error(node, ErrorKind::TooManyTraitsInImpl))?;
+            let mut state = ImplGenerationState {
+               proto: state.proto,
+               trait_index: Some(trait_index),
+               ..*state
+            };
+            for &item in as_items {
+               self.generate_impl_item(ast, item, &mut state, false)?;
+            }
+         }
+
+         // NB: If other item types are allowed, don't forget to change the error message for
+         // InvalidImplItem.
+         _ => return Err(ast.error(node, ErrorKind::InvalidImplItem)),
+      }
+
+      Ok(())
+   }
+
+   /// Generates the *shim* for a trait method. The shim is responsible for calling the actual
+   /// method.
+   fn generate_trait_method_shim(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      trait_name: &str,
+      method_id: u16,
+      method_signature: &FunctionSignature,
+   ) -> Result<Opr24, Error> {
+      // NOTE: Overflow here should never happen because we're referring to
+      let arity = method_signature.arity.unwrap() as u8;
+
+      let mut chunk = Chunk::new(Rc::clone(&self.chunk.module_name));
+      chunk.codegen_location = self.chunk.codegen_location;
+      chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
+      chunk.emit(Opcode::Return);
+
+      let shim_name = Rc::from(format!(
+         "trait {trait_name}.{} <shim>",
+         method_signature.name
+      ));
+      let chunk = Rc::new(chunk);
+      let function_id = self
+         .env
+         .create_function(Function {
+            name: shim_name,
+            parameter_count: method_signature.arity,
+            kind: FunctionKind::Bytecode {
+               chunk,
+               captured_locals: vec![],
+            },
+            hidden_in_stack_traces: true,
+         })
+         .map_err(|e| ast.error(node, e))?;
+
+      Ok(function_id)
+   }
+
+   /// Generates code for a trait definition.
+   fn generate_trait(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
+      let (trait_name, _) = ast.node_pair(node);
+      let trait_name = ast.string(trait_name).unwrap();
+      let items = ast.children(node).unwrap();
+
+      let trait_index =
+         self.env.create_trait(Rc::clone(trait_name)).map_err(|k| ast.error(node, k))?;
+      let mut required_methods = HashSet::new();
+      let mut shims = Vec::new();
+
+      for &item in items {
+         match ast.kind(item) {
+            NodeKind::Func => {
+               let (head, body) = ast.node_pair(item);
+               let (name, params) = ast.node_pair(head);
+               if body != NodeId::EMPTY {
+                  return Err(ast.error(body, ErrorKind::TraitMethodCannotHaveBody));
+               }
+               if name == NodeId::EMPTY {
+                  return Err(ast.error(head, ErrorKind::MissingMethodName));
+               }
+               if ast.node_pair(params).0 != NodeId::EMPTY {
+                  return Err(ast.error(head, ErrorKind::FunctionKindInTrait));
+               }
+
+               let signature = FunctionSignature {
+                  name: Rc::clone(ast.string(name).unwrap()),
+                  arity: Some(
+                     1 + u16::try_from(ast.len(params).unwrap())
+                        .map_err(|_| ast.error(params, ErrorKind::TooManyParameters))?,
+                  ),
+                  trait_id: Some(trait_index),
+               };
+               let method_id =
+                  self.env.get_method_index(&signature).map_err(|e| ast.error(item, e))?;
+
+               let shim_signature = FunctionSignature {
+                  // Need to add 1 to the arity for the receiving trait.
+                  arity: signature.arity.map(|x| x + 1),
+                  trait_id: None,
+                  ..signature.clone()
+               };
+               let shim_method_id =
+                  self.env.get_method_index(&shim_signature).map_err(|e| ast.error(item, e))?;
+               let shim_function_id =
+                  self.generate_trait_method_shim(ast, item, trait_name, method_id, &signature)?;
+               shims.push((shim_method_id, shim_function_id));
+
+               if !required_methods.insert(method_id) {
+                  return Err(ast.error(
+                     item,
+                     ErrorKind::TraitAlreadyHasMethod(RenderedSignature {
+                        name: signature.name,
+                        arity: signature.arity,
+                        // Do not duplicate the trait name in the error message.
+                        trait_name: None,
+                     }),
+                  ));
+               }
+            }
+            _ => return Err(ast.error(item, ErrorKind::InvalidTraitItem)),
+         }
+      }
+
+      let prototype = self.env.get_trait_mut(trait_index).unwrap();
+      prototype.required = required_methods;
+      prototype.shims = shims;
+
+      self.chunk.emit((Opcode::CreateTrait, trait_index));
+      let variable = self
+         .create_variable(trait_name, VariableAllocation::Allocate)
+         .map_err(|k| ast.error(node, k))?;
+      self.generate_variable_assign(variable);
+
+      Ok(ExpressionResult::Present)
+   }
+
+   /// Generates code for a valid expression node.
+   ///
+   /// Nodes that are not valid expressions cause a panic.
    fn generate_node(&mut self, ast: &Ast, node: NodeId, expr: Expression) -> Result<(), Error> {
       let previous_codegen_location = self.chunk.codegen_location;
       self.chunk.codegen_location = ast.location(node);
@@ -1088,7 +1273,9 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Break => self.generate_break(ast, node)?,
 
          NodeKind::Func => {
-            if ast.node_pair(node).0 != NodeId::EMPTY {
+            let (head, _) = ast.node_pair(node);
+            let (name, _) = ast.node_pair(head);
+            if name != NodeId::EMPTY {
                self.generate_function_declaration(ast, node)?
             } else {
                self.generate_function_expression(ast, node)?
@@ -1099,10 +1286,13 @@ impl<'e> CodeGenerator<'e> {
 
          NodeKind::Struct => self.generate_struct(ast, node)?,
          NodeKind::Impl => self.generate_impl(ast, node)?,
+         NodeKind::Trait => self.generate_trait(ast, node)?,
+         NodeKind::ImplAs => return Err(ast.error(node, ErrorKind::AsOutsideOfImpl)),
 
          | NodeKind::DictPair
          | NodeKind::IfBranch
          | NodeKind::ElseBranch
+         | NodeKind::FunctionHead
          | NodeKind::Parameters
          | NodeKind::Static
          | NodeKind::Constructor => {
@@ -1131,6 +1321,7 @@ impl<'e> CodeGenerator<'e> {
 }
 
 /// The calling convention of a function.
+#[derive(Debug, Clone, Copy)]
 enum FunctionCallConv {
    /// A bare function: `self` is invisible, fields cannot be assigned.
    Bare,
@@ -1190,10 +1381,17 @@ enum Expression {
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExpressionResult {
-   /// The result is still on the stack.
+   /// The generated code leaves a value on the stack.
    Present,
-   /// The result was discarded previously.
+   /// The generated code does not generate a value.
    Absent,
-   /// The expression does not return to the original place and unwinds the stack.
+   /// The generated code does not return to the original place and unwinds the stack.
    NoReturn,
+}
+
+/// The state of generating an `impl` block.
+struct ImplGenerationState<'p> {
+   proto: &'p mut Prototype,
+   has_constructor: bool,
+   trait_index: Option<u16>,
 }

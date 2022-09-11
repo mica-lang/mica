@@ -29,7 +29,9 @@ pub enum TokenKind {
    Return,
 
    Struct,
+   Trait,
    Impl,
+   As,
    Constructor,
    Static,
 
@@ -439,6 +441,8 @@ impl Lexer {
 
          "struct" => TokenKind::Struct,
          "impl" => TokenKind::Impl,
+         "trait" => TokenKind::Trait,
+         "as" => TokenKind::As,
          "constructor" => TokenKind::Constructor,
          "static" => TokenKind::Static,
 

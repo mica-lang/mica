@@ -62,21 +62,21 @@ impl Ast {
 
    /// Returns the kind of a node.
    pub fn kind(&self, node: NodeId) -> NodeKind {
-      unsafe { self.nodes.get_unchecked(node.0 as usize).0 }
+      self.nodes[node.0 as usize].0
    }
 
    /// Returns the raw pair of a node.
    pub fn pair(&self, node: NodeId) -> (u32, u32) {
-      unsafe { self.nodes.get_unchecked(node.0 as usize).1 }
+      self.nodes[node.0 as usize].1
    }
 
    fn data(&self, node: NodeId) -> Option<&NodeData> {
-      unsafe { self.data.get_unchecked(node.0 as usize).as_ref() }
+      self.data[node.0 as usize].as_ref()
    }
 
    /// Returns the source location of a node.
    pub fn location(&self, node: NodeId) -> Location {
-      unsafe { *self.locations.get_unchecked(node.0 as usize) }
+      self.locations[node.0 as usize]
    }
 
    /// Returns the number data of a node, or `None` if the node carries a different type of data.
@@ -101,6 +101,12 @@ impl Ast {
          return Some(c);
       }
       None
+   }
+
+   /// Returns the length of the node's children, or `None` if the node has no children.
+   #[allow(clippy::len_without_is_empty)]
+   pub fn len(&self, node: NodeId) -> Option<usize> {
+      self.children(node).map(|c| c.len())
    }
 
    /// Returns the pair of nodes this node points to.
@@ -274,9 +280,12 @@ pub enum NodeKind {
    /// `break` expression.
    Break,
 
-   /// Function (item or anonymous).
+   /// Function (item or anonymous.)
    Func,
-   /// Function parameters (the RHS of `Function`).
+   /// The head of a function - LHS is the name, RHS are the parameters.
+   /// This is the LHS of `Func`.
+   FunctionHead,
+   /// Function parameters.
    Parameters,
    /// `static` keyword (the LHS of `Parameters`).
    Static,
@@ -291,6 +300,10 @@ pub enum NodeKind {
    Struct,
    /// An `impl` block.
    Impl,
+   /// A trait declaration.
+   Trait,
+   /// `as` block in an `impl`.
+   ImplAs,
 }
 
 /// A `Debug` formatter that pretty-prints ASTs.

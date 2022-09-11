@@ -1,11 +1,11 @@
 //! The bytecode representation of Mica.
 
-use std::collections::HashMap;
-use std::fmt::{self, Debug};
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::mem::size_of;
 use std::rc::Rc;
 
-use crate::common::{ErrorKind, Location};
+use crate::common::{ErrorKind, Location, RenderedSignature};
 use crate::gc::{Gc, GcRaw, Memory};
 use crate::value::{Closure, RawValue};
 
@@ -54,6 +54,14 @@ impl Opr24 {
    }
 }
 
+impl From<u8> for Opr24 {
+   fn from(value: u8) -> Self {
+      Self {
+         bytes: [value, 0, 0],
+      }
+   }
+}
+
 impl TryFrom<usize> for Opr24 {
    type Error = U32TooBig;
 
@@ -65,6 +73,12 @@ impl TryFrom<usize> for Opr24 {
 impl From<Opr24> for u32 {
    fn from(opr: Opr24) -> u32 {
       (opr.bytes[0] as u32) | ((opr.bytes[1] as u32) << 8) | ((opr.bytes[2] as u32) << 16)
+   }
+}
+
+impl From<Opr24> for usize {
+   fn from(opr: Opr24) -> usize {
+      (opr.bytes[0] as usize) | ((opr.bytes[1] as usize) << 8) | ((opr.bytes[2] as usize) << 16)
    }
 }
 
@@ -127,6 +141,8 @@ pub enum Opcode {
    /// Creates a struct instance from the type at the top of the stack, with the specified amount
    /// of fields.
    CreateStruct,
+   /// Creates an instance of the trait with the given ID and pushes it onto the stack.
+   CreateTrait,
    /// Creates a list from `operand` values that are at the top of the stack.
    CreateList,
    /// Creates a dict from `operand * 2` values that are at the top of the stack. The values have
@@ -362,8 +378,8 @@ impl Chunk {
    /// # Safety
    /// Assumes that `pc` is within the chunk's bounds and that the opcode at `pc` is valid.
    pub unsafe fn read_instruction(&self, pc: &mut usize) -> (Opcode, Opr24) {
-      let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::INSTRUCTION_SIZE);
-      let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap_unchecked();
+      let bytes = &self.bytes[*pc..*pc + Opcode::INSTRUCTION_SIZE];
+      let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap();
       let opcode: Opcode = std::mem::transmute(bytes[0]);
       bytes[0] = 0;
       let operand = Opr24 {
@@ -379,8 +395,8 @@ impl Chunk {
    /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
    pub unsafe fn read_number(&self, pc: &mut usize) -> f64 {
       const SIZE: usize = std::mem::size_of::<f64>();
-      let bytes = self.bytes.get_unchecked(*pc..*pc + SIZE);
-      let bytes: [u8; SIZE] = bytes.try_into().unwrap_unchecked();
+      let bytes = &self.bytes[*pc..*pc + SIZE];
+      let bytes: [u8; SIZE] = bytes.try_into().unwrap();
       let number = f64::from_le_bytes(bytes);
       *pc += SIZE;
       number
@@ -552,23 +568,45 @@ impl std::fmt::Debug for FunctionKind {
 pub struct Function {
    pub name: Rc<str>,
    pub parameter_count: Option<u16>,
+
    pub kind: FunctionKind,
+
+   /// Set to `true` if the function is to be hidden in stack traces.
+   ///
+   /// This is useful for functions that are implementation details, such as trait function shims.
+   pub hidden_in_stack_traces: bool,
 }
 
-/// The signature of a function (its name and argument count).
+/// The signature of a function (its name, argument count, and enclosing trait).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
    pub name: Rc<str>,
    /// This arity number does not include the implicit `self` argument.
    pub arity: Option<u16>,
+   /// The index of the trait this signature belongs to.
+   /// When `None`, the function is free and does not belong to any trait.
+   pub trait_id: Option<Opr24>,
 }
 
-impl fmt::Display for FunctionSignature {
-   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      if let Some(arity) = self.arity {
-         write!(f, "{}/{}", self.name, arity)
-      } else {
-         write!(f, "{}/...", self.name)
+impl FunctionSignature {
+   /// Creates a new function signature for a function that does not belong to a trait.
+   pub fn new(name: impl Into<Rc<str>>, arity: impl Into<Option<u16>>) -> Self {
+      Self {
+         name: name.into(),
+         arity: arity.into(),
+         trait_id: None,
+      }
+   }
+
+   /// Renders this signature into one that can be formatted.
+   pub fn render(&self, env: &Environment) -> RenderedSignature {
+      RenderedSignature {
+         name: Rc::clone(&self.name),
+         arity: self.arity,
+         trait_name: self
+            .trait_id
+            .and_then(|index| env.get_trait(index))
+            .map(|prototype| Rc::clone(&prototype.name)),
       }
    }
 }
@@ -583,13 +621,15 @@ pub struct Environment {
    /// Mapping from named function signatures to method indices.
    method_indices: HashMap<FunctionSignature, u16>,
    /// Mapping from method indices to function signatures.
-   function_signatures: Vec<FunctionSignature>,
+   method_signatures: Vec<FunctionSignature>,
    /// Dispatch tables for builtin types.
    pub builtin_dtables: BuiltinDispatchTables,
    /// `impl` prototypes.
    prototypes: Vec<Option<Prototype>>,
    /// `prototypes` indices that have been taken out of the vec.
    free_prototypes: Vec<Opr24>,
+   /// Trait prototypes.
+   traits: Vec<TraitPrototype>,
 }
 
 impl Environment {
@@ -599,18 +639,18 @@ impl Environment {
          globals: HashMap::new(),
          functions: Vec::new(),
          method_indices: HashMap::new(),
-         function_signatures: Vec::new(),
+         method_signatures: Vec::new(),
          builtin_dtables,
          prototypes: Vec::new(),
          free_prototypes: Vec::new(),
+         traits: Vec::new(),
       }
    }
 
    /// Tries to create a global. Returns the global slot number, or an error if there are too many
    /// globals.
    pub fn create_global(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
-      let slot = Opr24::new(self.globals.len().try_into().map_err(|_| ErrorKind::TooManyGlobals)?)
-         .map_err(|_| ErrorKind::TooManyGlobals)?;
+      let slot = Opr24::try_from(self.globals.len()).map_err(|_| ErrorKind::TooManyGlobals)?;
       self.globals.insert(name.to_owned(), slot);
       Ok(slot)
    }
@@ -653,14 +693,15 @@ impl Environment {
          let index =
             u16::try_from(self.method_indices.len()).map_err(|_| ErrorKind::TooManyMethods)?;
          self.method_indices.insert(signature.clone(), index);
-         self.function_signatures.push(signature.clone());
+         self.method_signatures.push(signature.clone());
          Ok(index)
       }
    }
 
-   /// Returns the function with the given signature, or `None` if the method index is invalid.
-   pub fn get_function_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
-      self.function_signatures.get(method_index as usize)
+   /// Returns the signature for the method with the given ID, or `None` if the method index is
+   /// invalid.
+   pub fn get_method_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
+      self.method_signatures.get(method_index as usize)
    }
 
    /// Creates a prototype and returns its ID.
@@ -684,6 +725,28 @@ impl Environment {
          self.prototypes.get_unchecked_mut(u32::from(id) as usize).take().unwrap_unchecked();
       self.free_prototypes.push(id);
       proto
+   }
+
+   /// Creates a trait and returns its ID. Use `get_trait_mut` afterwards to modify the trait.
+   pub fn create_trait(&mut self, name: Rc<str>) -> Result<Opr24, ErrorKind> {
+      let slot_index = self.traits.len();
+      let slot = Opr24::try_from(slot_index).map_err(|_| ErrorKind::TooManyTraits)?;
+      self.traits.push(TraitPrototype {
+         name,
+         required: HashSet::new(),
+         shims: vec![],
+      });
+      Ok(slot)
+   }
+
+   /// Returns a reference to the trait with the given ID.
+   pub fn get_trait(&self, id: Opr24) -> Option<&TraitPrototype> {
+      self.traits.get(usize::from(id))
+   }
+
+   /// Returns a mutable reference to the trait with the given ID.
+   pub fn get_trait_mut(&mut self, id: Opr24) -> Option<&mut TraitPrototype> {
+      self.traits.get_mut(usize::from(id))
    }
 }
 
@@ -774,6 +837,32 @@ impl BuiltinDispatchTables {
 /// constructed at runtime to form a dispatch table.
 #[derive(Debug, Default)]
 pub(crate) struct Prototype {
+   /// Map of method IDs to instance methods. This doesn't include trait methods, which have
+   /// to be resolved dynamically.
    pub(crate) instance: HashMap<u16, Opr24>,
+
+   /// List of implemented trait methods. Because an implemented trait in `as` can be any
+   /// expression, we have no way of knowing what the method ID is going to be, so we have to map
+   /// trait methods by `(name, arity, trait_index)` pairs rather than method ID.
+   pub(crate) trait_instance: HashMap<(Rc<str>, u16, u16), Opr24>,
+
+   /// Same as `instance`, but lists methods that are added to the type dtable rather than the
+   /// instance dtable.
+   ///
+   /// Even though we don't support `static` methods in traits, the type is kept the same to reduce
+   /// code duplication.
    pub(crate) statics: HashMap<u16, Opr24>,
+
+   /// The total number of traits implemented by this struct.
+   pub(crate) implemented_trait_count: u16,
+}
+
+/// The prototype of a trait. Contains a list of all method IDs the trait must implement.
+#[derive(Debug)]
+pub struct TraitPrototype {
+   pub name: Rc<str>,
+   /// List of method IDs that this trait requires.
+   pub required: HashSet<u16>,
+   /// List of `(method_id, function_id)` mappings that make up the dtable of shims for the trait.
+   pub shims: Vec<(u16, Opr24)>,
 }

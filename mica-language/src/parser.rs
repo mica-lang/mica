@@ -378,15 +378,24 @@ impl Parser {
          .with_location(left_paren.location)
          .with_children(parameters)
          .done();
+      let name_location = self.ast.location(name);
+      let head = self
+         .ast
+         .build_node(NodeKind::FunctionHead, (name, parameters))
+         .with_location(name_location)
+         .done();
 
-      let _equals = self.expect(TokenKind::Assign, |_| ErrorKind::MissingFunctionBody)?;
-      let body = vec![self.parse_expression(0)?];
+      let body = if self.lexer.peek_token()?.kind == TokenKind::Assign {
+         let _equals = self.lexer.next_token();
+         self.parse_expression(0)?
+      } else {
+         NodeId::EMPTY
+      };
 
       Ok(self
          .ast
-         .build_node(NodeKind::Func, (name, parameters))
+         .build_node(NodeKind::Func, (head, body))
          .with_location(func_token.location)
-         .with_children(body)
          .done())
    }
 
@@ -413,18 +422,35 @@ impl Parser {
       Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
    }
 
-   /// Parses an `impl` block.
-   fn parse_impl(&mut self, impl_token: Token) -> Result<NodeId, Error> {
+   /// Parses an `impl`-like block.
+   fn parse_impl_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
       let implementee = self.parse_expression(0)?;
       let mut items = Vec::new();
       // Note that we parse any type of item inside of the `impl` block.
       // The codegen phase is the thing that ensures the items declared are valid.
-      self.parse_terminated_block(&impl_token, &mut items, |k| k == &TokenKind::End)?;
+      self.parse_terminated_block(&token, &mut items, |k| k == &TokenKind::End)?;
       let _end = self.lexer.next_token()?;
       Ok(self
          .ast
-         .build_node(NodeKind::Impl, implementee)
-         .with_location(impl_token.location)
+         .build_node(kind, implementee)
+         .with_location(token.location)
+         .with_children(items)
+         .done())
+   }
+
+   /// Parses a trait declaration.
+   fn parse_trait(&mut self, trait_token: Token) -> Result<NodeId, Error> {
+      let name = self.lexer.next_token()?;
+      let name = self.parse_identifier(name)?;
+      let mut items = Vec::new();
+      // Just like with `impl`, we allow for any item here, and the codegen phase ensures they're
+      // functions.
+      self.parse_terminated_block(&trait_token, &mut items, |k| k == &TokenKind::End)?;
+      let _end = self.lexer.next_token()?;
+      Ok(self
+         .ast
+         .build_node(NodeKind::Trait, name)
+         .with_location(trait_token.location)
          .with_children(items)
          .done())
    }
@@ -467,7 +493,9 @@ impl Parser {
 
          TokenKind::Func => self.parse_function(token, true),
          TokenKind::Struct => self.parse_struct(token),
-         TokenKind::Impl => self.parse_impl(token),
+         TokenKind::Impl => self.parse_impl_like(token, NodeKind::Impl),
+         TokenKind::As => self.parse_impl_like(token, NodeKind::ImplAs),
+         TokenKind::Trait => self.parse_trait(token),
 
          _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
       }

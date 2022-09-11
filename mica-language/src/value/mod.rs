@@ -7,6 +7,7 @@ mod dicts;
 mod impls;
 mod lists;
 mod structs;
+mod traits;
 
 use std::any::Any;
 use std::borrow::Cow;
@@ -25,6 +26,7 @@ pub use closures::*;
 pub use dicts::*;
 pub use lists::*;
 pub use structs::*;
+pub use traits::*;
 
 /// The kind of a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -35,6 +37,7 @@ pub enum ValueKind {
    String,
    Function,
    Struct,
+   Trait,
    List,
    Dict,
    UserData,
@@ -48,6 +51,7 @@ trait ValueCommon: Clone + PartialEq {
    fn new_string(s: GcRaw<String>) -> Self;
    fn new_function(f: GcRaw<Closure>) -> Self;
    fn new_struct(s: GcRaw<Struct>) -> Self;
+   fn new_trait(s: GcRaw<Trait>) -> Self;
    fn new_list(s: GcRaw<List>) -> Self;
    fn new_dict(d: GcRaw<Dict>) -> Self;
    fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self;
@@ -60,6 +64,7 @@ trait ValueCommon: Clone + PartialEq {
    unsafe fn get_raw_string_unchecked(&self) -> GcRaw<String>;
    unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure>;
    unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct>;
+   unsafe fn get_raw_trait_unchecked(&self) -> GcRaw<Trait>;
    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List>;
    unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict>;
    unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>>;
@@ -91,6 +96,11 @@ impl RawValue {
          ValueKind::List => "List".into(),
          ValueKind::Dict => "Dict".into(),
          ValueKind::Struct => unsafe { self.0.get_raw_struct_unchecked().get().dtable() }
+            .type_name
+            .deref()
+            .to_owned()
+            .into(),
+         ValueKind::Trait => unsafe { self.0.get_raw_trait_unchecked().get().dtable() }
             .type_name
             .deref()
             .to_owned()
@@ -148,6 +158,14 @@ impl RawValue {
    /// Calling this on a value that isn't known to be a struct is undefined behavior.
    pub unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct> {
       self.0.get_raw_struct_unchecked()
+   }
+
+   /// Returns a trait value without performing any checks.
+   ///
+   /// # Safety
+   /// Calling this on a value that isn't known to be a trait is undefined behavior.
+   pub unsafe fn get_raw_trait_unchecked(&self) -> GcRaw<Trait> {
+      self.0.get_raw_trait_unchecked()
    }
 
    /// Returns a list value without performing any checks.
@@ -224,7 +242,16 @@ impl RawValue {
       if self.0.kind() == ValueKind::Struct {
          Ok(unsafe { self.0.get_raw_struct_unchecked() })
       } else {
-         Err(self.type_error("(any struct)"))
+         Err(self.type_error("any struct"))
+      }
+   }
+
+   /// Ensures the value is a `Trait`, returning a type mismatch error if that's not the case.
+   pub fn ensure_raw_trait(&self) -> Result<GcRaw<Trait>, ErrorKind> {
+      if self.0.kind() == ValueKind::Trait {
+         Ok(unsafe { self.0.get_raw_trait_unchecked() })
+      } else {
+         Err(self.type_error("any trait"))
       }
    }
 
@@ -281,6 +308,7 @@ impl RawValue {
             },
             ValueKind::Function => Ok(None),
             ValueKind::Struct => Ok(None),
+            ValueKind::Trait => Ok(None),
             ValueKind::List => unsafe {
                let a = self.0.get_raw_list_unchecked();
                let b = other.0.get_raw_list_unchecked();
@@ -332,6 +360,12 @@ impl From<GcRaw<Closure>> for RawValue {
 impl From<GcRaw<Struct>> for RawValue {
    fn from(s: GcRaw<Struct>) -> Self {
       Self(ValueImpl::new_struct(s))
+   }
+}
+
+impl From<GcRaw<Trait>> for RawValue {
+   fn from(t: GcRaw<Trait>) -> Self {
+      Self(ValueImpl::new_trait(t))
    }
 }
 
@@ -404,6 +438,7 @@ impl fmt::Debug for RawValue {
                Ok(())
             }
             ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
+            ValueKind::Trait => dtable(f, self.0.get_raw_trait_unchecked().get().dtable()),
             ValueKind::UserData => dtable(f, self.0.get_raw_user_data_unchecked().get().dtable()),
          }
       }

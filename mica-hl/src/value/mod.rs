@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use mica_language::gc::Gc;
-use mica_language::value::{self, Closure, Dict, List, RawValue, Struct, UserData};
+use mica_language::value::{self, Closure, Dict, List, RawValue, Struct, Trait, UserData};
 
 use crate::{Error, Object};
 
@@ -31,6 +31,7 @@ pub enum Value {
    String(Gc<String>),
    Function(Hidden<Closure>),
    Struct(Hidden<Struct>),
+   Trait(Hidden<Trait>),
    List(Hidden<List>),
    Dict(Hidden<Dict>),
    UserData(Gc<Box<dyn UserData>>),
@@ -48,6 +49,7 @@ impl Value {
          Value::Function(_) => "Function",
          // Hopefully this doesn't explode.
          Value::Struct(s) => &unsafe { s.0.dtable() }.type_name,
+         Value::Trait(s) => &s.0.dtable().type_name,
          Value::List(_) => "List",
          Value::Dict(_) => "Dict",
          Value::UserData(u) => &unsafe { u.dtable() }.type_name,

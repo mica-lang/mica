@@ -10,7 +10,7 @@ use crate::bytecode::{
 };
 use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
-use crate::value::{Closure, Dict, List, RawValue, Struct, Upvalue, ValueKind};
+use crate::value::{Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -117,24 +117,29 @@ impl Fiber {
          call_stack: self
             .call_stack
             .iter()
-            .map(|return_point| StackTraceEntry {
-               function_name: if let Some(closure) = &return_point.closure {
-                  let closure = unsafe { closure.get() };
-                  let function = unsafe { env.get_function_unchecked(closure.function_id) };
-                  Rc::clone(&function.name)
-               } else {
-                  Rc::from("<main>")
-               },
-               module_name: if let Some(chunk) = &return_point.chunk {
-                  Rc::clone(&chunk.module_name)
-               } else {
-                  Rc::from("<FFI>")
-               },
-               location: if let Some(chunk) = &return_point.chunk {
-                  chunk.location(return_point.pc - Opcode::INSTRUCTION_SIZE)
-               } else {
-                  Location::UNINIT
-               },
+            .filter_map(|return_point| {
+               Some(StackTraceEntry {
+                  function_name: if let Some(closure) = &return_point.closure {
+                     let closure = unsafe { closure.get() };
+                     let function = unsafe { env.get_function_unchecked(closure.function_id) };
+                     if function.hidden_in_stack_traces {
+                        return None;
+                     }
+                     Rc::clone(&function.name)
+                  } else {
+                     Rc::from("<main>")
+                  },
+                  module_name: if let Some(chunk) = &return_point.chunk {
+                     Rc::clone(&chunk.module_name)
+                  } else {
+                     Rc::from("<FFI>")
+                  },
+                  location: if let Some(chunk) = &return_point.chunk {
+                     chunk.location(return_point.pc - Opcode::INSTRUCTION_SIZE)
+                  } else {
+                     Location::UNINIT
+                  },
+               })
             })
             .collect(),
       }
@@ -381,6 +386,7 @@ impl Fiber {
             ValueKind::List => &env.builtin_dtables.list,
             ValueKind::Dict => &env.builtin_dtables.dict,
             ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
+            ValueKind::Trait => value.get_raw_trait_unchecked().get().dtable(),
             ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
          }
       }
@@ -401,6 +407,32 @@ impl Fiber {
          let closure = self.create_closure(env, gc, function_id);
          dtable.set_method(method_id, closure);
       }
+   }
+
+   fn initialize_dtable_with_trait_methods(
+      &mut self,
+      methods: impl Iterator<Item = (Rc<str>, u16, u16, Opr24)>,
+      traits: &[GcRaw<Trait>],
+      env: &mut Environment,
+      gc: &mut Memory,
+      dtable: &mut DispatchTable,
+   ) -> Result<(), ErrorKind> {
+      for (name, arity, trait_index, function_id) in methods {
+         let trait_handle = unsafe { traits[trait_index as usize].get() };
+         let trait_id = trait_handle.id;
+         let method_signature = FunctionSignature {
+            name,
+            arity: Some(arity),
+            trait_id: Some(trait_id),
+         };
+         // NOTE: This should never panic because trait method indices are created during the
+         // trait's declaration. New method indices should not be made here.
+         let method_id =
+            env.get_method_index(&method_signature).expect("existing method index must be found");
+         let closure = self.create_closure(env, gc, function_id);
+         dtable.set_method(method_id, closure);
+      }
+      Ok(())
    }
 
    /// Returns an iterator over all GC roots.
@@ -473,7 +505,7 @@ impl Fiber {
             Opcode::CreateType => {
                let name = unsafe { self.chunk.read_string(&mut self.pc) };
                let mut dispatch_table = DispatchTable::new_for_type(name);
-               dispatch_table.pretty_name = Rc::from(format!("unit {}", name));
+               dispatch_table.pretty_name = Rc::from(format!("unimplemented type {name}"));
                let dispatch_table = gc.allocate(dispatch_table);
                let struct_v = Struct::new_type(dispatch_table);
                self.stack.push(RawValue::from(gc.allocate(struct_v)));
@@ -490,6 +522,25 @@ impl Fiber {
                let field_count = u32::from(operand) as usize;
                let instance = unsafe { type_struct.get().new_instance(field_count) };
                let instance = gc.allocate(instance);
+               self.push(RawValue::from(instance));
+            }
+            Opcode::CreateTrait => {
+               let prototype = env.get_trait(operand).expect("trait with given ID does not exist");
+               let name = &prototype.name;
+               let mut dispatch_table = DispatchTable::new_for_type(format!("{name}"));
+               dispatch_table.pretty_name = Rc::from(format!("trait {name}"));
+               for &(method_id, function_id) in &prototype.shims {
+                  let closure = gc.allocate(Closure {
+                     function_id,
+                     captures: vec![],
+                  });
+                  dispatch_table.set_method(method_id, closure);
+               }
+               let dispatch_table = gc.allocate(dispatch_table);
+               let instance = gc.allocate(Trait {
+                  id: operand,
+                  dtable: dispatch_table,
+               });
                self.push(RawValue::from(instance));
             }
             Opcode::CreateList => {
@@ -651,17 +702,18 @@ impl Fiber {
                      "call # m. idx={}, argc={}; {:?}",
                      method_index,
                      argument_count,
-                     env.get_function_signature(method_index)
+                     env.get_method_signature(method_index)
                   );
                }
                if let Some(closure) = dtable.get_method(method_index) {
                   self.enter_function(env, globals, gc, closure, argument_count as usize)?;
                } else {
                   let signature =
-                     env.get_function_signature(method_index).cloned().unwrap_or_else(|| {
+                     env.get_method_signature(method_index).cloned().unwrap_or_else(|| {
                         FunctionSignature {
                            name: Rc::from("(invalid method index)"),
                            arity: None,
+                           trait_id: None,
                         }
                      });
                   let error_kind = ErrorKind::MethodDoesNotExist {
@@ -670,7 +722,8 @@ impl Fiber {
                         // Subtract 1 to omit the receiver from error messages.
                         arity: signature.arity.map(|x| x - 1),
                         ..signature
-                     },
+                     }
+                     .render(env),
                   };
                   return Err(self.error_outside_function_call(None, env, error_kind));
                }
@@ -682,10 +735,21 @@ impl Fiber {
             }
 
             Opcode::Implement => {
-               let st = wrap_error!(self.stack_top_mut().ensure_raw_struct());
-               let st = unsafe { st.get() };
-               let type_name = Rc::clone(&unsafe { st.dtable() }.type_name);
                let proto = unsafe { env.take_prototype_unchecked(operand) };
+               let struct_position = proto.implemented_trait_count as usize;
+               let traits: Vec<_> = {
+                  // TODO: Maybe get rid of this allocation, or hoist it into the fiber?
+                  let mut traits = vec![];
+                  for trait_value in &self.stack[self.stack.len() - struct_position..] {
+                     traits.push(wrap_error!(trait_value.ensure_raw_trait()));
+                  }
+                  traits
+               };
+
+               let impld_struct =
+                  wrap_error!(self.nth_from_top(struct_position + 1).ensure_raw_struct());
+               let impld_struct = unsafe { impld_struct.get() };
+               let type_name = Rc::clone(&unsafe { impld_struct.dtable() }.type_name);
 
                let mut type_dtable = DispatchTable::new_for_type(Rc::clone(&type_name));
                self.initialize_dtable(
@@ -702,17 +766,25 @@ impl Fiber {
                   gc,
                   &mut instance_dtable,
                );
+               wrap_error!(self.initialize_dtable_with_trait_methods(
+                  proto.trait_instance.iter().map(
+                     |((name, arity, trait_index), &function_index)| {
+                        (Rc::clone(name), *arity, *trait_index, function_index)
+                     },
+                  ),
+                  &traits,
+                  env,
+                  gc,
+                  &mut instance_dtable,
+               ));
 
                let instance_dtable = gc.allocate(instance_dtable);
                type_dtable.instance = Some(instance_dtable);
                let type_dtable = gc.allocate(type_dtable);
 
-               unsafe {
-                  let st = self.stack_top().get_raw_struct_unchecked();
-                  st.get()
-                     .implement(type_dtable)
-                     .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
-               }
+               impld_struct
+                  .implement(type_dtable)
+                  .map_err(|kind| self.error_outside_function_call(None, env, kind))?;
             }
 
             Opcode::Negate => {

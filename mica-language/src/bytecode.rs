@@ -378,8 +378,8 @@ impl Chunk {
    /// # Safety
    /// Assumes that `pc` is within the chunk's bounds and that the opcode at `pc` is valid.
    pub unsafe fn read_instruction(&self, pc: &mut usize) -> (Opcode, Opr24) {
-      let bytes = self.bytes.get_unchecked(*pc..*pc + Opcode::INSTRUCTION_SIZE);
-      let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap_unchecked();
+      let bytes = &self.bytes[*pc..*pc + Opcode::INSTRUCTION_SIZE];
+      let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap();
       let opcode: Opcode = std::mem::transmute(bytes[0]);
       bytes[0] = 0;
       let operand = Opr24 {
@@ -395,8 +395,8 @@ impl Chunk {
    /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
    pub unsafe fn read_number(&self, pc: &mut usize) -> f64 {
       const SIZE: usize = std::mem::size_of::<f64>();
-      let bytes = self.bytes.get_unchecked(*pc..*pc + SIZE);
-      let bytes: [u8; SIZE] = bytes.try_into().unwrap_unchecked();
+      let bytes = &self.bytes[*pc..*pc + SIZE];
+      let bytes: [u8; SIZE] = bytes.try_into().unwrap();
       let number = f64::from_le_bytes(bytes);
       *pc += SIZE;
       number

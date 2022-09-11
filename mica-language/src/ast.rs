@@ -62,21 +62,21 @@ impl Ast {
 
    /// Returns the kind of a node.
    pub fn kind(&self, node: NodeId) -> NodeKind {
-      unsafe { self.nodes.get_unchecked(node.0 as usize).0 }
+      self.nodes[node.0 as usize].0
    }
 
    /// Returns the raw pair of a node.
    pub fn pair(&self, node: NodeId) -> (u32, u32) {
-      unsafe { self.nodes.get_unchecked(node.0 as usize).1 }
+      self.nodes[node.0 as usize].1
    }
 
    fn data(&self, node: NodeId) -> Option<&NodeData> {
-      unsafe { self.data.get_unchecked(node.0 as usize).as_ref() }
+      self.data[node.0 as usize].as_ref()
    }
 
    /// Returns the source location of a node.
    pub fn location(&self, node: NodeId) -> Location {
-      unsafe { *self.locations.get_unchecked(node.0 as usize) }
+      self.locations[node.0 as usize]
    }
 
    /// Returns the number data of a node, or `None` if the node carries a different type of data.

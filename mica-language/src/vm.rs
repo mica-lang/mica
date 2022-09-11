@@ -418,7 +418,6 @@ impl Fiber {
       dtable: &mut DispatchTable,
    ) -> Result<(), ErrorKind> {
       for (name, arity, trait_index, function_id) in methods {
-         dbg!((&name, arity, trait_index, function_id));
          let trait_handle = unsafe { traits[trait_index as usize].get() };
          let trait_id = trait_handle.id;
          let method_signature = FunctionSignature {
@@ -426,7 +425,6 @@ impl Fiber {
             arity: Some(arity),
             trait_id: Some(trait_id),
          };
-         dbg!(&method_signature);
          // NOTE: This should never panic because trait method indices are created during the
          // trait's declaration. New method indices should not be made here.
          let method_id =

@@ -24,10 +24,6 @@ impl struct Dog
    end
 
    as Animal
-      func speak() = print("bark!")
-      func eat(food) = do
-         @satiation = @satiation + food
-      end
    end
 end
 
@@ -35,3 +31,7 @@ doggo = Dog.new("Floofer")
 # Trait methods can be called on a value via shims provided by the trait's dtable.
 Animal.speak(doggo)
 Animal.eat(doggo, 10)
+      # func speak() = print("bark!")
+      # func eat(food) = do
+      #    @satiation = @satiation + food
+      # end

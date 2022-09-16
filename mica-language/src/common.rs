@@ -56,8 +56,31 @@ pub struct RenderedSignature {
    pub trait_name: Option<Rc<str>>,
 }
 
+impl RenderedSignature {
+   /// The empty string name is considered to be the invalid name, and will result in different
+   /// `Display`.
+   pub const INVALID_NAME: &str = "";
+
+   pub fn invalid() -> Self {
+      Self {
+         name: Rc::from(Self::INVALID_NAME),
+         arity: None,
+         trait_name: None,
+      }
+   }
+
+   pub fn is_invalid(&self) -> bool {
+      &*self.name == Self::INVALID_NAME
+   }
+}
+
 impl fmt::Display for RenderedSignature {
    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      if self.is_invalid() {
+         write!(f, "(invalid method)")?;
+         return Ok(());
+      }
+
       if let Some(arity) = self.arity {
          write!(f, "{}/{arity}", self.name)?;
       } else {
@@ -161,6 +184,14 @@ pub enum ErrorKind {
    },
    StructAlreadyImplemented,
    UserDataAlreadyBorrowed,
+   DoubleMethodImplementation {
+      type_name: Rc<str>,
+      signature: RenderedSignature,
+   },
+   MethodsUnimplemented {
+      type_name: Rc<str>,
+      methods: Vec<RenderedSignature>,
+   },
 
    User(Box<dyn std::error::Error>),
 }
@@ -261,12 +292,23 @@ impl std::fmt::Display for ErrorKind {
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }
-         Self::MethodDoesNotExist {
-            type_name,
-            signature,
-         } => write!(f, "method {} is not defined for {}", signature, type_name),
+         Self::MethodDoesNotExist { type_name, signature } => write!(f, "method {} is not defined for {}", signature, type_name),
          Self::StructAlreadyImplemented => write!(f, "this struct is already implemented"),
          Self::UserDataAlreadyBorrowed => write!(f, "this user data is already borrowed"),
+         Self::DoubleMethodImplementation { type_name, signature } => {
+            write!(f, "method {signature} is already implemented by {type_name}")
+         }
+         Self::MethodsUnimplemented { type_name, methods } => {
+            writeln!(f, "{type_name} is missing the following trait methods:")?;
+            for (i, signature) in methods.iter().enumerate() {
+               if i > 0 {
+                  writeln!(f)?;
+               }
+               write!(f, "    - {signature}")?;
+            }
+            Ok(())
+         }
+
          Self::User(error) => write!(f, "{}", error),
       }
    }

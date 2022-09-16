@@ -59,7 +59,7 @@ pub struct RenderedSignature {
 impl RenderedSignature {
    /// The empty string name is considered to be the invalid name, and will result in different
    /// `Display`.
-   pub const INVALID_NAME: &str = "";
+   pub const INVALID_NAME: &'static str = "";
 
    pub fn invalid() -> Self {
       Self {

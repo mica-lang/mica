@@ -1,5 +1,6 @@
 //! The virtual machine.
 
+use std::collections::HashSet;
 use std::pin::Pin;
 use std::ptr;
 use std::rc::Rc;
@@ -8,7 +9,7 @@ use crate::bytecode::{
    CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, FunctionSignature,
    Opcode, Opr24,
 };
-use crate::common::{Error, ErrorKind, Location, StackTraceEntry};
+use crate::common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
 use crate::value::{Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind};
 
@@ -416,6 +417,7 @@ impl Fiber {
       env: &mut Environment,
       gc: &mut Memory,
       dtable: &mut DispatchTable,
+      unimplemented_methods: &mut HashSet<u16>,
    ) -> Result<(), ErrorKind> {
       for (name, arity, trait_index, function_id) in methods {
          let trait_handle = unsafe { traits[trait_index as usize].get() };
@@ -431,7 +433,39 @@ impl Fiber {
             env.get_method_index(&method_signature).expect("existing method index must be found");
          let closure = self.create_closure(env, gc, function_id);
          dtable.set_method(method_id, closure);
+
+         if !unimplemented_methods.remove(&method_id) {
+            return Err(ErrorKind::DoubleMethodImplementation {
+               type_name: Rc::clone(&dtable.pretty_name),
+               signature: method_signature.render(env),
+            });
+         }
       }
+
+      if !unimplemented_methods.is_empty() {
+         let mut methods: Vec<_> = unimplemented_methods
+            .iter()
+            .map(|&method_id| {
+               env.get_method_signature(method_id)
+                  .map(|signature| signature.render(env))
+                  .unwrap_or_else(RenderedSignature::invalid)
+            })
+            .collect();
+         methods.sort_unstable_by_key(|signature| {
+            // Maybe doing the Rc clones here isn't ideal, but this is the sad path which doesn't
+            // have to be The Fastest.
+            (
+               signature.trait_name.clone(),
+               Rc::clone(&signature.name),
+               signature.arity,
+            )
+         });
+         return Err(ErrorKind::MethodsUnimplemented {
+            type_name: Rc::clone(&dtable.pretty_name),
+            methods,
+         });
+      }
+
       Ok(())
    }
 
@@ -736,18 +770,29 @@ impl Fiber {
 
             Opcode::Implement => {
                let proto = unsafe { env.take_prototype_unchecked(operand) };
-               let struct_position = proto.implemented_trait_count as usize;
+               let struct_position = proto.implemented_trait_count as usize + 1;
+
                let traits: Vec<_> = {
                   // TODO: Maybe get rid of this allocation, or hoist it into the fiber?
                   let mut traits = vec![];
-                  for trait_value in &self.stack[self.stack.len() - struct_position..] {
+                  for trait_value in &self.stack[self.stack.len() - struct_position + 1..] {
                      traits.push(wrap_error!(trait_value.ensure_raw_trait()));
                   }
                   traits
                };
+               let mut unimplemented_trait_methods: HashSet<_> = traits
+                  .iter()
+                  .enumerate()
+                  .map(|(trait_index, trait_handle)| {
+                     (trait_index, unsafe { trait_handle.get() }.id)
+                  })
+                  .flat_map(|(_, trait_id)| {
+                     env.get_trait(trait_id).unwrap().required.iter().copied()
+                  })
+                  .collect();
 
                let impld_struct =
-                  wrap_error!(self.nth_from_top(struct_position + 1).ensure_raw_struct());
+                  wrap_error!(self.nth_from_top(struct_position).ensure_raw_struct());
                let impld_struct = unsafe { impld_struct.get() };
                let type_name = Rc::clone(&unsafe { impld_struct.dtable() }.type_name);
 
@@ -776,6 +821,7 @@ impl Fiber {
                   env,
                   gc,
                   &mut instance_dtable,
+                  &mut unimplemented_trait_methods,
                ));
 
                let instance_dtable = gc.allocate(instance_dtable);

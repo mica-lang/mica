@@ -32,6 +32,6 @@ impl struct Dog
 end
 
 doggo = Dog.new("Floofer")
-# Trait methods can be called on a value via methods defined on the trait itself.
+# Trait methods can be called on a value via shims provided by the trait's dtable.
 Animal.speak(doggo)
 Animal.eat(doggo, 10)

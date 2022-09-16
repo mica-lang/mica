@@ -32,8 +32,8 @@ fn interpret<'e>(
 /// (This is inspired by SerenityOS/jakt tests.)
 fn test_should_fail(code: &str) -> Option<&str> {
    for line in code.lines() {
-      if line.starts_with("# Exception: ") {
-         return line.strip_prefix("# Exception: ");
+      if line.starts_with("# Error: ") {
+         return line.strip_prefix("# Error: ");
       }
    }
    None
@@ -53,7 +53,7 @@ fn test_mica_file(test: &Test<PathBuf>) -> Outcome {
 
       let error = outcome.unwrap_err();
       let message = error.to_string();
-      if !message.contains(&assertion) {
+      if !message.contains(assertion) {
          Outcome::Failed {
             msg: Some(format!(
                "Should have failed with '{}', but failed with '{}'",
@@ -115,7 +115,7 @@ fn collect_mi_files(base_path: &str) -> Vec<(String, Vec<PathBuf>)> {
 
          tests.push(path);
       }
-	  ret.push((suite_name.to_string(), tests));
+      ret.push((suite_name.to_string(), tests));
    }
 
    ret
@@ -124,14 +124,12 @@ fn collect_mi_files(base_path: &str) -> Vec<(String, Vec<PathBuf>)> {
 fn generate_tests(suite_name: &str, mi_files: &[PathBuf]) -> Vec<Test<PathBuf>> {
    mi_files
       .iter()
-      .map(|file| {
-         Test {
-            name: file.file_stem().unwrap().to_str().unwrap().to_string(),
-            kind: suite_name.to_string(),
-            is_bench: false,
-            data: file.clone(),
-            is_ignored: file.file_name().unwrap().to_str().unwrap().ends_with(".skip.mi"),
-         }
+      .map(|file| Test {
+         name: file.file_stem().unwrap().to_str().unwrap().to_string(),
+         kind: suite_name.to_string(),
+         is_bench: false,
+         data: file.clone(),
+         is_ignored: file.file_name().unwrap().to_str().unwrap().ends_with(".skip.mi"),
       })
       .collect()
 }

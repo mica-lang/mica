@@ -53,7 +53,7 @@ fn test_mica_file(test: &Test<PathBuf>) -> Outcome {
 
       let error = outcome.unwrap_err();
       let message = error.to_string();
-      if !message.contains(&assertion) {
+      if !message.contains(assertion) {
          Outcome::Failed {
             msg: Some(format!(
                "Should have failed with '{}', but failed with '{}'",

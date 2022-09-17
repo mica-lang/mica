@@ -1,8 +1,6 @@
 # Tests if the GC can handle a function getting deleted during a call.
 
-struct LinkedList
-
-impl LinkedList
+struct LinkedList impl
    func new(value, next) constructor = do
       @value = value
       @next = next

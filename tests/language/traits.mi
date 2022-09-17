@@ -17,7 +17,7 @@ trait Animal
 end
 
 # A trait can be implemented by a struct.
-impl struct Dog
+struct Dog impl
    func new(name) constructor = do
       @name = name
       @satiation = 0

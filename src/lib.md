@@ -340,9 +340,7 @@ let greeter_type =
       .start(
          "greeter.mi",
          r#"
-            struct Greeter
-
-            impl Greeter
+            struct Greeter impl
                func new(template) constructor = do
                   @template = template
                end

@@ -1,8 +1,6 @@
 # Stress tests the garbage collector by allocating a bunch of long linked lists.
 
-struct LinkedList
-
-impl LinkedList
+struct LinkedList impl
    func new(value, next) constructor = do
       @value = value
       @next = next

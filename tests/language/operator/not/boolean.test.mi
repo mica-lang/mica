@@ -1,0 +1,3 @@
+# ! flips a value into an opposing Boolean.
+assert(!true == false)
+assert(!false == true)

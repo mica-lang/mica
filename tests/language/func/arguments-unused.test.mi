@@ -1,0 +1,3 @@
+# Arguments should not affect the function's result.
+func discard(x) = nil
+assert(discard(1) == nil)

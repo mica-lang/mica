@@ -1,0 +1,6 @@
+# Long string literals are strings that span multiple lines.
+s =
+   \\Hello
+   \\ world!
+# Replace CRLF to LF for Windows.
+assert(s.replace("\r\n", "\n") == "Hello\n world!")

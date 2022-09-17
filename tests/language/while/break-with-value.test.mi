@@ -1,0 +1,9 @@
+# Test a `while` loop with `break value`.
+x = 1
+first_power_of_two_greater_than_1000 = while true do
+   x = x * 2
+   if x > 1000 do
+      break x
+   end
+end
+assert(first_power_of_two_greater_than_1000 == 1024)

@@ -1,0 +1,11 @@
+# Check that `do` scopes variables properly.
+do
+   i = 0
+   do
+      # Declaring this variable shouldn't result in 'i' being changed, nor should the value of
+      # i and j be swapped.
+      j = 1
+      assert(j == 1)
+   end
+   assert(i == 0)
+end

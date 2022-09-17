@@ -1,0 +1,5 @@
+# A trait can declare required functions.
+trait Animal
+   func speak()
+   func eat(food)
+end

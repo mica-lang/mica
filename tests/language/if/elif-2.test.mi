@@ -1,0 +1,11 @@
+# Only the second branch should be evaluated.
+i = 1
+v =
+   if i == 2 do
+      error("Branch accidentally evaluated")
+      "Bad 1"
+   elif i == 1 do
+      "Good"
+   end
+assert(v == "Good")
+assert(i == 1)

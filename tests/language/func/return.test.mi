@@ -1,0 +1,10 @@
+# `return` can be used to return from the function early.
+func test_return(x) = do
+   if x == 1 do
+      return 123
+   end
+   x + 1
+end
+
+assert(test_return(0) == 1)
+assert(test_return(1) == 123)

@@ -1,23 +1,3 @@
-# Tests the ability to create and implement structs.
-
-# Two defined struct types are never equal to each other.
-struct Test
-struct Other
-assert(Test == Test)
-assert(Other == Other)
-assert(Test != Other)
-
-# A struct expression returns the struct.
-assert(struct Test2 != nil)
-
-# A struct can be implemented with arbitrary methods.
-struct Greetings impl
-   func get(for_whom) static =
-      "Hello, ".cat(for_whom).cat("!")
-end
-
-assert(Greetings.get("World") == "Hello, World!")
-
 # A struct can have a constructor that sets its fields up.
 # It can also have instance methods.
 struct Vector impl
@@ -57,13 +37,3 @@ assert(Vector.new(3, 4).len == 5)
 z = Vector.zero
 assert(z.x == 0)
 assert(z.y == 0)
-
-# Two constructed struct instances are never equal to each other.
-u = Vector.new(1, 2)
-v = Vector.new(1, 2)
-assert(u == u)
-assert(v == v)
-assert(u != v)
-
-# `impl` blocks return the implemented struct.
-assert(struct ErgonomicImpl impl end == ErgonomicImpl)

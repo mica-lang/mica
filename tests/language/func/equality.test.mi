@@ -1,0 +1,7 @@
+# A function is equal to itself, but never to other functions.
+
+func nop() = nil
+func discard(x) = nil
+
+assert(nop == nop)
+assert(nop != discard)

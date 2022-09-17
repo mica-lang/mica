@@ -1,0 +1,11 @@
+# Two constructed struct instances are never equal to each other.
+
+struct Example impl
+   func new() constructor = nil
+end
+
+a = Example.new()
+b = Example.new()
+assert(a == a)
+assert(b == b)
+assert(a != b)

@@ -1,0 +1,6 @@
+# Numbers can have an explicit radix.
+assert(\2:110 == 6)
+assert(\4:2 + \4:2 == \4:10)
+assert(\36:Rust == 1299629)
+assert(\16:deadbeef == 3735928559)
+assert(\36:foo_bar == 948437811)

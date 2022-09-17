@@ -1,0 +1,5 @@
+# Closures can have immutable captures.
+func adder(x) =
+   func (y) = x + y
+add_two = adder(2)
+assert(add_two(2) == 4)

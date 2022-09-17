@@ -1,0 +1,34 @@
+# Trait methods can be called on a value via redirector methods defined on the trait itself.
+
+spoken = false
+
+trait Animal
+   func speak()
+   func eat(food)
+end
+
+struct Dog impl
+   func new(name) constructor = do
+      @name = name
+      @satiation = 0
+   end
+
+   func satiation() = @satiation
+
+   as Animal
+      func speak() = do
+         spoken = true
+      end
+
+      func eat(food) = do
+         @satiation = @satiation + food
+      end
+   end
+end
+
+doggo = Dog.new("Floofer")
+Animal.speak(doggo)
+Animal.eat(doggo, 10)
+
+assert(doggo.satiation == 10)
+assert(spoken)

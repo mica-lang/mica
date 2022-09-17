@@ -1,0 +1,8 @@
+# Strings have various escape sequences available.
+assert("\\".byte_at(0) == 92)
+assert("\"".byte_at(0) == 34)
+assert("\'" == "'")
+assert("\n".byte_at(0) == 10)
+assert("\r".byte_at(0) == 13)
+assert("\t".byte_at(0) == 9)
+assert("\u{107}" == "ć")

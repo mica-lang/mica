@@ -1,0 +1,7 @@
+# Common radixes have shorthand versions.
+assert(\b110 == \2:110)
+assert(\b110 == \B110)
+assert(\o777 == \8:777)
+assert(\o777 == 511)
+assert(\xDEADBEEF == \16:DEADBEEF)
+assert(\xDEADBEEF == \XDEADBEEF)

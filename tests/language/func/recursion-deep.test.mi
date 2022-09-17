@@ -1,0 +1,7 @@
+# Deep recursion may take a while but should never crash the program (unless we run out of memory).
+# @ignore
+func fib(n) =
+   if n == 0 or n == 1 do n
+   else fib(n - 1) + fib(n - 2)
+   end
+assert(fib(30) == 832040)

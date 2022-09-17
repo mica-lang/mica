@@ -1,0 +1,8 @@
+# Declare a variable and copy it to another variable.
+x = 30
+y = x
+assert(x == y)
+# y does not contain a reference to the original variable, rather its value.
+x = 40
+assert(x == 40)
+assert(y == 30)

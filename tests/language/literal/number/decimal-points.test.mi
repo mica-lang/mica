@@ -1,0 +1,2 @@
+# Ensure decimal points are not ignored.
+assert(1.05 != 105)

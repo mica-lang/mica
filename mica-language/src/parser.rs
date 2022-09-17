@@ -69,7 +69,7 @@ impl Parser {
          | TokenKind::GreaterEqual => 4,
          TokenKind::Plus | TokenKind::Minus => 5,
          TokenKind::Star | TokenKind::Slash => 6,
-         TokenKind::LeftParen | TokenKind::Dot => 7,
+         TokenKind::LeftParen | TokenKind::Dot | TokenKind::Impl => 7,
          _ => 0,
       }
    }
@@ -422,8 +422,8 @@ impl Parser {
       Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
    }
 
-   /// Parses an `impl`-like block.
-   fn parse_impl_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
+   /// Parses an `as` block.
+   fn parse_as(&mut self, token: Token) -> Result<NodeId, Error> {
       let implementee = self.parse_expression(0)?;
       let mut items = Vec::new();
       // Note that we parse any type of item inside of the `impl` block.
@@ -432,7 +432,7 @@ impl Parser {
       let _end = self.lexer.next_token()?;
       Ok(self
          .ast
-         .build_node(kind, implementee)
+         .build_node(NodeKind::ImplAs, implementee)
          .with_location(token.location)
          .with_children(items)
          .done())
@@ -493,8 +493,7 @@ impl Parser {
 
          TokenKind::Func => self.parse_function(token, true),
          TokenKind::Struct => self.parse_struct(token),
-         TokenKind::Impl => self.parse_impl_like(token, NodeKind::Impl),
-         TokenKind::As => self.parse_impl_like(token, NodeKind::ImplAs),
+         TokenKind::As => self.parse_as(token),
          TokenKind::Trait => self.parse_trait(token),
 
          _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
@@ -528,6 +527,21 @@ impl Parser {
          .done())
    }
 
+   /// Parses an `impl` block.
+   fn parse_impl(&mut self, left: NodeId, token: Token) -> Result<NodeId, Error> {
+      let mut items = Vec::new();
+      // Note that we parse any type of item inside of the `impl` block.
+      // The codegen phase is the thing that ensures the items declared are valid.
+      self.parse_terminated_block(&token, &mut items, |k| k == &TokenKind::End)?;
+      let _end = self.lexer.next_token()?;
+      Ok(self
+         .ast
+         .build_node(NodeKind::Impl, left)
+         .with_location(token.location)
+         .with_children(items)
+         .done())
+   }
+
    /// Parses an infix token.
    fn parse_infix(&mut self, left: NodeId, token: Token) -> Result<NodeId, Error> {
       match &token.kind {
@@ -549,6 +563,8 @@ impl Parser {
          TokenKind::Dot => self.binary_operator(left, token, NodeKind::Dot),
 
          TokenKind::LeftParen => self.function_call(left, token),
+
+         TokenKind::Impl => self.parse_impl(left, token),
 
          _ => Err(self.error(&token, ErrorKind::InvalidInfixToken)),
       }

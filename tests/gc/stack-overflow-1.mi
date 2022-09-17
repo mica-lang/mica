@@ -1,8 +1,6 @@
 # Tests if the GC can handle very deeply nested objects.
 
-struct LinkedList
-
-impl LinkedList
+struct LinkedList impl
    func new(value, next) constructor = do
       @value = value
       @next = next

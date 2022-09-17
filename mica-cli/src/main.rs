@@ -9,7 +9,7 @@ use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::{Editor, Helper};
 
 #[derive(Parser)]
-#[structopt(name = "mica")]
+#[clap(name = "mica")]
 struct Options {
    file: Option<PathBuf>,
 

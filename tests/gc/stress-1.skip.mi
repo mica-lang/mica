@@ -1,8 +1,6 @@
 # Stress tests the garbage collector by performing lots of tiny allocations that never get used.
 
-struct Garbage
-
-impl Garbage
+struct Garbage impl
    func new() constructor = do
       @trash = 1
    end

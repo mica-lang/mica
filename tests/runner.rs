@@ -81,8 +81,7 @@ impl TestSpec {
       let mut spec = parser.spec;
       if !parser.error_lines.is_empty() {
          let joined_lines = parser.error_lines.join("\n");
-         // Add the "error: " prefix which is added to all errors emitted by the VM.
-         spec.expected_outcome = Outcome::Failure(format!("error: {joined_lines}"));
+         spec.expected_outcome = Outcome::Failure(joined_lines);
       }
 
       spec

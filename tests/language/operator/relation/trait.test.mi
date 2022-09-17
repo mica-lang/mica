@@ -1,0 +1,6 @@
+# A trait is equal to itself, but two traits are not equal to each other.
+trait A end
+trait B end
+assert(A == A)
+assert(B == B)
+assert(A != B)

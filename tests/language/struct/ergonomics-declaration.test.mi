@@ -1,0 +1,2 @@
+# A struct expression returns the struct.
+assert(struct Test2 != nil)

@@ -1,5 +1,5 @@
 # This is a failing example. It makes sure, if we fail an assertion, that the program actually exits.
-# @error assertion failed
+# @error error: assertion failed
 # @error stack traceback (most recent call first):
 # @error     <FFI>                assert
 # @error     {file}:{:LINE}:7  <main>

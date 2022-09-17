@@ -1,0 +1,6 @@
+# Test a really basic `while` loop that counts upwards.
+i = 1
+while i < 10 do
+   i = i + 1
+end
+assert(i == 10)

@@ -1,0 +1,10 @@
+# `nil` and `false` are the only falsy values.
+assert(!!nil == false)
+assert(!!false == false)
+assert(!!1 == true)
+assert(!!"" == true)
+assert(!!(func () = nil) == true)
+assert(!!struct S == true)
+assert(!!trait T end == true)
+assert(!![] == true)
+assert(!![:] == true)

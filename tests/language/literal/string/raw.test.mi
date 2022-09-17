@@ -1,0 +1,2 @@
+# Raw string literals do not interpret escape sequences.
+assert(\r"C:\Windows\System32" == "C:\\Windows\\System32")

@@ -1,0 +1,2 @@
+# It should be possible to define an empty trait.
+trait Marker end

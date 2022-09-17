@@ -1,0 +1,7 @@
+# A closure may capture a variable that's captured in another closure.
+func double_indirection(x) =
+   func (y) =
+      func (z) =
+         x + y + z
+w = double_indirection(1)(2)(3)
+assert(w == 6)

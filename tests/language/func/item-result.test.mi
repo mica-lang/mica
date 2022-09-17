@@ -1,0 +1,4 @@
+# Function items return nil.
+assert(do
+   func f() = nil
+end == nil)

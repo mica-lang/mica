@@ -1,0 +1,3 @@
+# Declare and read from a variable.
+x = 30
+assert(x == 30)

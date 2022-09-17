@@ -1,0 +1,9 @@
+# Test Boolean logic operators.
+assert((false and false) == false)
+assert((true and false) == false)
+assert((false and true) == false)
+assert((true and true) == true)
+assert((false or false) == false)
+assert((true or false) == true)
+assert((false or true) == true)
+assert((true or true) == true)

@@ -12,6 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 rustyline = "9.1.2"
-structopt = "0.3.26"
+clap = "3.2.22"
 
 mica = { version = "0.4.0", path = ".." }

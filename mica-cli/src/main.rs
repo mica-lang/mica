@@ -1,27 +1,27 @@
 use std::path::PathBuf;
 
+use clap::Parser;
 use mica::{Engine, Error, LanguageError, LanguageErrorKind, Value};
 use rustyline::completion::Completer;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::validate::{ValidationContext, ValidationResult, Validator};
 use rustyline::{Editor, Helper};
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 #[structopt(name = "mica")]
 struct Options {
    file: Option<PathBuf>,
 
-   #[structopt(flatten)]
+   #[clap(flatten)]
    engine_options: EngineOptions,
 }
 
-#[derive(StructOpt)]
+#[derive(clap::Args)]
 struct EngineOptions {
-   #[structopt(long)]
+   #[clap(long)]
    dump_ast: bool,
-   #[structopt(long)]
+   #[clap(long)]
    dump_bytecode: bool,
 }
 
@@ -118,7 +118,7 @@ fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-   let opts = Options::from_args();
+   let opts = Options::parse();
    if let Some(path) = &opts.file {
       let file = std::fs::read_to_string(path)?;
       let mut engine = engine(&opts.engine_options)?;

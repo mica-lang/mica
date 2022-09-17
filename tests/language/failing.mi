@@ -1,4 +1,0 @@
-# This is a failing example. It makes sure, if we fail an assertion, that the program actually fails.
-# Error: assertion failed
-
-assert(1 == 0)

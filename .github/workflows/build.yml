@@ -17,4 +17,4 @@ jobs:
     - name: Build
       run: cargo build --release -p mica-cli
     - name: Run Language and API tests
-      run: cargo test --release -- --ignored
+      run: cargo test --release -- --include-ignored

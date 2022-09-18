@@ -11,7 +11,9 @@ use crate::bytecode::{
 };
 use crate::common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry};
 use crate::gc::{GcRaw, Memory};
-use crate::value::{Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind};
+use crate::value::{
+   create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind,
+};
 
 /// Storage for global variables.
 #[derive(Debug)]
@@ -545,12 +547,6 @@ impl Fiber {
                self.stack.push(RawValue::from(gc.allocate(struct_v)));
             }
             Opcode::CreateStruct => {
-               // SAFETY: It's ok to use `unwrap_unchecked` because we're guaranteed the value on
-               // top is a struct.
-               //  - Constructors can only be created on types that weren't implemented yet.
-               //  - Thus, the only types that can be implemented are user-defined types.
-               //  - And each user-defined type is a struct.
-               //  - `Opcode::Implement` aborts execution if it isn't.
                unsafe { gc.auto_collect(self.roots(globals)) };
                let type_struct = unsafe { self.pop().get_raw_struct_unchecked() };
                let field_count = u32::from(operand) as usize;
@@ -559,22 +555,7 @@ impl Fiber {
                self.push(RawValue::from(instance));
             }
             Opcode::CreateTrait => {
-               let prototype = env.get_trait(operand).expect("trait with given ID does not exist");
-               let name = &prototype.name;
-               let mut dispatch_table = DispatchTable::new_for_type(format!("{name}"));
-               dispatch_table.pretty_name = Rc::from(format!("trait {name}"));
-               for &(method_id, function_id) in &prototype.shims {
-                  let closure = gc.allocate(Closure {
-                     function_id,
-                     captures: vec![],
-                  });
-                  dispatch_table.set_method(method_id, closure);
-               }
-               let dispatch_table = gc.allocate(dispatch_table);
-               let instance = gc.allocate(Trait {
-                  id: operand,
-                  dtable: dispatch_table,
-               });
+               let instance = create_trait(env, gc, operand);
                self.push(RawValue::from(instance));
             }
             Opcode::CreateList => {

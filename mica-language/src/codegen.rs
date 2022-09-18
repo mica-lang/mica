@@ -9,7 +9,7 @@ use crate::bytecode::{
    CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
    Prototype,
 };
-use crate::common::{Error, ErrorKind, RenderedSignature};
+use crate::common::{Error, ErrorKind, Location, RenderedSignature};
 
 /// Info about a local variable on the stack.
 #[derive(Debug)]
@@ -1112,7 +1112,7 @@ impl<'e> CodeGenerator<'e> {
       let trait_name = ast.string(trait_name).unwrap();
       let items = ast.children(node).unwrap();
 
-      let mut builder = TraitBuilder::new(self.env, &self.chunk, Rc::clone(trait_name))
+      let mut builder = TraitBuilder::new(self.env, Some(&self.chunk), Rc::clone(trait_name))
          .map_err(|e| ast.error(node, e))?;
 
       for &item in items {
@@ -1142,7 +1142,7 @@ impl<'e> CodeGenerator<'e> {
          }
       }
 
-      let trait_id = builder.build();
+      let (trait_id, _) = builder.build();
 
       self.chunk.emit((Opcode::CreateTrait, trait_id));
       let variable = self
@@ -1327,8 +1327,8 @@ struct ImplGenerationState<'p> {
 }
 
 pub struct TraitBuilder<'b> {
-   env: &'b mut Environment,
-   parent_chunk: &'b Chunk,
+   pub env: &'b mut Environment,
+   parent_chunk: Option<&'b Chunk>,
    trait_id: Opr24,
    required_methods: HashSet<u16>,
    shims: Vec<(u16, Opr24)>,
@@ -1337,7 +1337,7 @@ pub struct TraitBuilder<'b> {
 impl<'b> TraitBuilder<'b> {
    pub fn new(
       env: &'b mut Environment,
-      parent_chunk: &'b Chunk,
+      parent_chunk: Option<&'b Chunk>,
       name: Rc<str>,
    ) -> Result<Self, ErrorKind> {
       let trait_id = env.create_trait(name)?;
@@ -1358,11 +1358,19 @@ impl<'b> TraitBuilder<'b> {
       method_id: u16,
       method_signature: &FunctionSignature,
    ) -> Result<Opr24, ErrorKind> {
-      // NOTE: Overflow here should never happen because we're referring to
       let arity = method_signature.arity.unwrap() as u8;
 
-      let mut chunk = Chunk::new(Rc::clone(&self.parent_chunk.module_name));
-      chunk.codegen_location = self.parent_chunk.codegen_location;
+      let (module_name, codegen_location) = if let Some(parent_chunk) = self.parent_chunk {
+         (
+            Rc::clone(&parent_chunk.module_name),
+            parent_chunk.codegen_location,
+         )
+      } else {
+         (Rc::from("FFI"), Location::UNINIT)
+      };
+
+      let mut chunk = Chunk::new(module_name);
+      chunk.codegen_location = codegen_location;
       chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
       chunk.emit(Opcode::Return);
 
@@ -1418,11 +1426,12 @@ impl<'b> TraitBuilder<'b> {
       Ok(method_id)
    }
 
-   /// Finishes building the trait and returns its trait ID.
-   pub fn build(self) -> Opr24 {
+   /// Finishes building the trait, returns its trait ID, and gives back the mutable reference to
+   /// the environment.
+   pub fn build(self) -> (Opr24, &'b mut Environment) {
       let prototype = self.env.get_trait_mut(self.trait_id).unwrap();
       prototype.required = self.required_methods;
       prototype.shims = self.shims;
-      self.trait_id
+      (self.trait_id, self.env)
    }
 }

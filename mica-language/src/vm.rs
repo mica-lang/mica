@@ -809,6 +809,10 @@ impl Fiber {
                type_dtable.instance = Some(instance_dtable);
                let type_dtable = gc.allocate(type_dtable);
 
+               for _ in 0..proto.implemented_trait_count {
+                  let _ = self.pop();
+               }
+
                impld_struct
                   .implement(type_dtable)
                   .map_err(|kind| self.error_outside_function_call(None, env, kind))?;

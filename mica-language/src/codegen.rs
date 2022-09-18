@@ -1106,55 +1106,14 @@ impl<'e> CodeGenerator<'e> {
       Ok(())
    }
 
-   /// Generates the *shim* for a trait method. The shim is responsible for calling the actual
-   /// method.
-   fn generate_trait_method_shim(
-      &mut self,
-      ast: &Ast,
-      node: NodeId,
-      trait_name: &str,
-      method_id: u16,
-      method_signature: &FunctionSignature,
-   ) -> Result<Opr24, Error> {
-      // NOTE: Overflow here should never happen because we're referring to
-      let arity = method_signature.arity.unwrap() as u8;
-
-      let mut chunk = Chunk::new(Rc::clone(&self.chunk.module_name));
-      chunk.codegen_location = self.chunk.codegen_location;
-      chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
-      chunk.emit(Opcode::Return);
-
-      let shim_name = Rc::from(format!(
-         "trait {trait_name}.{} <shim>",
-         method_signature.name
-      ));
-      let chunk = Rc::new(chunk);
-      let function_id = self
-         .env
-         .create_function(Function {
-            name: shim_name,
-            parameter_count: method_signature.arity,
-            kind: FunctionKind::Bytecode {
-               chunk,
-               captured_locals: vec![],
-            },
-            hidden_in_stack_traces: true,
-         })
-         .map_err(|e| ast.error(node, e))?;
-
-      Ok(function_id)
-   }
-
    /// Generates code for a trait definition.
    fn generate_trait(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
       let (trait_name, _) = ast.node_pair(node);
       let trait_name = ast.string(trait_name).unwrap();
       let items = ast.children(node).unwrap();
 
-      let trait_index =
-         self.env.create_trait(Rc::clone(trait_name)).map_err(|k| ast.error(node, k))?;
-      let mut required_methods = HashSet::new();
-      let mut shims = Vec::new();
+      let mut builder = TraitBuilder::new(self.env, &self.chunk, Rc::clone(trait_name))
+         .map_err(|e| ast.error(node, e))?;
 
       for &item in items {
          match ast.kind(item) {
@@ -1171,50 +1130,21 @@ impl<'e> CodeGenerator<'e> {
                   return Err(ast.error(head, ErrorKind::FunctionKindInTrait));
                }
 
-               let signature = FunctionSignature {
-                  name: Rc::clone(ast.string(name).unwrap()),
-                  arity: Some(
-                     1 + u16::try_from(ast.len(params).unwrap())
-                        .map_err(|_| ast.error(params, ErrorKind::TooManyParameters))?,
-                  ),
-                  trait_id: Some(trait_index),
-               };
-               let method_id =
-                  self.env.get_method_index(&signature).map_err(|e| ast.error(item, e))?;
-
-               let shim_signature = FunctionSignature {
-                  // Need to add 1 to the arity for the receiving trait.
-                  arity: signature.arity.map(|x| x + 1),
-                  trait_id: None,
-                  ..signature.clone()
-               };
-               let shim_method_id =
-                  self.env.get_method_index(&shim_signature).map_err(|e| ast.error(item, e))?;
-               let shim_function_id =
-                  self.generate_trait_method_shim(ast, item, trait_name, method_id, &signature)?;
-               shims.push((shim_method_id, shim_function_id));
-
-               if !required_methods.insert(method_id) {
-                  return Err(ast.error(
-                     item,
-                     ErrorKind::TraitAlreadyHasMethod(RenderedSignature {
-                        name: signature.name,
-                        arity: signature.arity,
-                        // Do not duplicate the trait name in the error message.
-                        trait_name: None,
-                     }),
-                  ));
-               }
+               let _method_id = builder
+                  .add_method(
+                     Rc::clone(ast.string(name).unwrap()),
+                     u16::try_from(ast.len(params).unwrap())
+                        .map_err(|_| ast.error(item, ErrorKind::TooManyParameters))?,
+                  )
+                  .map_err(|e| ast.error(item, e))?;
             }
             _ => return Err(ast.error(item, ErrorKind::InvalidTraitItem)),
          }
       }
 
-      let prototype = self.env.get_trait_mut(trait_index).unwrap();
-      prototype.required = required_methods;
-      prototype.shims = shims;
+      let trait_id = builder.build();
 
-      self.chunk.emit((Opcode::CreateTrait, trait_index));
+      self.chunk.emit((Opcode::CreateTrait, trait_id));
       let variable = self
          .create_variable(trait_name, VariableAllocation::Allocate)
          .map_err(|k| ast.error(node, k))?;
@@ -1394,4 +1324,105 @@ struct ImplGenerationState<'p> {
    proto: &'p mut Prototype,
    has_constructor: bool,
    trait_index: Option<u16>,
+}
+
+pub struct TraitBuilder<'b> {
+   env: &'b mut Environment,
+   parent_chunk: &'b Chunk,
+   trait_id: Opr24,
+   required_methods: HashSet<u16>,
+   shims: Vec<(u16, Opr24)>,
+}
+
+impl<'b> TraitBuilder<'b> {
+   pub fn new(
+      env: &'b mut Environment,
+      parent_chunk: &'b Chunk,
+      name: Rc<str>,
+   ) -> Result<Self, ErrorKind> {
+      let trait_id = env.create_trait(name)?;
+      Ok(Self {
+         env,
+         parent_chunk,
+         trait_id,
+         required_methods: HashSet::new(),
+         shims: vec![],
+      })
+   }
+
+   /// Generates the *shim* for a trait method. The shim is responsible for calling the actual
+   /// method.
+   fn generate_method_shim(
+      &mut self,
+      trait_name: &str,
+      method_id: u16,
+      method_signature: &FunctionSignature,
+   ) -> Result<Opr24, ErrorKind> {
+      // NOTE: Overflow here should never happen because we're referring to
+      let arity = method_signature.arity.unwrap() as u8;
+
+      let mut chunk = Chunk::new(Rc::clone(&self.parent_chunk.module_name));
+      chunk.codegen_location = self.parent_chunk.codegen_location;
+      chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
+      chunk.emit(Opcode::Return);
+
+      let shim_name = Rc::from(format!(
+         "trait {trait_name}.{} <shim>",
+         method_signature.name
+      ));
+      let chunk = Rc::new(chunk);
+      let function_id = self.env.create_function(Function {
+         name: shim_name,
+         parameter_count: method_signature.arity,
+         kind: FunctionKind::Bytecode {
+            chunk,
+            captured_locals: vec![],
+         },
+         hidden_in_stack_traces: true,
+      })?;
+
+      Ok(function_id)
+   }
+
+   /// Adds a function into the trait and returns its method ID and function ID.
+   ///
+   /// The arity does not include the `self` parameter.
+   pub fn add_method(&mut self, name: Rc<str>, arity: u16) -> Result<u16, ErrorKind> {
+      let trait_name = Rc::clone(&self.env.get_trait(self.trait_id).unwrap().name);
+      let signature = FunctionSignature {
+         name,
+         arity: Some(arity.checked_add(1).ok_or(ErrorKind::TooManyParameters)?),
+         trait_id: Some(self.trait_id),
+      };
+      let method_id = self.env.get_method_index(&signature)?;
+
+      let shim_signature = FunctionSignature {
+         // Add 2 for the receiving trait and self.
+         arity: Some(arity.checked_add(2).ok_or(ErrorKind::TooManyParameters)?),
+         trait_id: None,
+         ..signature.clone()
+      };
+      let shim_method_id = self.env.get_method_index(&shim_signature)?;
+      let shim_function_id = self.generate_method_shim(&trait_name, method_id, &signature)?;
+      self.shims.push((shim_method_id, shim_function_id));
+
+      if !self.required_methods.insert(method_id) {
+         return Err(ErrorKind::TraitAlreadyHasMethod(RenderedSignature {
+            name: signature.name,
+            arity: signature.arity,
+            // Do not duplicate the trait name in the error message.
+            trait_name: None,
+         }));
+      }
+
+      Ok(method_id)
+   }
+
+   /// Finishes building the trait and returns its trait ID.
+   pub fn build(self) -> Opr24 {
+      let prototype = self.env.get_trait_mut(self.trait_id).unwrap();
+      prototype.required = self.required_methods;
+      prototype.shims = self.shims;
+      self.trait_id
+   }
 }

@@ -7,17 +7,15 @@
 ```text
 ## Hello, Mica!
 
-struct Counter
-
-impl Counter
-   func new(start, increment) constructor
+struct Counter impl
+   func new(start, increment) constructor = do
       @value = start
       @increment = increment
    end
 
-   func value() @value end
+   func value() = @value
 
-   func increment()
+   func increment() = do
       @value = @value + @increment
    end
 end

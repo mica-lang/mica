@@ -7,7 +7,7 @@ use mica_language::bytecode::{
    BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind,
    FunctionSignature, Opcode, Opr24,
 };
-use mica_language::codegen::CodeGenerator;
+use mica_language::codegen::{self, CodeGenerator};
 use mica_language::gc::{Gc, Memory};
 use mica_language::lexer::Lexer;
 use mica_language::parser::Parser;
@@ -15,8 +15,8 @@ use mica_language::value::{Closure, RawValue};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   ffvariants, BuiltType, Error, Fiber, ForeignFunction, StandardLibrary, TryFromValue,
-   TypeBuilder, UserData, Value,
+   ffvariants, BuiltType, Error, Fiber, ForeignFunction, MicaResultExt, StandardLibrary,
+   TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
 };
 
 /// The implementation of a raw foreign function.
@@ -381,6 +381,14 @@ impl Engine {
       let value = typ.make_type(&mut self.gc);
       self.set(typ.type_name.deref(), value)
    }
+
+   /// Starts building a new trait.
+   pub fn build_trait(&mut self, name: &str) -> Result<TraitBuilder<'_>, Error> {
+      Ok(TraitBuilder {
+         inner: codegen::TraitBuilder::new(&mut self.env, None, Rc::from(name)).mica()?,
+         gc: &mut self.gc,
+      })
+   }
 }
 
 /// A script pre-compiled into bytecode.
@@ -476,7 +484,7 @@ mod method_id {
 /// Note that these IDs are not portable across different engine instances.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
-pub struct MethodId(u16);
+pub struct MethodId(pub(crate) u16);
 
 /// Implemented by every type that can be used as a method signature.
 ///

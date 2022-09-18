@@ -23,6 +23,10 @@ pub enum Error {
    TooManyMethods,
    /// Too many arguments were passed to a method or a function.
    TooManyArguments,
+   /// Too many traits were created.
+   TooManyTraits,
+   /// A trait method with too many parameters was created.
+   TooManyParametersInTraitMethod,
    /// A type mismatch occured.
    TypeMismatch {
       expected: Cow<'static, str>,
@@ -59,6 +63,10 @@ impl fmt::Display for Error {
          Self::TooManyFunctions => f.write_str("too many functions"),
          Self::TooManyMethods => f.write_str("too many methods with different signatures"),
          Self::TooManyArguments => f.write_str("too many arguments passed to a function"),
+         Self::TooManyTraits => f.write_str("too many traits"),
+         Self::TooManyParametersInTraitMethod => {
+            f.write_str("trait method with too many parameters")
+         }
          Self::TypeMismatch { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")
          }

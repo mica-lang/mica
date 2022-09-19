@@ -6,8 +6,8 @@ use std::rc::Rc;
 
 use crate::ast::{Ast, NodeId, NodeKind};
 use crate::bytecode::{
-   CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature, Opcode, Opr24,
-   Prototype,
+   BuiltinTraits, CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature,
+   Opcode, Opr24, Prototype,
 };
 use crate::common::{Error, ErrorKind, Location, RenderedSignature};
 
@@ -189,6 +189,7 @@ impl StructData {
 
 pub struct CodeGenerator<'e> {
    env: &'e mut Environment,
+   builtin_traits: &'e BuiltinTraits,
 
    chunk: Chunk,
 
@@ -203,10 +204,15 @@ pub struct CodeGenerator<'e> {
 
 impl<'e> CodeGenerator<'e> {
    /// Constructs a new code generator with an empty chunk.
-   pub fn new(module_name: Rc<str>, env: &'e mut Environment) -> Self {
+   pub fn new(
+      module_name: Rc<str>,
+      env: &'e mut Environment,
+      builtin_traits: &'e BuiltinTraits,
+   ) -> Self {
       Self {
          env,
          chunk: Chunk::new(module_name),
+         builtin_traits,
 
          locals: Default::default(),
          breakable_blocks: Vec::new(),
@@ -766,7 +772,11 @@ impl<'e> CodeGenerator<'e> {
       let (_, parameters) = ast.node_pair(head);
       let parameter_list = ast.children(parameters).unwrap();
 
-      let mut generator = CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env);
+      let mut generator = CodeGenerator::new(
+         Rc::clone(&self.chunk.module_name),
+         self.env,
+         self.builtin_traits,
+      );
       // NOTE: Hopefully the allocation from this mem::take gets optimized out.
       generator.locals.parent = Some(mem::take(&mut self.locals));
       if call_conv.has_field_access() {

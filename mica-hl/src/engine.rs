@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use mica_language::ast::DumpAst;
 use mica_language::bytecode::{
-   BuiltinDispatchTables, Chunk, DispatchTable, Environment, Function, FunctionKind,
+   BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function, FunctionKind,
    FunctionSignature, Opcode, Opr24,
 };
 use mica_language::codegen::{self, CodeGenerator};
@@ -15,8 +15,8 @@ use mica_language::value::{Closure, RawValue};
 use mica_language::vm::{self, Globals};
 
 use crate::{
-   ffvariants, BuiltType, Error, Fiber, ForeignFunction, MicaResultExt, StandardLibrary,
-   TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
+   create_trait_value, ffvariants, BuiltType, Error, Fiber, ForeignFunction, MicaResultExt,
+   StandardLibrary, TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
 };
 
 /// The implementation of a raw foreign function.
@@ -37,6 +37,7 @@ pub struct DebugOptions {
 /// types, etc.
 pub struct Engine {
    pub(crate) env: Environment,
+   pub(crate) builtin_traits: BuiltinTraits,
    pub(crate) globals: Globals,
    // This field is needed to keep all builtin dispatch tables alive for longer than `gc`.
    pub(crate) gc: Memory,
@@ -63,15 +64,16 @@ impl Engine {
       // This is a little bad because it allocates a bunch of empty dtables only to discard them.
       let mut env = Environment::new(BuiltinDispatchTables::empty());
 
+      let builtin_traits = BuiltinTraits::register_in(&mut env);
+      let iterator = create_trait_value(&mut env, &mut gc, builtin_traits.iterator);
+
       macro_rules! get_dtables {
          ($type_name:tt, $define:tt) => {{
             let tb = TypeBuilder::new($type_name);
             let tb = stdlib.$define(tb);
-            // Unwrapping here is fine because the stdlib should never declare THAT many methods.
-            tb.build(&mut env, &mut gc).unwrap()
+            tb.build(&mut env, &mut gc).expect("stdlib declares too many methods")
          }};
       }
-      // TODO: Expose _*_type in the global scope.
       let nil = get_dtables!("Nil", define_nil);
       let boolean = get_dtables!("Boolean", define_boolean);
       let number = get_dtables!("Number", define_number);
@@ -90,6 +92,7 @@ impl Engine {
 
       let mut engine = Self {
          env,
+         builtin_traits,
          globals: Globals::new(),
          gc,
          debug_options,
@@ -101,6 +104,7 @@ impl Engine {
       engine.set_built_type(&number).unwrap();
       engine.set_built_type(&string).unwrap();
       engine.set_built_type(&list).unwrap();
+      engine.set("Iterator", iterator).unwrap();
 
       engine
    }
@@ -122,7 +126,8 @@ impl Engine {
          eprintln!("{:?}", DumpAst(&ast, root_node));
       }
 
-      let main_chunk = CodeGenerator::new(module_name, &mut self.env).generate(&ast, root_node)?;
+      let main_chunk = CodeGenerator::new(module_name, &mut self.env, &self.builtin_traits)
+         .generate(&ast, root_node)?;
       if self.debug_options.dump_bytecode {
          eprintln!("Mica - global environment:");
          eprintln!("{:#?}", self.env);

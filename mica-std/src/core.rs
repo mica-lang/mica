@@ -6,6 +6,7 @@ use std::fmt::Write;
 use mica_hl::{Arguments, Engine, MicaResultExt, Value};
 
 use crate::gc::load_gc;
+use crate::iterators::load_iterators;
 
 fn print(arguments: Arguments) {
    for value in arguments.array() {
@@ -61,6 +62,7 @@ pub fn load_core(engine: &mut Engine) -> Result<(), mica_hl::Error> {
    engine.add_function("assert", assert)?;
 
    load_gc(engine)?;
+   load_iterators(engine)?;
 
    Ok(())
 }

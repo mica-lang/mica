@@ -1,0 +1,2 @@
+func countup(min, max) = CountUp.new(min, max)
+func countdown(max, min) = CountDown.new(max, min)

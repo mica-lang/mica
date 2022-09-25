@@ -1,10 +1,13 @@
 //! The Mica standard library. Provides functions that can be registered in engines.
 
+#![allow(clippy::or_fun_call)]
+
 mod builtins;
 mod core;
 mod gc;
 #[cfg(feature = "io")]
 mod io;
+mod iterators;
 
 use mica_hl::Engine;
 

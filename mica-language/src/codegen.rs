@@ -238,6 +238,7 @@ impl<'e> CodeGenerator<'e> {
          Ok(place)
       } else {
          let slot = self.env.create_global(name)?;
+         println!("global created {slot} -> {name}");
          Ok(VariablePlace::Global(slot))
       }
    }

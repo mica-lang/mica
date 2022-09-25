@@ -1,4 +1,5 @@
-use mica::Value;
+use mica::builtin_traits::iterator;
+use mica::{TypeBuilder, UserData, Value};
 
 use crate::api::RevealResultExt;
 
@@ -31,4 +32,57 @@ fn exposing_traits_from_rust() {
 
    assert!(did_draw);
    assert!(did_update);
+}
+
+#[test]
+fn binding_type_that_implements_builtin_traits() {
+   let mut engine = create_engine();
+
+   struct CountUp {
+      current: usize,
+      max: usize,
+   }
+
+   impl CountUp {
+      fn new(from: usize, to: usize) -> Self {
+         Self {
+            current: from,
+            max: to,
+         }
+      }
+
+      fn has_next(&self) -> bool {
+         self.current <= self.max
+      }
+
+      fn next(&mut self) -> usize {
+         let i = self.current;
+         self.current += 1;
+         i
+      }
+   }
+
+   impl UserData for CountUp {}
+
+   engine
+      .add_type(
+         TypeBuilder::<CountUp>::new("CountUp")
+            .add_constructor("new", |ctor| {
+               move |from, to| ctor.construct(CountUp::new(from, to))
+            })
+            .add_builtin_trait_function(iterator::HasNext, CountUp::has_next)
+            .add_builtin_trait_function(iterator::Next, CountUp::next),
+      )
+      .reveal();
+
+   let result: usize = engine
+      .start(
+         "test.mi",
+         include_str!("traits/binding_type_that_implements_builtin_traits.mi"),
+      )
+      .reveal()
+      .trampoline()
+      .reveal();
+
+   assert_eq!(result, 1024);
 }

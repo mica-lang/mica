@@ -71,7 +71,7 @@ impl Engine {
          ($type_name:tt, $define:tt) => {{
             let tb = TypeBuilder::new($type_name);
             let tb = stdlib.$define(tb);
-            tb.build(&mut env, &mut gc).expect("stdlib declares too many methods")
+            tb.build(&mut env, &mut gc, &builtin_traits).expect("stdlib declares too many methods")
          }};
       }
       let nil = get_dtables!("Nil", define_nil);
@@ -374,7 +374,7 @@ impl Engine {
    where
       T: Any + UserData,
    {
-      let built = builder.build(&mut self.env, &mut self.gc)?;
+      let built = builder.build(&mut self.env, &mut self.gc, &self.builtin_traits)?;
       self.set_built_type(&built)?;
       Ok(())
    }

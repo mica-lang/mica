@@ -3,11 +3,12 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use mica_language::bytecode::{
-   DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
+   BuiltinTraits, DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
 };
 use mica_language::gc::{Gc, Memory};
 use mica_language::value::{self, Closure};
 
+use crate::builtin_traits::{BuiltinTrait, BuiltinTraitFunction};
 use crate::userdata::Type;
 use crate::{
    ffvariants, Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction, Value,
@@ -15,11 +16,30 @@ use crate::{
 
 type Constructor<T> = Box<dyn FnOnce(Rc<dyn ObjectConstructor<T>>) -> RawForeignFunction>;
 
+struct UnresolvedFunctionSignature {
+   name: Rc<str>,
+   arity: Option<u16>,
+   builtin_trait: BuiltinTrait,
+}
+
+impl UnresolvedFunctionSignature {
+   fn resolve(self, builtin_traits: &BuiltinTraits) -> FunctionSignature {
+      FunctionSignature {
+         name: self.name,
+         arity: self.arity,
+         trait_id: match self.builtin_trait {
+            BuiltinTrait::None => None,
+            BuiltinTrait::Iterator => Some(builtin_traits.iterator),
+         },
+      }
+   }
+}
+
 /// A descriptor for a dispatch table. Defines which methods are available on the table, as well
 /// as their implementations.
 #[derive(Default)]
 pub(crate) struct DispatchTableDescriptor {
-   methods: Vec<(FunctionSignature, FunctionKind)>,
+   methods: Vec<(UnresolvedFunctionSignature, FunctionKind)>,
 }
 
 impl DispatchTableDescriptor {
@@ -27,7 +47,8 @@ impl DispatchTableDescriptor {
       env: &mut Environment,
       gc: &mut Memory,
       dtable: &mut DispatchTable,
-      signature: FunctionSignature,
+      builtin_traits: &BuiltinTraits,
+      signature: UnresolvedFunctionSignature,
       f: FunctionKind,
    ) -> Result<(), Error> {
       let function_id = env
@@ -38,6 +59,7 @@ impl DispatchTableDescriptor {
             hidden_in_stack_traces: false,
          })
          .map_err(|_| Error::TooManyFunctions)?;
+      let signature = signature.resolve(builtin_traits);
       let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
       dtable.set_method(
          index,
@@ -55,9 +77,10 @@ impl DispatchTableDescriptor {
       mut dtable: DispatchTable,
       env: &mut Environment,
       gc: &mut Memory,
+      builtin_traits: &BuiltinTraits,
    ) -> Result<DispatchTable, Error> {
       for (signature, f) in self.methods {
-         Self::add_function_to_dtable(env, gc, &mut dtable, signature, f)?;
+         Self::add_function_to_dtable(env, gc, &mut dtable, builtin_traits, signature, f)?;
       }
       Ok(dtable)
    }
@@ -71,7 +94,7 @@ where
    type_name: Rc<str>,
    type_dtable: DispatchTableDescriptor,
    instance_dtable: DispatchTableDescriptor,
-   constructors: Vec<(FunctionSignature, Constructor<T>)>,
+   constructors: Vec<(UnresolvedFunctionSignature, Constructor<T>)>,
    _data: PhantomData<T>,
 }
 
@@ -112,10 +135,10 @@ where
       f: FunctionKind,
    ) -> Self {
       self.instance_dtable.methods.push((
-         FunctionSignature {
+         UnresolvedFunctionSignature {
             name: Rc::from(name),
             arity: parameter_count,
-            trait_id: None,
+            builtin_trait: BuiltinTrait::None,
          },
          f,
       ));
@@ -140,10 +163,10 @@ where
       f: FunctionKind,
    ) -> Self {
       self.type_dtable.methods.push((
-         FunctionSignature {
+         UnresolvedFunctionSignature {
             name: Rc::from(name),
             arity: parameter_count,
-            trait_id: None,
+            builtin_trait: BuiltinTrait::None,
          },
          f,
       ));
@@ -168,10 +191,10 @@ where
       f: Constructor<T>,
    ) -> Self {
       self.constructors.push((
-         FunctionSignature {
+         UnresolvedFunctionSignature {
             name: Rc::from(name),
             arity: parameter_count,
-            trait_id: None,
+            builtin_trait: BuiltinTrait::None,
          },
          f,
       ));
@@ -192,6 +215,25 @@ where
          F::parameter_count(),
          FunctionKind::Foreign(f.into_raw_foreign_function()),
       )
+   }
+
+   /// Adds a function that's part of a built-in trait implementation.
+   ///
+   /// The function must have a signature that's compatible with the built-in trait in question.
+   pub fn add_builtin_trait_function<S, B, F>(mut self, which: B, f: F) -> Self
+   where
+      B: BuiltinTraitFunction<S>,
+      F: ForeignFunction<S>,
+   {
+      self.instance_dtable.methods.push((
+         UnresolvedFunctionSignature {
+            name: Rc::from(B::NAME),
+            arity: F::parameter_count(),
+            builtin_trait: which.owning_trait(),
+         },
+         FunctionKind::Foreign(f.into_raw_foreign_function()),
+      ));
+      self
    }
 
    /// Adds a static function to the struct.
@@ -235,20 +277,26 @@ where
    }
 
    /// Builds the struct builder into its type dtable and instance dtable, respectively.
-   pub(crate) fn build(self, env: &mut Environment, gc: &mut Memory) -> Result<BuiltType<T>, Error>
+   pub(crate) fn build(
+      self,
+      env: &mut Environment,
+      gc: &mut Memory,
+      builtin_traits: &BuiltinTraits,
+   ) -> Result<BuiltType<T>, Error>
    where
       T: Any + Sized,
    {
-      // Build the dtables.
       let mut type_dtable = self.type_dtable.build_dtable(
          DispatchTable::new_for_type(Rc::clone(&self.type_name)),
          env,
          gc,
+         builtin_traits,
       )?;
       let instance_dtable = self.instance_dtable.build_dtable(
          DispatchTable::new_for_instance(Rc::clone(&self.type_name)),
          env,
          gc,
+         builtin_traits,
       )?;
       let instance_dtable = Gc::new(instance_dtable);
 
@@ -279,6 +327,7 @@ where
             env,
             gc,
             &mut type_dtable,
+            builtin_traits,
             signature,
             FunctionKind::Foreign(f),
          )?;

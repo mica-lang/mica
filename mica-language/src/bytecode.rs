@@ -652,9 +652,13 @@ impl Environment {
    /// Tries to create a global. Returns the global slot number, or an error if there are too many
    /// globals.
    pub fn create_global(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
-      let slot = Opr24::try_from(self.globals.len()).map_err(|_| ErrorKind::TooManyGlobals)?;
-      self.globals.insert(name.to_owned(), slot);
-      Ok(slot)
+      if self.globals.contains_key(name) {
+         Ok(*self.globals.get(name).unwrap())
+      } else {
+         let slot = Opr24::try_from(self.globals.len()).map_err(|_| ErrorKind::TooManyGlobals)?;
+         self.globals.insert(name.to_owned(), slot);
+         Ok(slot)
+      }
    }
 
    /// Tries to look up a global. Returns `None` if the global doesn't exist.

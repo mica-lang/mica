@@ -1,0 +1,10 @@
+# Ensures that globals can be shadowed by user scripts.
+
+# The declaration below shadows print, and *should* work ↓
+func print() = nil
+func another_global() = nil
+
+print = 1
+another_global = 2
+
+assert(print != another_global)

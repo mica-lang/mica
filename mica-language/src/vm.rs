@@ -733,12 +733,7 @@ impl Fiber {
                      });
                   let error_kind = ErrorKind::MethodDoesNotExist {
                      type_name: Rc::clone(&dtable.pretty_name),
-                     signature: FunctionSignature {
-                        // Subtract 1 to omit the receiver from error messages.
-                        arity: signature.arity.map(|x| x - 1),
-                        ..signature
-                     }
-                     .render(env),
+                     signature: signature.render(env),
                   };
                   return Err(self.error_outside_function_call(None, env, error_kind));
                }

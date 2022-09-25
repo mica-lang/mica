@@ -136,6 +136,7 @@ pub enum ErrorKind {
    CommaExpected,
    ColonExpectedAfterDictKey,
    RightBracketExpectedToCloseEmptyDict,
+   InExpectedAfterForBinding,
 
    // Code generator
    VariableDoesNotExist(Rc<str>),
@@ -173,6 +174,7 @@ pub enum ErrorKind {
    TooManyTraitsInImpl,
    AsCannotNest,
    FunctionKindInTrait,
+   InvalidPattern,
 
    // Runtime
    TypeError {
@@ -238,6 +240,7 @@ impl std::fmt::Display for ErrorKind {
          Self::ColonExpectedAfterDictKey => write!(f, "colon ':' expected after dict key"),
          Self::RightBracketExpectedToCloseEmptyDict => write!(f, "right bracket ']' expected to close empty dict literal [:]"),
          Self::MissingFunctionBody => write!(f, "missing function body ('= expression')"),
+         Self::InExpectedAfterForBinding => write!(f, "'in' expected after 'for' loop variable binding"),
 
          Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
          Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
@@ -289,6 +292,7 @@ impl std::fmt::Display for ErrorKind {
          Self::TooManyTraitsInImpl => write!(f, "too many 'as' blocks in 'impl'"),
          Self::AsCannotNest => write!(f, "'as' blocks cannot nest"),
          Self::FunctionKindInTrait => write!(f, "trait functions must be instance methods (cannot be constructors nor statics)"),
+         Self::InvalidPattern => write!(f, "invalid pattern for destructuring into variables"),
 
          Self::TypeError { expected, got } => {
             write!(f, "type mismatch, expected {expected} but got {got}")

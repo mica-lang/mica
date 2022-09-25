@@ -277,6 +277,8 @@ pub enum NodeKind {
    ElseBranch,
    /// `while` loop.
    While,
+   /// `for` loop.
+   For,
    /// `break` expression.
    Break,
 

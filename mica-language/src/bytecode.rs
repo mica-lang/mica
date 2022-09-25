@@ -5,6 +5,7 @@ use std::fmt::Debug;
 use std::mem::size_of;
 use std::rc::Rc;
 
+use crate::codegen::TraitBuilder;
 use crate::common::{ErrorKind, Location, RenderedSignature};
 use crate::gc::{Gc, GcRaw, Memory};
 use crate::value::{Closure, RawValue};
@@ -602,7 +603,8 @@ impl FunctionSignature {
    pub fn render(&self, env: &Environment) -> RenderedSignature {
       RenderedSignature {
          name: Rc::clone(&self.name),
-         arity: self.arity,
+         // Subtract 1 to omit `self`.
+         arity: self.arity.map(|x| x - 1),
          trait_name: self
             .trait_id
             .and_then(|index| env.get_trait(index))
@@ -830,6 +832,37 @@ impl BuiltinDispatchTables {
          list: Gc::new(DispatchTable::new("List", "List")),
          dict: Gc::new(DispatchTable::new("Dict", "Dict")),
       }
+   }
+}
+
+/// IDs of built-in traits and their methods.
+pub struct BuiltinTraits {
+   pub iterator: Opr24,
+   pub iterator_has_next: u16,
+   pub iterator_next: u16,
+}
+
+impl BuiltinTraits {
+   /// Tries to register built-in traits in the given environment.
+   fn try_register_in(env: &mut Environment) -> Result<Self, ErrorKind> {
+      let mut builder = TraitBuilder::new(env, None, Rc::from("Iterator"))?;
+      let iterator_has_next = builder.add_method(Rc::from("has_next"), 0)?;
+      let iterator_next = builder.add_method(Rc::from("next"), 0)?;
+      let (iterator, _) = builder.build();
+
+      Ok(Self {
+         iterator,
+         iterator_has_next,
+         iterator_next,
+      })
+   }
+
+   /// Registers built-in traits in the given environment.
+   ///
+   /// # Panics
+   /// If there are too many traits, methods, or functions registered in the environment.
+   pub fn register_in(env: &mut Environment) -> Self {
+      Self::try_register_in(env).expect("environment should have enough space for built-in traits")
    }
 }
 

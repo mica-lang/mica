@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use mica_language::bytecode::{Environment, Opr24};
 use mica_language::codegen;
 use mica_language::gc::{Gc, Memory};
 use mica_language::value::create_trait;
@@ -28,8 +29,12 @@ impl<'e> TraitBuilder<'e> {
    /// Finishes building the trait and wraps it into a value.
    pub fn build(self) -> Value {
       let (trait_id, env) = self.inner.build();
-      let instance = create_trait(env, self.gc, trait_id);
-      let instance = unsafe { Gc::from_raw(instance) };
-      Value::Trait(Hidden(instance))
+      create_trait_value(env, self.gc, trait_id)
    }
+}
+
+pub(crate) fn create_trait_value(env: &mut Environment, gc: &mut Memory, trait_id: Opr24) -> Value {
+   let instance = create_trait(env, gc, trait_id);
+   let instance = unsafe { Gc::from_raw(instance) };
+   Value::Trait(Hidden(instance))
 }

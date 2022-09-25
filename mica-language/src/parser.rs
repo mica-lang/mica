@@ -347,6 +347,23 @@ impl Parser {
          .done())
    }
 
+   /// Parses a `for` expression.
+   fn parse_for_expression(&mut self, token: Token) -> Result<NodeId, Error> {
+      let binding = self.parse_expression(0)?;
+      let _in_token = self.expect(TokenKind::In, |_| ErrorKind::InExpectedAfterForBinding)?;
+      let iterator = self.parse_expression(0)?;
+      let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
+      let mut body = Vec::new();
+      self.parse_terminated_block(&do_token, &mut body, |k| *k == TokenKind::End)?;
+      let _end = self.lexer.next_token();
+      Ok(self
+         .ast
+         .build_node(NodeKind::For, (binding, iterator))
+         .with_location(token.location)
+         .with_children(body)
+         .done())
+   }
+
    /// Parses a function. `anonymous` decides if the function has a name or not.
    fn parse_function(&mut self, func_token: Token, anonymous: bool) -> Result<NodeId, Error> {
       let name = if !anonymous {
@@ -487,6 +504,7 @@ impl Parser {
          TokenKind::Do => self.parse_do_block(token),
          TokenKind::If => self.parse_if_expression(token),
          TokenKind::While => self.parse_while_expression(token),
+         TokenKind::For => self.parse_for_expression(token),
 
          TokenKind::Break => self.parse_break_like(token, NodeKind::Break),
          TokenKind::Return => self.parse_break_like(token, NodeKind::Return),
@@ -610,7 +628,7 @@ impl Parser {
    pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
       let first_token = self.lexer.peek_token()?;
       let mut main = Vec::new();
-      Ok(loop {
+      loop {
          if self.lexer.peek_token()?.kind == TokenKind::Eof {
             let main = self
                .ast
@@ -618,11 +636,11 @@ impl Parser {
                .with_location(first_token.location)
                .with_children(main)
                .done();
-            break (self.ast, main);
+            return Ok((self.ast, main));
          }
          let item = self.parse_item()?;
          main.push(item);
-      })
+      }
    }
 }
 

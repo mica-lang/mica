@@ -539,6 +539,39 @@ while i = iterator.next do
 end
 ```
 
+### `for` loops
+
+`for` is a loop expression similar to `while`, but instead of operating on a boolean expression
+it allows for iterating over an _iterator_. The iterator is any value that implements the `Iterator`
+[trait](#trait-definitions), which is defined as follows:
+```mica
+trait Iterator
+   func has_next()
+   func next()
+end
+```
+A `for` loop is desugared to a `while` loop as follows:
+```mica
+for binding in iter do
+   # body
+end
+
+# becomes
+
+do
+   # This _iterator variable is hidden by the compiler, and cannot be referred to.
+   _iterator = iter
+   # It's also worth noting that these method calls do not involve global lookups to resolve
+   # Iterator, as they would in normal Mica code.
+   while Iterator.has_next(_iterator) do
+      binding = Iterator.next(_iterator)
+      do
+         # body
+      end
+   end
+end
+```
+
 ### `break` expressions
 
 A `break` expression can be used to immediately jump past a loop.
@@ -616,7 +649,7 @@ assert(struct Example == Example)
 
 Implementations, or `impl` blocks, can be used to attach data and behavior to types.
 ```mica
-impl SomeStructType
+SomeStructType impl
    # functions
 end
 ```
@@ -628,7 +661,7 @@ functions can be used as a way of putting functions into namespaces.
 ```mica
 struct Greetings
 
-impl Greetings
+Greetings impl
    func get(for_whom) static =
       "Hello, ".cat(for_whom).cat("!")
 end
@@ -649,7 +682,8 @@ declared in the first one.
 
 ```mica
 struct Vector
-impl Vector
+
+Vector impl
    func new(x, y) constructor = do
       # Declare fields that will store the X/Y coordinates of the vector.
       @x = x
@@ -699,21 +733,25 @@ struct S
 func obtain_struct() =
    S
 
-impl obtain_struct()
+obtain_struct() impl
    # ...
 end
 ```
 This also leads to the following idiom, where a newly created struct is implemented right away:
-```
-impl struct Immediate
+```mica
+struct Immediate impl
    # ...
 end
 ```
+This idiom is why `impl` is a postfix operator rather than a prefix operator - it reads much more
+naturally than `impl struct Immediate`, and better displays the scoping of the newly declared
+struct.
+
 Apart from this, an `impl` block returns the implemented struct, so eg. returning a newly
 implemented struct from a function is possible.
-```
+```mica
 func make_me_a_struct() =
-   impl struct TheStruct
+   struct TheStruct impl
       func say_hi() static =
          print("Hi!!")
    end
@@ -723,4 +761,41 @@ AStruct.say_hi()
 
 Another = make_me_a_struct()
 assert(Another != AStruct)
+```
+
+### Trait definitions
+
+Traits allow for defining list of functions a type must implement. These functions are namespaced
+separately from other functions defined outside of traits, so it's possible to have two traits
+that define a function `example`, and no conflicts will occur between them.
+
+This feature is commonly known as _interfaces_ or _protocols_ in other programming languages.
+
+To define a trait, the `trait` keyword is used:
+```mica
+trait MyTrait
+   func do_something()  # note the lack of the equals sign '='
+end
+```
+Implementing a trait is done through introducing an `as` block inside an `impl`:
+```mica
+struct MyImplementer impl
+   func new() constructor = nil
+
+   as MyTrait
+      func do_something() = do
+         print("Hello!")
+      end
+   end
+end
+```
+Note that all trait methods are _instance_ methods. Allowing static methods in traits or static
+implementations of traits wouldn't make that much sense, because Mica is a dynamically typed
+language - _everything is a value._
+
+To call a trait method, the usual `receiver.do_something()` syntax cannot be used, because it would
+be ambiguous - instead, the trait must be used as a "relay":
+```mica
+receiver = MyImplementer.new()
+MyTrait.do_something(receiver)  # the first argument becomes `self`
 ```

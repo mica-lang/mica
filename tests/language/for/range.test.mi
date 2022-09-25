@@ -1,0 +1,25 @@
+# Tests `for` loops by defining a basic CountUp iterator and testing its output.
+
+struct CountUp impl
+   func new(min, max) constructor = do
+      @min = min
+      @max = max
+   end
+
+   as Iterator
+      func has_next() =
+         @min <= @max
+
+      func next() = do
+         i = @min
+         @min = @min + 1
+         i
+      end
+   end
+end
+
+elements = []
+for i in CountUp.new(1, 10) do
+   elements.push(i)
+end
+assert(elements == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])

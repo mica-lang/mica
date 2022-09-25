@@ -448,6 +448,24 @@ impl<'e> CodeGenerator<'e> {
       Ok(ExpressionResult::Present)
    }
 
+   /// Generates code for destructuring a pattern.
+   ///
+   /// The generated code assumes there's a value to destructure at the top of the stack (called the
+   /// *scrutinee*.)
+   fn generate_pattern_destructuring(&mut self, ast: &Ast, node: NodeId) -> Result<(), Error> {
+      match ast.kind(node) {
+         NodeKind::Identifier => {
+            let name = ast.string(node).unwrap();
+            let variable = self
+               .create_variable(name, VariableAllocation::Allocate)
+               .map_err(|kind| ast.error(node, kind))?;
+            self.generate_variable_sink(variable);
+         }
+         _ => return Err(ast.error(node, ErrorKind::InvalidPattern)),
+      }
+      Ok(())
+   }
+
    /// Generates code for an assignment.
    fn generate_assignment(
       &mut self,
@@ -641,23 +659,25 @@ impl<'e> CodeGenerator<'e> {
       Ok(ExpressionResult::Present)
    }
 
-   /// Generates code for a `while..do..end` loop.
-   fn generate_while(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
-      let (condition, _) = ast.node_pair(node);
-      let body = ast.children(node).unwrap();
-
+   fn generate_conditional_loop(
+      &mut self,
+      ast: &Ast,
+      node: NodeId,
+      generate_condition: &dyn Fn(&mut CodeGenerator<'_>) -> Result<(), Error>,
+      generate_body: &dyn Fn(&mut CodeGenerator<'_>) -> Result<(), Error>,
+   ) -> Result<(), Error> {
       // The outer scope, so that variables can be declared in the condition.
       self.push_scope();
       // The breakable block.
       self.push_breakable_block();
 
       let start = self.chunk.len();
-      self.generate_node(ast, condition, Expression::Used)?;
+      generate_condition(self)?;
       let jump_to_end = self.chunk.emit(Opcode::Nop);
       // Discard the condition if it's true.
       self.chunk.emit(Opcode::Discard);
 
-      self.generate_node_list(ast, body)?;
+      generate_body(self)?;
       // While loops don't yield a value.
       self.chunk.emit(Opcode::Discard);
 
@@ -673,12 +693,68 @@ impl<'e> CodeGenerator<'e> {
       // Discard the condition if it's false.
       self.chunk.emit(Opcode::Discard);
 
-      // Because while loops are an expression, they must produce a value. That value is `nil`.
+      // Because loops are expressions, they must produce a value. That value is `nil`.
       self.chunk.emit(Opcode::PushNil);
 
       // `break`s produce a value (or `nil` by default), so we need to jump over the
       // fallback `PushNil`.
       self.pop_breakable_block();
+      self.pop_scope();
+
+      Ok(())
+   }
+
+   /// Generates code for a `while..do..end` loop.
+   fn generate_while(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
+      let (condition, _) = ast.node_pair(node);
+      let body = ast.children(node).unwrap();
+
+      self.generate_conditional_loop(
+         ast,
+         node,
+         &|generator| generator.generate_node(ast, condition, Expression::Used),
+         &|generator| generator.generate_node_list(ast, body),
+      )?;
+
+      Ok(ExpressionResult::Present)
+   }
+
+   /// Generates code for a `for` loop.
+   fn generate_for(&mut self, ast: &Ast, node: NodeId) -> Result<ExpressionResult, Error> {
+      let (binding, iterator) = ast.node_pair(node);
+      let body = ast.children(node).unwrap();
+
+      self.push_scope();
+
+      let iterator_var = self
+         .create_variable("<iterator>", VariableAllocation::Allocate)
+         .map_err(|kind| ast.error(iterator, kind))?;
+      self.generate_node(ast, iterator, Expression::Used)?;
+      self.generate_variable_sink(iterator_var);
+
+      self.generate_conditional_loop(
+         ast,
+         node,
+         &|generator| {
+            generator.generate_variable_load(iterator_var);
+            generator.chunk.emit((
+               Opcode::CallMethod,
+               Opr24::pack((generator.builtin_traits.iterator_has_next, 1)),
+            ));
+            Ok(())
+         },
+         &|generator| {
+            generator.generate_variable_load(iterator_var);
+            generator.chunk.emit((
+               Opcode::CallMethod,
+               Opr24::pack((generator.builtin_traits.iterator_next, 1)),
+            ));
+            generator.generate_pattern_destructuring(ast, binding)?;
+            generator.generate_node_list(ast, body)?;
+            Ok(())
+         },
+      )?;
+
       self.pop_scope();
 
       Ok(ExpressionResult::Present)
@@ -1210,6 +1286,7 @@ impl<'e> CodeGenerator<'e> {
          NodeKind::Do => self.generate_do(ast, node)?,
          NodeKind::If => self.generate_if(ast, node)?,
          NodeKind::While => self.generate_while(ast, node)?,
+         NodeKind::For => self.generate_for(ast, node)?,
          NodeKind::Break => self.generate_break(ast, node)?,
 
          NodeKind::Func => {

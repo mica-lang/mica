@@ -1,0 +1,4 @@
+# Tests that invalid pattern expressions throw an error.
+# @error {file}:{:LINE}:5: error: invalid pattern for destructuring into variables
+
+for 1 in nil do end  # @line LINE

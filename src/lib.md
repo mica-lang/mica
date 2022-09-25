@@ -346,8 +346,6 @@ let greeter_type =
                func greetings(for_whom) =
                   @template.replace("{target}", for_whom)
             end
-
-            Greeter
          "#
       )?
       .trampoline()?;
@@ -357,4 +355,50 @@ assert_eq!(greeting, "Hello, world!");
 # Ok(())
 # }
 
+```
+
+### Defining traits
+
+Usually you don't want to call "bare" methods, because by convention they're meant to be used within
+the script itself. If you want to let types implement an interface, you can do so with traits, which
+in addition to scripts, can also be defined using the Rust API.
+
+The advantage of using the Rust API directly is that calling trait methods becomes less verbose and
+requires less indirections, which improves performance.
+
+```rust
+# use mica::Value;
+# fn main() -> Result<(), Box<dyn std::error::Error>> {
+# let mut engine = mica::Engine::new(mica::std::lib());
+# mica::std::load(&mut engine);
+let mut builder = engine.build_trait("RandomNumberGenerator")?;
+// NB: You *must not* reuse m_generate across different Engines.
+let m_generate = builder.add_function("generate", 0)?;
+let random_number_generator = builder.build();
+// Note that unlike with types, you have to set the trait explicitly.
+// This is a quirk of how the borrow hierarchy works currently.
+engine.set("RandomNumberGenerator", random_number_generator)?;
+
+// Once the trait is exposed to scripts, we can now define types that implement it.
+let rng: Value =
+   engine
+      .start(
+         "rng.mi",
+         r#"
+            struct Generator impl
+               func new() constructor = nil
+
+               as RandomNumberGenerator
+                  ## https://xkcd.com/221/
+                  func generate() = 4
+               end
+            end
+            .new()  # Note that trait methods can be called on instances only.
+         "#
+      )?
+      .trampoline()?;
+let number: u32 = engine.call_method(rng, m_generate, [])?;
+assert_eq!(number, 4);
+# Ok(())
+# }
 ```

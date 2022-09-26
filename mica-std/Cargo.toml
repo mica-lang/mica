@@ -10,4 +10,4 @@ repository = "https://github.com/liquidev/mica"
 io = []
 
 [dependencies]
-mica-hl = { version = "0.4.0", path = "../mica-hl" }
+mica-hl = { version = "0.5.0", path = "../mica-hl" }

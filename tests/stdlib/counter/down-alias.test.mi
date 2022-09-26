@@ -1,0 +1,5 @@
+elements = []
+for i in countdown(5, 1) do
+   elements.push(i)
+end
+assert(elements == [5, 4, 3, 2, 1])

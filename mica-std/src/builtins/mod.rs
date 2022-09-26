@@ -1,5 +1,3 @@
-#![allow(clippy::or_fun_call)]
-
 mod dict;
 mod list;
 mod number;

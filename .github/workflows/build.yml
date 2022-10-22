@@ -14,7 +14,9 @@ jobs:
         runs-on: ubuntu-latest
         steps:
         - uses: actions/checkout@v2
-        - name: Build
+        -
+            name: Build
             run: cargo build --release -p mica-cli
-        - name: Run Language and API tests
+        -
+            name: Run Language and API tests
             run: cargo test --release -- --include-ignored

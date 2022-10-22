@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use mica::Engine;
 
+mod stress;
 mod traits;
 
 pub trait RevealResultExt<T> {

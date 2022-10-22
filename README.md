@@ -1,7 +1,7 @@
 # Mica
 
 [![Language reference](https://img.shields.io/badge/docs-language-blueviolet?style=flat-square)][langref]
-[![Rust API](https://img.shields.io/badge/docs-API-blueviolet?style=flat-square)][rustapi] ·
+[![Rust API](https://img.shields.io/badge/docs-API-blueviolet?style=flat-square)][rustapi]
 [![GitHub](https://img.shields.io/badge/GitHub-mica--lang%2Fmica-blue?style=flat-square)][GitHub]
 [![crates.io](https://img.shields.io/crates/v/mica?style=flat-square)][crates.io]
 

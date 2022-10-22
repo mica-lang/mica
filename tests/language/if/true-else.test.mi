@@ -1,11 +1,11 @@
 # The if expression should not execute the else branch.
 x = 123
 t =
-   if x == 123 do
-      "Good"
-   else
-      error("Branch accidentally evaluated")
-      "Bad"
-   end
+    if x == 123 do
+        "Good"
+    else
+        error("Branch accidentally evaluated")
+        "Bad"
+    end
 assert(t == "Good")
 assert(x == 123)

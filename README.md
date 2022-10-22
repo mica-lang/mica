@@ -16,25 +16,25 @@ A simple, human-friendly scripting language, developed one feature at a time. It
 # Hello, Mica!
 
 struct Counter impl
-   func new(start, increment) constructor = do
-      @value = start
-      @increment = increment
-   end
+    func new(start, increment) constructor = do
+        @value = start
+        @increment = increment
+    end
 
-   func value() = @value
+    func value() = @value
 
-   func increment() = do
-      @value = @value + @increment
-   end
+    func increment() = do
+        @value = @value + @increment
+    end
 end
 
 c = Counter.new(1, 1)
 while c.value < 100 do
-   print(c.value)
-   if c.value.mod(2) == 0 do
-      print("even!")
-   end
-   c.increment()
+    print(c.value)
+    if c.value.mod(2) == 0 do
+        print("even!")
+    end
+    c.increment()
 end
 ```
 

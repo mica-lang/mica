@@ -3,27 +3,27 @@
 spoken = false
 
 trait Animal
-   func speak()
-   func eat(food)
+    func speak()
+    func eat(food)
 end
 
 struct Dog impl
-   func new(name) constructor = do
-      @name = name
-      @satiation = 0
-   end
+    func new(name) constructor = do
+        @name = name
+        @satiation = 0
+    end
 
-   func satiation() = @satiation
+    func satiation() = @satiation
 
-   as Animal
-      func speak() = do
-         spoken = true
-      end
+    as Animal
+        func speak() = do
+            spoken = true
+        end
 
-      func eat(food) = do
-         @satiation = @satiation + food
-      end
-   end
+        func eat(food) = do
+            @satiation = @satiation + food
+        end
+    end
 end
 
 doggo = Dog.new("Floofer")

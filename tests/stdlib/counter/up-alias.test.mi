@@ -1,5 +1,5 @@
 elements = []
 for i in countup(1, 5) do
-   elements.push(i)
+    elements.push(i)
 end
 assert(elements == [1, 2, 3, 4, 5])

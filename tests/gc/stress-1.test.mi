@@ -2,14 +2,14 @@
 # @ignore
 
 struct Garbage impl
-   func new() constructor = do
-      @trash = 1
-   end
+    func new() constructor = do
+        @trash = 1
+    end
 end
 
 n = 0
 g = nil
 while n < 10000 do
-   g = Garbage.new()
-   n = n + 1
+    g = Garbage.new()
+    n = n + 1
 end

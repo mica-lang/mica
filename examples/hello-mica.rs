@@ -3,11 +3,11 @@
 use mica::Engine;
 
 fn main() {
-   let mut engine = Engine::new(mica::std::lib());
-   mica::std::load(&mut engine).unwrap();
+    let mut engine = Engine::new(mica::std::lib());
+    mica::std::load(&mut engine).unwrap();
 
-   engine.set("x", 123_i32).unwrap();
-   engine.set("y", 456_i32).unwrap();
-   let result: i32 = engine.start("<main>", "x * 3 + y").unwrap().trampoline().unwrap();
-   println!("{result}");
+    engine.set("x", 123_i32).unwrap();
+    engine.set("y", 456_i32).unwrap();
+    let result: i32 = engine.start("<main>", "x * 3 + y").unwrap().trampoline().unwrap();
+    println!("{result}");
 }

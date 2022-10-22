@@ -1,8 +1,8 @@
 i = 3
 while true do
-   i = i + i
-   if i >= 100 do
-      1 + break i
-   end
+    i = i + i
+    if i >= 100 do
+        1 + break i
+    end
 end
 print(i)

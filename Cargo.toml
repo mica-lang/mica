@@ -10,10 +10,10 @@ categories = ["compilers"]
 
 [workspace]
 members = [
-   "mica-cli",
-   "mica-hl",
-   "mica-language",
-   "mica-std",
+    "mica-cli",
+    "mica-hl",
+    "mica-language",
+    "mica-std",
 ]
 
 [features]

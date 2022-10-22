@@ -1,20 +1,20 @@
 struct Game impl
-   func new() constructor = do
-      @did_draw = false
-      @did_update = false
-   end
+    func new() constructor = do
+        @did_draw = false
+        @did_update = false
+    end
 
-   func did_draw() = @did_draw
-   func did_update() = @did_update
+    func did_draw() = @did_draw
+    func did_update() = @did_update
 
-   as GameLoop
-      func draw(alpha) = do
-         @did_draw = true
-      end
+    as GameLoop
+        func draw(alpha) = do
+            @did_draw = true
+        end
 
-      func update() = do
-         @did_update = true
-      end
-   end
+        func update() = do
+            @did_update = true
+        end
+    end
 end
 .new()

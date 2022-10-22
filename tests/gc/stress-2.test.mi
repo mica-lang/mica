@@ -2,25 +2,25 @@
 # @ignore
 
 struct LinkedList impl
-   func new(value, next) constructor = do
-      @value = value
-      @next = next
-   end
+    func new(value, next) constructor = do
+        @value = value
+        @next = next
+    end
 end
 
 func make_long_list() = do
-   i = 0
-   list = nil
-   while i < 1000 do
-      list = LinkedList.new(i, list)
-      i = i + 1
-   end
-   list
+    i = 0
+    list = nil
+    while i < 1000 do
+        list = LinkedList.new(i, list)
+        i = i + 1
+    end
+    list
 end
 
 n = 0
 list = nil
 while n < 10 do
-   list = make_long_list()
-   n = n + 1
+    list = make_long_list()
+    n = n + 1
 end

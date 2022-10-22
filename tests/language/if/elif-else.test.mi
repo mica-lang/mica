@@ -1,14 +1,14 @@
 # Check that elif branches fall through to the else branch.
 i = 1
 y =
-   if i == 2 do
-      error("Branch accidentally evaluated")
-      "Bad 1"
-   elif i == 3 do
-      error("Branch accidentally evaluated")
-      "Bad 2"
-   else
-      "Good"
-   end
+    if i == 2 do
+        error("Branch accidentally evaluated")
+        "Bad 1"
+    elif i == 3 do
+        error("Branch accidentally evaluated")
+        "Bad 2"
+    else
+        "Good"
+    end
 assert(y == "Good")
 assert(i == 1)

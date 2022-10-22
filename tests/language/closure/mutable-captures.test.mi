@@ -1,11 +1,11 @@
 # Closures may modify captured variables.
 func counter(start, increment) = do
-   i = start
-   (func () = do
-      value = i
-      i = i + increment
-      value
-   end)
+    i = start
+    (func () = do
+        value = i
+        i = i + increment
+        value
+    end)
 end
 c = counter(10, 1)
 assert(c() == 10)

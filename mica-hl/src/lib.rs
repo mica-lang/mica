@@ -19,12 +19,6 @@ pub use engine::*;
 pub use error::*;
 pub use fiber::*;
 pub use function::*;
-pub use stdlib::*;
-pub use traits::*;
-pub use types::*;
-pub use userdata::*;
-pub use value::*;
-
 pub use mica_language as language;
 pub use mica_language::gc::Gc;
 /// An **unsafe** value used internally in the VM.
@@ -34,3 +28,8 @@ pub use mica_language::gc::Gc;
 pub use mica_language::value::RawValue;
 /// The kind of a [`RawValue`].
 pub use mica_language::value::ValueKind as RawValueKind;
+pub use stdlib::*;
+pub use traits::*;
+pub use types::*;
+pub use userdata::*;
+pub use value::*;

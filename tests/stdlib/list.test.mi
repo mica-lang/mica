@@ -17,9 +17,9 @@ assert(l.get(2) == 4)
 assert(l.get(3) == nil)
 
 do
-   li = [1]
-   li.set(0, 2)
-   assert(li == [2])
+    li = [1]
+    li.set(0, 2)
+    assert(li == [2])
 end
 
 assert(l.first == 1)
@@ -29,76 +29,76 @@ assert(l.contains(3))
 assert(!l.contains(2))
 
 do
-   li = [1]
-   li.clear()
-   assert(li.is_empty)
+    li = [1]
+    li.clear()
+    assert(li.is_empty)
 end
 
 do
-   li = [1, 1, 2, 2, 3, 3, 2, 2, 2]
-   li.dedup()
-   assert(li == [1, 2, 3, 2])
+    li = [1, 1, 2, 2, 3, 3, 2, 2, 2]
+    li.dedup()
+    assert(li == [1, 2, 3, 2])
 end
 
 do
-   li = [1, 3, 4]
-   li.insert(1, 2)
-   assert(li == [1, 2, 3, 4])
+    li = [1, 3, 4]
+    li.insert(1, 2)
+    assert(li == [1, 2, 3, 4])
 end
 
 do
-   li = [1, 2, 3]
-   li.remove(0)
-   assert(li == [2, 3])
+    li = [1, 2, 3]
+    li.remove(0)
+    assert(li == [2, 3])
 end
 
 do
-   li = [1, 2, 3]
-   li.swap_remove(0)
-   assert(li == [3, 2])
+    li = [1, 2, 3]
+    li.swap_remove(0)
+    assert(li == [3, 2])
 end
 
 do
-   li = [1, 2, 3]
-   li.push(4)
-   li.push(5)
-   assert(li == [1, 2, 3, 4, 5])
-   assert(li.pop() == 5)
-   assert(li == [1, 2, 3, 4])
+    li = [1, 2, 3]
+    li.push(4)
+    li.push(5)
+    assert(li == [1, 2, 3, 4, 5])
+    assert(li.pop() == 5)
+    assert(li == [1, 2, 3, 4])
 end
 
 do
-   li = [1]
-   li.resize(5, 0)
-   assert(li == [1, 0, 0, 0, 0])
+    li = [1]
+    li.resize(5, 0)
+    assert(li == [1, 0, 0, 0, 0])
 end
 
 do
-   li = [1, 2, 3, 4, 5]
-   li.truncate(3)
-   assert(li == [1, 2, 3])
+    li = [1, 2, 3, 4, 5]
+    li.truncate(3)
+    assert(li == [1, 2, 3])
 end
 
 assert([1, 2, 3].repeat(2) == [1, 2, 3, 1, 2, 3])
 
 do
-   li = [1, 2, 3]
-   li.reverse()
-   assert(li == [3, 2, 1])
+    li = [1, 2, 3]
+    li.reverse()
+    assert(li == [3, 2, 1])
 end
 
 do
-   li = [1, 2, 3, 4, 5]
-   li2 = li.clone
-   li.rotate_left(1)
-   assert(li == [2, 3, 4, 5, 1])
-   li.rotate_right(2)
-   assert(li == [5, 1, 2, 3, 4])
+    li = [1, 2, 3, 4, 5]
+    li2 = li.clone
+    li.rotate_left(1)
+    assert(li == [2, 3, 4, 5, 1])
+    li.rotate_right(2)
+    assert(li == [5, 1, 2, 3, 4])
 end
 
 do
-   li = [1, 2, 3, 4]
-   li.swap(0, 3)
-   assert(li == [4, 2, 3, 1])
+    li = [1, 2, 3, 4]
+    li.swap(0, 3)
+    assert(li == [4, 2, 3, 1])
 end
 

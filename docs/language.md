@@ -91,7 +91,7 @@ As with any numbers, underscore separators are permitted between all digits.
 There exist a few shorthands for commonly used radixes.
 - `\b110` or `\B110` - same as `\2:110`
 - `\o777` - same as `\8:777`
-   - Note that an uppercase O is *not* permitted, because it's easily confused with a zero.
+    - Note that an uppercase O is *not* permitted, because it's easily confused with a zero.
 - `\xFF` or `\XFF` - same as `\16:FF`
 
 Integers that out of the 32-bit range are invalid, though this limitation may be relaxed in
@@ -108,9 +108,9 @@ Strings begin and end with double quotes, and can contain the following escape s
 - `\r` - carriage return, ASCII 0Dh
 - `\t` - tabulator, ASCII 09h
 - `\u{x}` - Unicode [scalar value](https://www.unicode.org/glossary/#unicode_scalar_value)
-  - Between braces must be a hexadecimal digit <= 10FFFFh not contained in the range D800h–DFFFh (inclusive).
-  - Like in any number, digits can be separated with underscores.
-  - At least one digit must be present.
+    - Between braces must be a hexadecimal digit <= 10FFFFh not contained in the range D800h–DFFFh (inclusive).
+    - Like in any number, digits can be separated with underscores.
+    - At least one digit must be present.
 
 Raw strings begin with the extended literal sequence `\r`, followed by double quotes, any sequence
 of characters that doesn't contain double quotes, and end with double quotes. Raw strings do not
@@ -132,8 +132,8 @@ To construct a long string literal, prefix each line of the string with `\\`.
 ```mica
 # Spaces after \\ are not stripped.
 s =
-   \\Hello,
-   \\ world!
+    \\Hello,
+    \\ world!
 assert(s == "Hello,\n world!")
 ```
 
@@ -149,10 +149,10 @@ data type. They are heterogenous, which means that multiple data types can be st
 list - including other lists.
 ```mica
 identity_mat4 = [
-   [1, 0, 0, 0],
-   [0, 1, 0, 0],
-   [0, 0, 1, 0],
-   [0, 0, 0, 1],  # trailing comma is optional
+    [1, 0, 0, 0],
+    [0, 1, 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1],  # trailing comma is optional
 ]
 ```
 Elements can be retrieved using the `get/1` function, and modified using the `set/2` function.
@@ -189,8 +189,8 @@ written as `[:]`.
 
 ```mica
 dependencies = [
-   "rust": "1.61",
-   "mica": "0.3.0",
+    "rust": "1.61",
+    "mica": "0.3.0",
 ]
 ```
 Elements can be retrieved using `get/1`.
@@ -210,10 +210,10 @@ Just like lists, dicts are heterogenous. Any value can be used as a key or a val
 itself.
 ```mica
 weird = [
-   "#ffffff": "white",
-   [1, 2]: 0,
-   [3, 4]: 1,
-   ["x": 3]: 5,
+    "#ffffff": "white",
+    [1, 2]: 0,
+    [3, 4]: 1,
+    ["x": 3]: 5,
 ]
 assert(weird.get([1, 2]) == 0)
 assert(weird.get(["x": 3]) == 5)
@@ -240,7 +240,7 @@ An identifier must start with an alphabetic character or an underscore, and cont
 more alphanumeric characters or underscores. Alphabetic and alphanumeric characters are defined in
 [Chapter 4 of the Unicode Standard][unicode-chapter4].
 
-   [unicode-chapter4]: https://www.unicode.org/versions/Unicode14.0.0/ch04.pdf
+    [unicode-chapter4]: https://www.unicode.org/versions/Unicode14.0.0/ch04.pdf
 
 The naming conventions used in Mica code should be `PascalCase` for type names and `snake_case` for
 everything else (variables, functions). `SCREAMING_SNAKE_CASE` can be used for constants, however
@@ -312,7 +312,7 @@ Ordered relation between values of distinct types is undefined and raises a runt
 
 > true < 1
 error: type mismatch, expected Boolean but got Number
-    (repl):1:6  <main>
+     (repl):1:6  <main>
 ```
 
 #### Logic
@@ -439,8 +439,8 @@ Variables are subject to _scoping_. Mica has two kinds of scopes: global, and lo
 The global scope is the default scope. A local scope can be introduced by using `do..end`.
 ```mica
 do
-   my_variable = 1
-   print(my_variable)  #> 1
+    my_variable = 1
+    print(my_variable)  #> 1
 end
 ```
 A `do..end` block returns the value of the last expression inside.
@@ -452,7 +452,7 @@ Local variables on the other hand, are temporary, and are deleted as soon as the
 declared in `end`s.
 ```mica
 > do
-   my_variable = 1
+    my_variable = 1
 end
 < 1
 
@@ -465,7 +465,7 @@ end
 `if` expressions allow for evaluating different _branches_ of code based upon _conditions_.
 ```mica
 if condition do
-   # branch
+    # branch
 end
 ```
 The condition can be any expression. The branch will execute only if the condition is evaluated to
@@ -481,19 +481,19 @@ More branches can be specified by using the `elif` keyword:
 # readline function provided by host program
 x = Number.parse(readline())
 if x == 1 do
-   "one!"
+    "one!"
 elif x == 2 do
-   "two!"
+    "two!"
 elif x == 3 do
-   "three!"
+    "three!"
 end
 ```
 A fallback branch can be specified by using the `else` keyword:
 ```mica
 if readline() == "yes" do
-   print("Continuing.")
+    print("Continuing.")
 else
-   print("Cancelling...")
+    print("Cancelling...")
 end
 ```
 
@@ -502,8 +502,8 @@ branch. This means that variables can be declared inside the branch, which allow
 checks.
 ```
 if value = do_some_stuff() do
-   # value is guaranteed to be non-nil
-   value.do_something(123)
+    # value is guaranteed to be non-nil
+    value.do_something(123)
 end
 ```
 
@@ -512,7 +512,7 @@ end
 `while` is an expression that can be used for looping.
 ```mica
 while condition do
-   # body
+    # body
 end
 ```
 The condition will be evaluated, and if found truthy, the body will execute. Once the body is done
@@ -525,8 +525,8 @@ A basic loop that counts up from 1 to 10:
 ```mica
 i = 1
 while i <= 10 do
-   print(i)
-   i = i + 1
+    print(i)
+    i = i + 1
 end
 ```
 
@@ -535,7 +535,7 @@ Just like in `if`, `while` introduces a new scope on the `while` keyword. This a
 ```
 iterator = get_iterator_from_somewhere()
 while i = iterator.next do
-   print(i)
+    print(i)
 end
 ```
 
@@ -546,29 +546,29 @@ it allows for iterating over an _iterator_. The iterator is any value that imple
 [trait](#trait-definitions), which is defined as follows:
 ```mica
 trait Iterator
-   func has_next()
-   func next()
+    func has_next()
+    func next()
 end
 ```
 A `for` loop is desugared to a `while` loop as follows:
 ```mica
 for binding in iter do
-   # body
+    # body
 end
 
 # becomes
 
 do
-   # This _iterator variable is hidden by the compiler, and cannot be referred to.
-   _iterator = iter
-   # It's also worth noting that these method calls do not involve global lookups to resolve
-   # Iterator, as they would in normal Mica code.
-   while Iterator.has_next(_iterator) do
-      binding = Iterator.next(_iterator)
-      do
-         # body
-      end
-   end
+    # This _iterator variable is hidden by the compiler, and cannot be referred to.
+    _iterator = iter
+    # It's also worth noting that these method calls do not involve global lookups to resolve
+    # Iterator, as they would in normal Mica code.
+    while Iterator.has_next(_iterator) do
+        binding = Iterator.next(_iterator)
+        do
+            # body
+        end
+    end
 end
 ```
 
@@ -578,11 +578,11 @@ A `break` expression can be used to immediately jump past a loop.
 ```mica
 i = 1
 while true do
-   print(i)
-   i = i + 1
-   if i * i >= 100 do
-      break
-   end
+    print(i)
+    i = i + 1
+    if i * i >= 100 do
+        break
+    end
 end
 print("done!")
 ```
@@ -594,10 +594,10 @@ truthy, execution will jump past the loop onto the line with `print`.
 # Find the first number whose square is greater than 100.
 i = 1
 print(while true do
-   i = i + 1
-   if i * i > 100 do
-      break i
-   end
+    i = i + 1
+    if i * i > 100 do
+        break i
+    end
 end)  #> 11
 ```
 In fact, a bare `break` is syntax sugar for `break nil`.
@@ -620,8 +620,8 @@ visible in stack traces. Anonymous functions have the name `<anonymous>`.
 To create a multiline function, a `do` block can be used as the expression:
 ```mica
 func say_nice_things() = do
-   print("Hey!")
-   print("You look great today!")
+    print("Hey!")
+    print("You look great today!")
 end
 ```
 
@@ -650,7 +650,7 @@ assert(struct Example == Example)
 Implementations, or `impl` blocks, can be used to attach data and behavior to types.
 ```mica
 SomeStructType impl
-   # functions
+    # functions
 end
 ```
 An `impl` block can contain three types of functions: _static_ functions, _constructors_, and
@@ -662,8 +662,8 @@ functions can be used as a way of putting functions into namespaces.
 struct Greetings
 
 Greetings impl
-   func get(for_whom) static =
-      "Hello, ".cat(for_whom).cat("!")
+    func get(for_whom) static =
+        "Hello, ".cat(for_whom).cat("!")
 end
 
 assert(Greetings.get("world") == "Hello, world!")
@@ -684,27 +684,27 @@ declared in the first one.
 struct Vector
 
 Vector impl
-   func new(x, y) constructor = do
-      # Declare fields that will store the X/Y coordinates of the vector.
-      @x = x
-      @y = y
-   end
+    func new(x, y) constructor = do
+        # Declare fields that will store the X/Y coordinates of the vector.
+        @x = x
+        @y = y
+    end
 
-   func zero() constructor = do
-      # Additional constructors must assign to the same set of fields as the first constructor.
-      @x = 0
-      @y = 0
-   end
+    func zero() constructor = do
+        # Additional constructors must assign to the same set of fields as the first constructor.
+        @x = 0
+        @y = 0
+    end
 
-   # Now we can declare functions that operate on instances of the type.
+    # Now we can declare functions that operate on instances of the type.
 
-   func len2() =
-      @x * @x + @y * @y
+    func len2() =
+        @x * @x + @y * @y
 
-   func len() =
-      # The `self` variable may be used to refer to the instance the function was called on, ie.
-      # the left-hand side of the dot.
-      self.len2.sqrt
+    func len() =
+        # The `self` variable may be used to refer to the instance the function was called on, ie.
+        # the left-hand side of the dot.
+        self.len2.sqrt
 end
 
 v = Vector.new(3, 4)
@@ -731,16 +731,16 @@ The implemented struct can be any expression, so nothing prevents you from doing
 ```mica
 struct S
 func obtain_struct() =
-   S
+    S
 
 obtain_struct() impl
-   # ...
+    # ...
 end
 ```
 This also leads to the following idiom, where a newly created struct is implemented right away:
 ```mica
 struct Immediate impl
-   # ...
+    # ...
 end
 ```
 This idiom is why `impl` is a postfix operator rather than a prefix operator - it reads much more
@@ -751,10 +751,10 @@ Apart from this, an `impl` block returns the implemented struct, so eg. returnin
 implemented struct from a function is possible.
 ```mica
 func make_me_a_struct() =
-   struct TheStruct impl
-      func say_hi() static =
-         print("Hi!!")
-   end
+    struct TheStruct impl
+        func say_hi() static =
+            print("Hi!!")
+    end
 
 AStruct = make_me_a_struct()
 AStruct.say_hi()
@@ -774,19 +774,19 @@ This feature is commonly known as _interfaces_ or _protocols_ in other programmi
 To define a trait, the `trait` keyword is used:
 ```mica
 trait MyTrait
-   func do_something()  # note the lack of the equals sign '='
+    func do_something()  # note the lack of the equals sign '='
 end
 ```
 Implementing a trait is done through introducing an `as` block inside an `impl`:
 ```mica
 struct MyImplementer impl
-   func new() constructor = nil
+    func new() constructor = nil
 
-   as MyTrait
-      func do_something() = do
-         print("Hello!")
-      end
-   end
+    as MyTrait
+        func do_something() = do
+            print("Hello!")
+        end
+    end
 end
 ```
 Note that all trait methods are _instance_ methods. Allowing static methods in traits or static

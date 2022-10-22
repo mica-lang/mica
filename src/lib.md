@@ -9,25 +9,25 @@
 ## Hello, Mica!
 
 struct Counter impl
-   func new(start, increment) constructor = do
-      @value = start
-      @increment = increment
-   end
+    func new(start, increment) constructor = do
+        @value = start
+        @increment = increment
+    end
 
-   func value() = @value
+    func value() = @value
 
-   func increment() = do
-      @value = @value + @increment
-   end
+    func increment() = do
+        @value = @value + @increment
+    end
 end
 
 c = Counter.new(1, 1)
 while c.value < 100 do
-   print(c.value)
-   if c.value.mod(2) == 0 do
-      print("even!")
-   end
-   c.increment()
+    print(c.value)
+    if c.value.mod(2) == 0 do
+        print("even!")
+    end
+    c.increment()
 end
 ```
 
@@ -84,7 +84,7 @@ A fiber doesn't start running immediately though. To make it start interpreting 
 # let mut fiber = script.start();
 use mica::Value;
 while let Some(value) = fiber.resume::<Value>()? {
-   println!("{value:?}");
+    println!("{value:?}");
 }
 // Output:
 // Hello, world!
@@ -155,12 +155,12 @@ of just returning values.
 # mica::std::load(&mut engine);
 // The unit type implements TryFromValue that expects a nil value.
 let _: () =
-   engine.start(
-      "code.mi",
-      r#" x = 1
-          nil "# // Explicitly return nil, because every assignment evaluates to its right-hand side
-   )?
-   .trampoline()?;
+    engine.start(
+        "code.mi",
+        r#" x = 1
+            nil "# // Explicitly return nil, because every assignment evaluates to its right-hand side
+    )?
+    .trampoline()?;
 let x: f64 = engine.get("x")?;
 assert_eq!(x, 1.0);
 # Ok(())
@@ -178,8 +178,8 @@ calling Rust functions. To register a Rust function in the VM, [`Engine::add_fun
 # mica::std::load(&mut engine);
 engine.add_function("double", |x: f64| x * x)?;
 assert_eq!(
-   engine.start("ffi.mi", "double(2)")?.trampoline::<f64>()?,
-   4.0
+    engine.start("ffi.mi", "double(2)")?.trampoline::<f64>()?,
+    4.0
 );
 # Ok(())
 # }
@@ -197,11 +197,11 @@ Rust functions registered in the VM can also be fallible, and return a [`Result<
 // Note that the API also understands numeric types other than `f64`. However, the only type of
 // numbers Mica supports natively is `f64`, so converting from bigger types incurs a precision loss.
 engine.add_function("parse_integer_with_radix", |s: String, radix: u32| {
-   usize::from_str_radix(&s, radix)
+    usize::from_str_radix(&s, radix)
 })?;
 assert_eq!(
-   engine.start("ffi.mi", r#" parse_integer_with_radix("FF", 16) "#)?.trampoline::<f64>()?,
-   255.0
+    engine.start("ffi.mi", r#" parse_integer_with_radix("FF", 16) "#)?.trampoline::<f64>()?,
+    255.0
 );
 # Ok(())
 # }
@@ -241,8 +241,8 @@ First of all, for Rust type system reasons, your type needs to implement [`UserD
 use mica::UserData;
 
 struct Counter {
-   value: usize,
-   increment: usize,
+    value: usize,
+    increment: usize,
 }
 
 impl UserData for Counter {}
@@ -263,32 +263,32 @@ With a type set up, you can then create a [`TypeBuilder`] and use it in [`Engine
 use mica::TypeBuilder;
 
 impl Counter {
-   fn value(&self) -> usize { self.value }
-   fn increment(&mut self) {
-      self.value += self.increment;
-   }
+    fn value(&self) -> usize { self.value }
+    fn increment(&mut self) {
+        self.value += self.increment;
+    }
 }
 
 engine.add_type(
-   // The argument passed to TypeBuilder::new is the name of the global that we want to bind the
-   // type under.
-   TypeBuilder::<Counter>::new("Counter")
-      .add_constructor("new", |ctor| move |value: usize, increment: usize| {
-         ctor.construct(Counter { value, increment })
-      })
-      .add_function("value", Counter::value)
-      .add_function("increment", Counter::increment)
+    // The argument passed to TypeBuilder::new is the name of the global that we want to bind the
+    // type under.
+    TypeBuilder::<Counter>::new("Counter")
+        .add_constructor("new", |ctor| move |value: usize, increment: usize| {
+            ctor.construct(Counter { value, increment })
+        })
+        .add_function("value", Counter::value)
+        .add_function("increment", Counter::increment)
 );
 
 assert_eq!(
-   engine
-      .start("type.mi", r#"
-         counter = Counter.new(10, 2)
-         counter.increment()
-         counter.value
-      "#)?
-      .trampoline::<f64>()?,
-   12.0,
+    engine
+        .start("type.mi", r#"
+            counter = Counter.new(10, 2)
+            counter.increment()
+            counter.value
+        "#)?
+        .trampoline::<f64>()?,
+    12.0,
 );
 # Ok(())
 # }
@@ -314,14 +314,14 @@ function may be used.
 # let mut engine = mica::Engine::new(mica::std::lib());
 # mica::std::load(&mut engine);
 let get_greeting =
-   engine
-      .start(
-         "function.mi",
-         r#"
-            (func (x) = "Hello, ".cat(x).cat("!"))
-         "#
-      )?
-      .trampoline()?;
+    engine
+        .start(
+            "function.mi",
+            r#"
+                (func (x) = "Hello, ".cat(x).cat("!"))
+            "#
+        )?
+        .trampoline()?;
 let greeting: String = engine.call(get_greeting, [Value::from("world")])?;
 assert_eq!(greeting, "Hello, world!");
 # Ok(())
@@ -335,21 +335,21 @@ Apart from bare functions, it's also possible to call methods, by using [`Engine
 # let mut engine = mica::Engine::new(mica::std::lib());
 # mica::std::load(&mut engine);
 let greeter_type =
-   engine
-      .start(
-         "greeter.mi",
-         r#"
-            struct Greeter impl
-               func new(template) constructor = do
-                  @template = template
-               end
+    engine
+        .start(
+            "greeter.mi",
+            r#"
+                struct Greeter impl
+                    func new(template) constructor = do
+                        @template = template
+                    end
 
-               func greetings(for_whom) =
-                  @template.replace("{target}", for_whom)
-            end
-         "#
-      )?
-      .trampoline()?;
+                    func greetings(for_whom) =
+                        @template.replace("{target}", for_whom)
+                end
+            "#
+        )?
+        .trampoline()?;
 let greeter = engine.call_method(greeter_type, ("new", 1), [Value::from("Hello, {target}!")])?;
 let greeting: String = engine.call_method(greeter, ("greetings", 1), [Value::from("world")])?;
 assert_eq!(greeting, "Hello, world!");
@@ -382,22 +382,22 @@ engine.set("RandomNumberGenerator", random_number_generator)?;
 
 // Once the trait is exposed to scripts, we can now define types that implement it.
 let rng: Value =
-   engine
-      .start(
-         "rng.mi",
-         r#"
-            struct Generator impl
-               func new() constructor = nil
+    engine
+        .start(
+            "rng.mi",
+            r#"
+                struct Generator impl
+                    func new() constructor = nil
 
-               as RandomNumberGenerator
-                  ## https://xkcd.com/221/
-                  func generate() = 4
-               end
-            end
-            .new()  # Note that trait methods can be called on instances only.
-         "#
-      )?
-      .trampoline()?;
+                    as RandomNumberGenerator
+                        ## https://xkcd.com/221/
+                        func generate() = 4
+                    end
+                end
+                .new()  # Note that trait methods can be called on instances only.
+            "#
+        )?
+        .trampoline()?;
 let number: u32 = engine.call_method(rng, m_generate, [])?;
 assert_eq!(number, 4);
 # Ok(())

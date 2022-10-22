@@ -1,76 +1,41 @@
 # Mica
 
-[Language reference][langref] · [Rust API][rustapi]
-
-![Crate version](https://img.shields.io/crates/v/mica?style=flat-square)
+[![Language reference](https://img.shields.io/badge/docs-language-blueviolet?style=flat-square)][langref]
+[![Rust API](https://img.shields.io/badge/docs-API-blueviolet?style=flat-square)][rustapi] ·
+[![GitHub](https://img.shields.io/badge/GitHub-mica--lang%2Fmica-blue?style=flat-square)][GitHub]
+[![crates.io](https://img.shields.io/crates/v/mica?style=flat-square)][crates.io]
 
 A simple, human-friendly scripting language, developed one feature at a time.
 
 - **Human-friendly** syntax inspired by Ruby and Lua
-- **Simple** yet **extensible** by providing a small amount of flexible language features
+- **Simple** and **familiar** to Rust developers feature-wise
 - **Easily embeddable** into existing programs
-- Still highly work in progress!
+- More **performant** than most existing Rust scripting languages
 
-You can try out the REPL with `cargo run -p mica-cli --release`.
+At its current stage, it can be embedded into existing programs, but bugs may arise and certain
+parts may be cumbersome to use. The performance is also not even close to where I'd like it to be.
+But I want you to try it out and share your thoughts!
 
 ## Try it out
 
-To compile Mica, use the following command:
+To compile Mica, use one of the following commands:
 ```sh
+# To install the latest stable release:
+$ cargo install mica-cli
+# To compile the latest revision:
+$ git clone https://github.com/mica-lang/mica
+$ cd mica
 $ cargo build -p mica-cli --release
-# or, if you want to run it immediately:
-$ cargo run -p mica-cli --release
+```
+Then you can try it out interactively, or run a file:
+```sh
+# To open the REPL:
+$ mica
+# To run a file:
+$ mica filename.mi
 ```
 
-Check out the [language reference][langref] to have a detailed look at the language!
-
-## Performance
-
-```
-func factorial(n)
-   i = 1
-   x = 1
-   while i <= n do
-      x = x * i
-      i = i + 1
-   end
-   x
-end
-
-iteration = 1
-result = 0
-while iteration <= 100000 do
-   result = factorial(15)
-   iteration = iteration + 1
-end
-
-print(result)
-```
-<p align="center">Factorial benchmark</p>
-
-```
-> hyperfine --warmup 5 'target/release/mica code/functions.mi' 'lua5.1 code/functions.lua' 'python3 code/functions.py'
-Benchmark 1: target/release/mica code/functions.mi
-  Time (mean ± σ):      94.8 ms ±   6.8 ms    [User: 93.8 ms, System: 1.2 ms]
-  Range (min … max):    91.5 ms … 121.1 ms    31 runs
-
-Benchmark 2: lua5.1 code/functions.lua
-  Time (mean ± σ):      27.5 ms ±   1.9 ms    [User: 26.7 ms, System: 1.2 ms]
-  Range (min … max):    26.9 ms …  45.9 ms    97 runs
-
-Benchmark 3: python3 code/functions.py
-  Time (mean ± σ):     117.5 ms ±   1.3 ms    [User: 116.2 ms, System: 1.4 ms]
-  Range (min … max):   115.6 ms … 119.9 ms    25 runs
-
-Summary
-  'lua5.1 code/functions.lua' ran
-    3.44 ± 0.34 times faster than 'target/release/mica code/functions.mi'
-    4.27 ± 0.30 times faster than 'python3 code/functions.py'
-```
-It's not ideal yet but hopefully it'll get better with time. Current bottlenecks include:
-- Stack-based rather than register-based virtual machine
-- Rust not having a way of doing direct threading in the interpreter dispatch loop. _Tail calls when_
-- The bytecode compiler not optimizing much
+Check out the [language reference][langref] for a detailed look at the language!
 
 ## Why?
 
@@ -80,8 +45,8 @@ me.
   [rlua](https://github.com/amethyst/rlua) quite annoying to use due to their inability to bind
   most functions out of the box. You have to create wrapper functions that take giant tuples as
   arguments, which confuses the heck out of rustfmt, and is just plain inconvenient.
-- [Rhai](https://github.com/rhaiscript/rhai) is nice, but the AST-walk interpreter is very slow.
-  A waste of computer resources which I cannot afford to have in my programs.
+- [Rhai](https://github.com/rhaiscript/rhai) is nice feature-wise, but the AST-walk interpreter is
+  very slow. A real waste of computer resources.
 - [Dyon](https://github.com/pistondevelopers/dyon)… exists, but it seems more like an
   experimenting ground for implementing language features rather than a language designed for end
   users.
@@ -96,7 +61,7 @@ There's also a number of unfinished crates with bindings for more niche scriptin
 are written in C, but, well, _they're unfinished_.
 
 I wanted a language that would take performance seriously. Be designed with specific goals in mind.
-Sugary, but not quite sweet enough to give you instant diabetes. And made by me.
+Sugary, but not quite sweet enough to give you instant diabetes. And handmade by myself.
 
 Designing and implementing a programming language has been one of my arch nemeses for the
 [past](https://github.com/liquidev/hayago) [few](https://github.com/liquidev/cflang) [years](https://github.com/liquidev/tsuki)
@@ -106,3 +71,5 @@ with varying levels of success, but I feel like finally, this is it. This time I
 
   [langref]: docs/language.md
   [rustapi]: https://docs.rs/mica/latest
+  [GitHub]: https://github.com/mica-lang/mica
+  [crates.io]: https://crates.io/crates/mica

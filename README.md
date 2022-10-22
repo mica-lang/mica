@@ -12,6 +12,32 @@ A simple, human-friendly scripting language, developed one feature at a time.
 - **Easily embeddable** into existing programs
 - More **performant** than most existing Rust scripting languages
 
+```
+# Hello, Mica!
+
+struct Counter impl
+   func new(start, increment) constructor = do
+      @value = start
+      @increment = increment
+   end
+
+   func value() = @value
+
+   func increment() = do
+      @value = @value + @increment
+   end
+end
+
+c = Counter.new(1, 1)
+while c.value < 100 do
+   print(c.value)
+   if c.value.mod(2) == 0 do
+      print("even!")
+   end
+   c.increment()
+end
+```
+
 At its current stage, it can be embedded into existing programs, but bugs may arise and certain
 parts may be cumbersome to use. The performance is also not even close to where I'd like it to be.
 But I want you to try it out and share your thoughts!

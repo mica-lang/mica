@@ -10,55 +10,55 @@ use crate::ffvariants::{FallibleSelf, ImmutableSelf, InfallibleSelf, MutableSelf
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
 pub enum BuiltinTrait {
-   None,
-   Iterator,
+    None,
+    Iterator,
 }
 
 mod private {
-   pub trait Sealed {}
+    pub trait Sealed {}
 }
 
 /// A built-in trait method that can be implemented with functions whose signature fits `S`.
 pub trait BuiltinTraitFunction<S>: private::Sealed {
-   #[doc(hidden)]
-   const NAME: &'static str;
+    #[doc(hidden)]
+    const NAME: &'static str;
 
-   #[doc(hidden)]
-   fn owning_trait(&self) -> BuiltinTrait;
+    #[doc(hidden)]
+    fn owning_trait(&self) -> BuiltinTrait;
 }
 
 macro_rules! implement_builtin_trait_function {
-   ($T:ty, $name:expr, ($($Args:ty),*), $owning_trait:expr) => {
-      impl super::private::Sealed for $T {}
+    ($T:ty, $name:expr, ($($Args:ty),*), $owning_trait:expr) => {
+        impl super::private::Sealed for $T {}
 
-      macro_rules! implement_for {
-         (<$S:tt> $ST:ty) => {
-            impl<$S> BuiltinTraitFunction<$ST> for $T {
-               const NAME: &'static str = $name;
+        macro_rules! implement_for {
+            (<$S:tt> $ST:ty) => {
+                impl<$S> BuiltinTraitFunction<$ST> for $T {
+                    const NAME: &'static str = $name;
 
-               fn owning_trait(&self) -> BuiltinTrait {
-                  $owning_trait
-               }
-            }
-         };
-      }
+                    fn owning_trait(&self) -> BuiltinTrait {
+                        $owning_trait
+                    }
+                }
+            };
+        }
 
-      implement_for!(<S> FallibleSelf<ImmutableSelf<S>, (&S, $($Args),*)>);
-      implement_for!(<S> InfallibleSelf<ImmutableSelf<S>, (&S, $($Args),*)>);
-      implement_for!(<S> InfallibleSelf<MutableSelf<S>, (&mut S, $($Args),*)>);
-      implement_for!(<S> FallibleSelf<MutableSelf<S>, (&mut S, $($Args),*)>);
-   };
+        implement_for!(<S> FallibleSelf<ImmutableSelf<S>, (&S, $($Args),*)>);
+        implement_for!(<S> InfallibleSelf<ImmutableSelf<S>, (&S, $($Args),*)>);
+        implement_for!(<S> InfallibleSelf<MutableSelf<S>, (&mut S, $($Args),*)>);
+        implement_for!(<S> FallibleSelf<MutableSelf<S>, (&mut S, $($Args),*)>);
+    };
 }
 
 /// Methods from the `Iterator` trait.
 pub mod iterator {
-   use super::*;
+    use super::*;
 
-   /// `Iterator.has_next`, can be implemented with `fn (&mut self) -> T`.
-   pub struct HasNext;
-   implement_builtin_trait_function!(HasNext, "has_next", (), BuiltinTrait::Iterator);
+    /// `Iterator.has_next`, can be implemented with `fn (&mut self) -> T`.
+    pub struct HasNext;
+    implement_builtin_trait_function!(HasNext, "has_next", (), BuiltinTrait::Iterator);
 
-   /// `Iterator.next`, can be implemented with `fn (&mut self) -> T`.
-   pub struct Next;
-   implement_builtin_trait_function!(Next, "next", (), BuiltinTrait::Iterator);
+    /// `Iterator.next`, can be implemented with `fn (&mut self) -> T`.
+    pub struct Next;
+    implement_builtin_trait_function!(Next, "next", (), BuiltinTrait::Iterator);
 }

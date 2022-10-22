@@ -2,27 +2,29 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use mica::{Engine, Error, LanguageError, LanguageErrorKind, Value};
-use rustyline::completion::Completer;
-use rustyline::highlight::Highlighter;
-use rustyline::hint::Hinter;
-use rustyline::validate::{ValidationContext, ValidationResult, Validator};
-use rustyline::{Editor, Helper};
+use rustyline::{
+    completion::Completer,
+    highlight::Highlighter,
+    hint::Hinter,
+    validate::{ValidationContext, ValidationResult, Validator},
+    Editor, Helper,
+};
 
 #[derive(Parser)]
 #[clap(name = "mica")]
 struct Options {
-   file: Option<PathBuf>,
+    file: Option<PathBuf>,
 
-   #[clap(flatten)]
-   engine_options: EngineOptions,
+    #[clap(flatten)]
+    engine_options: EngineOptions,
 }
 
 #[derive(clap::Args)]
 struct EngineOptions {
-   #[clap(long)]
-   dump_ast: bool,
-   #[clap(long)]
-   dump_bytecode: bool,
+    #[clap(long)]
+    dump_ast: bool,
+    #[clap(long)]
+    dump_bytecode: bool,
 }
 
 struct MicaValidator;
@@ -30,110 +32,109 @@ struct MicaValidator;
 impl Helper for MicaValidator {}
 
 impl Hinter for MicaValidator {
-   type Hint = String;
+    type Hint = String;
 }
 
 impl Highlighter for MicaValidator {}
 
 impl Completer for MicaValidator {
-   type Candidate = String;
+    type Candidate = String;
 }
 
 impl Validator for MicaValidator {
-   fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
-      let mut engine = Engine::new(mica::std::lib());
-      if let Err(error) = engine.compile("(repl)", ctx.input()) {
-         use LanguageErrorKind as ErrorKind;
-         if let Error::Compile(LanguageError::Compile {
-            kind:
-               ErrorKind::MissingEnd | ErrorKind::MissingClosingQuote | ErrorKind::MissingRightParen,
-            ..
-         }) = error
-         {
-            return Ok(ValidationResult::Incomplete);
-         }
-      }
-      Ok(ValidationResult::Valid(None))
-   }
+    fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
+        let mut engine = Engine::new(mica::std::lib());
+        if let Err(error) = engine.compile("(repl)", ctx.input()) {
+            use LanguageErrorKind as ErrorKind;
+            if let Error::Compile(LanguageError::Compile {
+                kind:
+                    ErrorKind::MissingEnd
+                    | ErrorKind::MissingClosingQuote
+                    | ErrorKind::MissingRightParen,
+                ..
+            }) = error
+            {
+                return Ok(ValidationResult::Incomplete);
+            }
+        }
+        Ok(ValidationResult::Valid(None))
+    }
 }
 
 fn interpret<'e>(
-   engine: &'e mut Engine,
-   filename: &str,
-   input: String,
+    engine: &'e mut Engine,
+    filename: &str,
+    input: String,
 ) -> Result<impl Iterator<Item = Result<Value, mica::Error>> + 'e, mica::Error> {
-   let mut fiber = match engine.start(filename, input) {
-      Ok(fiber) => fiber,
-      Err(error) => {
-         eprintln!("{error}");
-         return Ok(None.into_iter().flatten());
-      }
-   };
-   Ok(Some(std::iter::from_fn(move || match fiber.resume() {
-      Ok(Some(value)) => Some(Ok(value)),
-      Ok(None) => None,
-      Err(error) => {
-         eprintln!("{error}");
-         Some(Err(error))
-      }
-   }))
-   .into_iter()
-   .flatten())
+    let mut fiber = match engine.start(filename, input) {
+        Ok(fiber) => fiber,
+        Err(error) => {
+            eprintln!("{error}");
+            return Ok(None.into_iter().flatten());
+        }
+    };
+    Ok(Some(std::iter::from_fn(move || match fiber.resume() {
+        Ok(Some(value)) => Some(Ok(value)),
+        Ok(None) => None,
+        Err(error) => {
+            eprintln!("{error}");
+            Some(Err(error))
+        }
+    }))
+    .into_iter()
+    .flatten())
 }
 
 fn engine(options: &EngineOptions) -> Result<Engine, mica::Error> {
-   let mut engine = Engine::with_debug_options(
-      mica::std::lib(),
-      mica::DebugOptions {
-         dump_ast: options.dump_ast,
-         dump_bytecode: options.dump_bytecode,
-      },
-   );
-   mica::std::load(&mut engine)?;
-   Ok(engine)
+    let mut engine = Engine::with_debug_options(
+        mica::std::lib(),
+        mica::DebugOptions { dump_ast: options.dump_ast, dump_bytecode: options.dump_bytecode },
+    );
+    mica::std::load(&mut engine)?;
+    Ok(engine)
 }
 
 fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
-   println!("Mica {} REPL", env!("CARGO_PKG_VERSION"));
-   println!("Press Ctrl-C to exit.");
-   println!();
+    println!("Mica {} REPL", env!("CARGO_PKG_VERSION"));
+    println!("Press Ctrl-C to exit.");
+    println!();
 
-   let mut editor =
-      Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
-   editor.set_helper(Some(MicaValidator));
+    let mut editor =
+        Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
+    editor.set_helper(Some(MicaValidator));
 
-   let mut engine = engine(engine_options)?;
-   while let Ok(line) = editor.readline("> ") {
-      let iterator = match interpret(&mut engine, "(repl)", line) {
-         Ok(iterator) => iterator,
-         Err(_) => break,
-      };
-      for result in iterator.flatten() {
-         println!("< {result:?}");
-         println!();
-      }
-   }
+    let mut engine = engine(engine_options)?;
+    while let Ok(line) = editor.readline("> ") {
+        let iterator = match interpret(&mut engine, "(repl)", line) {
+            Ok(iterator) => iterator,
+            Err(_) => break,
+        };
+        for result in iterator.flatten() {
+            println!("< {result:?}");
+            println!();
+        }
+    }
 
-   Ok(())
+    Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-   let opts = Options::parse();
-   if let Some(path) = &opts.file {
-      let file = std::fs::read_to_string(path)?;
-      let mut engine = engine(&opts.engine_options)?;
-      let fiber = match interpret(&mut engine, path.to_str().unwrap(), file) {
-         Ok(iterator) => iterator,
-         Err(_) => std::process::exit(-1),
-      };
-      for result in fiber {
-         if result.is_err() {
-            std::process::exit(1);
-         }
-      }
-   } else {
-      repl(&opts.engine_options)?;
-   }
+    let opts = Options::parse();
+    if let Some(path) = &opts.file {
+        let file = std::fs::read_to_string(path)?;
+        let mut engine = engine(&opts.engine_options)?;
+        let fiber = match interpret(&mut engine, path.to_str().unwrap(), file) {
+            Ok(iterator) => iterator,
+            Err(_) => std::process::exit(-1),
+        };
+        for result in fiber {
+            if result.is_err() {
+                std::process::exit(1);
+            }
+        }
+    } else {
+        repl(&opts.engine_options)?;
+    }
 
-   Ok(())
+    Ok(())
 }

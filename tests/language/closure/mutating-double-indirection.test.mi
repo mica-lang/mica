@@ -2,11 +2,11 @@
 set = nil
 get = nil
 func double_indirection_mut() = do
-   val = 1
-   (func () = do
-      set = func (x) = val = x
-      get = func () = val
-   end)
+    val = 1
+    (func () = do
+        set = func (x) = val = x
+        get = func () = val
+    end)
 end
 setup = double_indirection_mut()
 setup()

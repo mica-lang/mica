@@ -1,7 +1,7 @@
 # A struct can be implemented with arbitrary methods.
 struct Greetings impl
-   func get(for_whom) static =
-      "Hello, ".cat(for_whom).cat("!")
+    func get(for_whom) static =
+        "Hello, ".cat(for_whom).cat("!")
 end
 
 # Said methods can be called.

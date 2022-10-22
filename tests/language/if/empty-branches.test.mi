@@ -1,19 +1,19 @@
 # Check that branches can be empty.
 j = 1
 z =
-   if j == 1 do end
+    if j == 1 do end
 assert(z == nil)
 z =
-   if j == 2 do else end
+    if j == 2 do else end
 assert(z == nil)
 z =
-   if j == 2 do
-   elif j == 1 do
-   end
+    if j == 2 do
+    elif j == 1 do
+    end
 assert(z == nil)
 z =
-   if j == 2 do
-   elif j == 3 do
-   else
-   end
+    if j == 2 do
+    elif j == 3 do
+    else
+    end
 assert(z == nil)

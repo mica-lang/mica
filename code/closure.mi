@@ -1,20 +1,20 @@
 "f = do
-   x = 1
-   (func ()
-      print(x)
-      x + 1
-   end)
+    x = 1
+    (func ()
+        print(x)
+        x + 1
+    end)
 end
 
 print(f())"
 
 func counter()
-   i = 1
-   (func ()
-      value = i
-      i = i + 1
-      value
-   end)
+    i = 1
+    (func ()
+        value = i
+        i = i + 1
+        value
+    end)
 end
 
 c = counter()
@@ -31,13 +31,13 @@ print("-----")
 inc1 = nil
 inc2 = nil
 do
-   x = 1
-   inc1 = func ()
-      x = x + 1
-   end
-   inc2 = func ()
-      x = x + 2
-   end
+    x = 1
+    inc1 = func ()
+        x = x + 1
+    end
+    inc2 = func ()
+        x = x + 2
+    end
 end
 
 print(inc1())

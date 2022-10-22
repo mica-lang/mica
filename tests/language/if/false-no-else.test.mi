@@ -1,8 +1,8 @@
 # If all branches fall through to the end, it evaluates to nil.
 x = 123
 s =
-   if x != 123 do
-      "Bad"
-   end
+    if x != 123 do
+        "Bad"
+    end
 assert(s == nil)
 assert(x == 123)

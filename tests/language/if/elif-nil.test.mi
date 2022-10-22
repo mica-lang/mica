@@ -1,12 +1,12 @@
 # If no branches are evaluated, the result should be nil.
 i = 1
 x =
-   if i == 2 do
-      error("Branch accidentally evaluated")
-      "Bad 1"
-   elif i == 3 do
-      error("Branch accidentally evaluated")
-      "Bad 2"
-   end
+    if i == 2 do
+        error("Branch accidentally evaluated")
+        "Bad 1"
+    elif i == 3 do
+        error("Branch accidentally evaluated")
+        "Bad 2"
+    end
 assert(x == nil)
 assert(i == 1)

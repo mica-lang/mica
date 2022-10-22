@@ -1,8 +1,8 @@
 # An if expression evaluates to the last expression evaluated in a branch.
 x = 123
 r =
-   if x == 123 do
-      "Good"
-   end
+    if x == 123 do
+        "Good"
+    end
 assert(r == "Good")
 assert(x == 123)

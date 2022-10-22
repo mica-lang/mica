@@ -1,11 +1,11 @@
 # Only the first branch should be evaluated.
 i = 1
 w =
-   if i == 1 do
-      "Good"
-   elif i == 1 do
-      error("Branch accidentally evaluated")
-      "Bad"
-   end
+    if i == 1 do
+        "Good"
+    elif i == 1 do
+        error("Branch accidentally evaluated")
+        "Bad"
+    end
 assert(w == "Good")
 assert(i == 1)

@@ -1,11 +1,11 @@
 # Tests methods of the Gc type.
 
 func make_a_bunch_of_trash() = do
-   i = 0
-   while i < 100 do
-      i = i + 1
-      n = i.to_string
-   end
+    i = 0
+    while i < 100 do
+        i = i + 1
+        n = i.to_string
+    end
 end
 
 # Manual collection

@@ -1,8 +1,9 @@
-**Mica** is an embeddable scripting language for Rust.
+**Mica** is an embeddable scripting language for Rust. Its goals are:
 
-- Features a **human-friendly** syntax inspired by Ruby and Lua.
-- It's **simple** yet **extensible** by providing a small set of flexible features.
-- It's **easily embeddable** into existing programs.
+- **Human-friendly** syntax inspired by Ruby and Lua
+- **Simple** and **familiar** to Rust developers feature-wise
+- **Easily embeddable** into existing programs
+- **Better performance** than most existing Rust scripting languages
 
 ```text
 ## Hello, Mica!

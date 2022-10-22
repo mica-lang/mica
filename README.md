@@ -5,12 +5,12 @@
 [![GitHub](https://img.shields.io/badge/GitHub-mica--lang%2Fmica-blue?style=flat-square)][GitHub]
 [![crates.io](https://img.shields.io/crates/v/mica?style=flat-square)][crates.io]
 
-A simple, human-friendly scripting language, developed one feature at a time.
+A simple, human-friendly scripting language, developed one feature at a time. Its goals are:
 
 - **Human-friendly** syntax inspired by Ruby and Lua
 - **Simple** and **familiar** to Rust developers feature-wise
 - **Easily embeddable** into existing programs
-- More **performant** than most existing Rust scripting languages
+- **Better performance** than most existing Rust scripting languages
 
 ```
 # Hello, Mica!

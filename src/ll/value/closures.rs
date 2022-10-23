@@ -1,7 +1,7 @@
 use std::{cell::UnsafeCell, fmt, marker::PhantomPinned, mem, pin::Pin, ptr, rc::Rc};
 
 use super::RawValue;
-use crate::ll::bytecode::Opr24;
+use crate::ll::bytecode::FunctionIndex;
 
 /// An upvalue captured by a closure.
 pub struct Upvalue {
@@ -70,6 +70,6 @@ impl Upvalue {
 #[repr(align(8))]
 pub struct Closure {
     pub name: Rc<str>,
-    pub function_id: Opr24,
+    pub function_id: FunctionIndex,
     pub captures: Vec<Pin<Rc<Upvalue>>>,
 }

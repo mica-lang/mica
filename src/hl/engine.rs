@@ -8,9 +8,10 @@ use crate::{
     corelib, create_trait_value, ffvariants,
     ll::{
         ast::DumpAst,
+        bytecode,
         bytecode::{
             BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function,
-            FunctionKind, FunctionSignature, Opcode, Opr24,
+            FunctionKind, Opcode, Opr24,
         },
         codegen::{self, CodeGenerator},
         gc::{Gc, Memory},
@@ -19,8 +20,8 @@ use crate::{
         value::{Closure, RawValue},
         vm::{self, Globals},
     },
-    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, MicaResultExt, TraitBuilder,
-    TryFromValue, TypeBuilder, UserData, Value,
+    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, GlobalIndex, MethodIndex, MicaResultExt,
+    TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
 };
 
 /// Options for debugging the language implementation.
@@ -195,14 +196,14 @@ impl Engine {
     /// # Errors
     ///
     /// - [`Error::TooManyMethods`] - raised when too many unique method signatures exist at once
-    pub fn method_id(&mut self, signature: impl MethodSignature) -> Result<MethodId, Error> {
+    pub fn method_id(&mut self, signature: impl MethodSignature) -> Result<MethodIndex, Error> {
         signature.to_method_id(&mut self.env)
     }
 
     /// Calls a method on a receiver with the given arguments.
     ///
     /// Note that if you're calling a method often, it's cheaper to precompute the method signature
-    /// into a [`MethodId`] by using the [`method_id`][`Self::method_id`] function, compared to
+    /// into a [`MethodIndex`] by using the [`method_id`][`Self::method_id`] function, compared to
     /// passing a name+arity pair every single time.
     ///
     /// # Errors
@@ -227,7 +228,7 @@ impl Engine {
         let method_id = signature.to_method_id(&mut self.env)?;
         // Unwrapping here is fine because `to_method_id` ensures that a method with a given ID
         // exists.
-        let signature = self.env.get_method_signature(method_id.0).unwrap();
+        let signature = self.env.get_method_signature(method_id).unwrap();
         let stack: Vec<_> =
             Some(receiver).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
         let argument_count = u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?;
@@ -240,7 +241,7 @@ impl Engine {
             });
         }
         let mut chunk = Chunk::new(Rc::from("(call)"));
-        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.0, argument_count))));
+        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), argument_count))));
         chunk.emit(Opcode::Halt);
         let chunk = Rc::new(chunk);
         let fiber = Fiber { engine: self, inner: vm::Fiber::new(chunk, stack) };
@@ -256,7 +257,7 @@ impl Engine {
     ///
     /// # Errors
     ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-    pub fn global_id(&mut self, name: impl GlobalName) -> Result<GlobalId, Error> {
+    pub fn global_id(&mut self, name: impl GlobalName) -> Result<GlobalIndex, Error> {
         name.to_global_id(&mut self.env)
     }
 
@@ -272,7 +273,7 @@ impl Engine {
         T: Into<Value>,
     {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into().to_raw(&mut self.gc));
+        self.globals.set(id, value.into().to_raw(&mut self.gc));
         Ok(())
     }
 
@@ -289,7 +290,7 @@ impl Engine {
         T: TryFromValue,
     {
         if let Some(id) = id.try_to_global_id(&self.env) {
-            T::try_from_value(&Value::from_raw(self.globals.get(id.0)))
+            T::try_from_value(&Value::from_raw(self.globals.get(id)))
         } else {
             T::try_from_value(&Value::from_raw(RawValue::from(())))
         }
@@ -329,7 +330,7 @@ impl Engine {
             .map_err(|_| Error::TooManyFunctions)?;
         let function =
             RawValue::from(self.gc.allocate(Closure { name, function_id, captures: Vec::new() }));
-        self.globals.set(global_id.0, function);
+        self.globals.set(global_id, function);
         Ok(())
     }
 
@@ -411,39 +412,32 @@ impl<'e> Script<'e> {
     }
 }
 
-/// An ID unique to an engine, identifying a global variable.
-///
-/// Note that these IDs are not portable across different engine instances.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-pub struct GlobalId(Opr24);
-
 mod global_id {
-    use crate::GlobalId;
+    use crate::GlobalIndex;
 
     pub trait Sealed {}
-    impl Sealed for GlobalId {}
+    impl Sealed for GlobalIndex {}
     impl Sealed for &str {}
 }
 
 /// A trait for names convertible to global IDs.
 pub trait GlobalName: global_id::Sealed {
     #[doc(hidden)]
-    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalId, Error>;
+    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalIndex, Error>;
 }
 
-impl GlobalName for GlobalId {
-    fn to_global_id(&self, _: &mut Environment) -> Result<GlobalId, Error> {
+impl GlobalName for GlobalIndex {
+    fn to_global_id(&self, _: &mut Environment) -> Result<GlobalIndex, Error> {
         Ok(*self)
     }
 }
 
 impl GlobalName for &str {
-    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalId, Error> {
+    fn to_global_id(&self, env: &mut Environment) -> Result<GlobalIndex, Error> {
         Ok(if let Some(slot) = env.get_global(self) {
-            GlobalId(slot)
+            slot
         } else {
-            env.create_global(self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
+            env.create_global(self).map_err(|_| Error::TooManyGlobals)?
         })
     }
 }
@@ -451,47 +445,40 @@ impl GlobalName for &str {
 /// A trait for names convertible to global IDs.
 pub trait OptionalGlobalName {
     #[doc(hidden)]
-    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId>;
+    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalIndex>;
 }
 
-impl OptionalGlobalName for GlobalId {
-    fn try_to_global_id(&self, _: &Environment) -> Option<GlobalId> {
+impl OptionalGlobalName for GlobalIndex {
+    fn try_to_global_id(&self, _: &Environment) -> Option<GlobalIndex> {
         Some(*self)
     }
 }
 
 impl OptionalGlobalName for &str {
-    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalId> {
-        env.get_global(self).map(GlobalId)
+    fn try_to_global_id(&self, env: &Environment) -> Option<GlobalIndex> {
+        env.get_global(self)
     }
 }
 
-mod method_id {
-    use crate::MethodId;
+mod method_index {
+    use crate::MethodIndex;
 
     pub trait Sealed {}
 
-    impl Sealed for MethodId {}
+    impl Sealed for MethodIndex {}
     impl Sealed for (&str, u8) {}
 }
-
-/// An ID unique to an engine, identifying a method signature.
-///
-/// Note that these IDs are not portable across different engine instances.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(transparent)]
-pub struct MethodId(pub(crate) u16);
 
 /// Implemented by every type that can be used as a method signature.
 ///
 /// See [`Engine::call_method`].
-pub trait MethodSignature: method_id::Sealed {
+pub trait MethodSignature: method_index::Sealed {
     #[doc(hidden)]
-    fn to_method_id(&self, env: &mut Environment) -> Result<MethodId, Error>;
+    fn to_method_id(&self, env: &mut Environment) -> Result<MethodIndex, Error>;
 }
 
-impl MethodSignature for MethodId {
-    fn to_method_id(&self, _: &mut Environment) -> Result<MethodId, Error> {
+impl MethodSignature for MethodIndex {
+    fn to_method_id(&self, _: &mut Environment) -> Result<MethodIndex, Error> {
         Ok(*self)
     }
 }
@@ -499,13 +486,12 @@ impl MethodSignature for MethodId {
 /// Tuples of string slices and `u8`s are a user-friendly representation of method signatures.
 /// For instance, `("cat", 1)` represents the method `cat/1`.
 impl MethodSignature for (&str, u8) {
-    fn to_method_id(&self, env: &mut Environment) -> Result<MethodId, Error> {
-        env.get_or_create_method_index(&FunctionSignature {
+    fn to_method_id(&self, env: &mut Environment) -> Result<MethodIndex, Error> {
+        env.get_or_create_method_index(&bytecode::MethodSignature {
             name: Rc::from(self.0),
             arity: Some(self.1 as u16 + 1),
             trait_id: None,
         })
-        .map(MethodId)
         .map_err(|_| Error::TooManyMethods)
     }
 }

@@ -21,6 +21,14 @@ pub use types::*;
 pub use userdata::*;
 pub use value::*;
 
+/// An ID unique to an engine, identifying a global variable.
+///
+/// Note that these IDs are not portable across different engine instances.
+pub use crate::ll::bytecode::GlobalIndex;
+/// An ID unique to an engine, identifying a method signature.
+///
+/// Note that these IDs are not portable across different engine instances.
+pub use crate::ll::bytecode::MethodIndex;
 /// An **unsafe** value used internally in the VM.
 ///
 /// Does not provide any safety guarantees as to GC'd object lifetimes.

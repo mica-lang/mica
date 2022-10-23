@@ -6,7 +6,7 @@ use crate::{
     hl::userdata::Type,
     ll::{
         bytecode::{
-            BuiltinTraits, DispatchTable, Environment, Function, FunctionKind, FunctionSignature,
+            BuiltinTraits, DispatchTable, Environment, Function, FunctionKind, MethodSignature,
         },
         gc::{Gc, Memory},
         value::{self, Closure},
@@ -23,8 +23,8 @@ struct UnresolvedFunctionSignature {
 }
 
 impl UnresolvedFunctionSignature {
-    fn resolve(self, builtin_traits: &BuiltinTraits) -> FunctionSignature {
-        FunctionSignature {
+    fn resolve(self, builtin_traits: &BuiltinTraits) -> MethodSignature {
+        MethodSignature {
             name: self.name,
             arity: self.arity,
             trait_id: match self.builtin_trait {

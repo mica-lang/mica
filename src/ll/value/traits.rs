@@ -2,13 +2,13 @@ use std::rc::Rc;
 
 use super::Closure;
 use crate::ll::{
-    bytecode::{DispatchTable, Environment, Opr24},
+    bytecode::{DispatchTable, Environment, TraitIndex},
     gc::{GcRaw, Memory},
 };
 
 /// Instance of a trait.
 pub struct Trait {
-    pub(crate) id: Opr24,
+    pub(crate) id: TraitIndex,
     pub(crate) dtable: GcRaw<DispatchTable>,
 }
 
@@ -20,7 +20,7 @@ impl Trait {
 }
 
 /// Creates a new instance of a trait inside the given GC memory.
-pub fn create_trait(env: &Environment, gc: &mut Memory, trait_id: Opr24) -> GcRaw<Trait> {
+pub fn create_trait(env: &Environment, gc: &mut Memory, trait_id: TraitIndex) -> GcRaw<Trait> {
     let prototype = env.get_trait(trait_id).expect("trait with given ID does not exist");
     let name = &prototype.name;
     let mut dispatch_table = DispatchTable::new_for_type(Rc::clone(name));

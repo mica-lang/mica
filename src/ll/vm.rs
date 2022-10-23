@@ -2,14 +2,18 @@
 
 use std::{collections::HashSet, pin::Pin, ptr, rc::Rc};
 
-use crate::ll::{
-    bytecode::{
-        CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, FunctionSignature,
-        Opcode, Opr24,
+use super::bytecode::{FunctionIndex, ImplementedTraitIndex, MethodIndex};
+use crate::{
+    ll::{
+        bytecode::{
+            CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, MethodSignature,
+            Opcode, PrototypeIndex, TraitIndex,
+        },
+        common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
+        gc::{GcRaw, Memory},
+        value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
     },
-    common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
-    gc::{GcRaw, Memory},
-    value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
+    GlobalIndex,
 };
 
 /// Storage for global variables.
@@ -25,8 +29,8 @@ impl Globals {
     }
 
     /// Sets the global in the given slot.
-    pub fn set(&mut self, slot: Opr24, value: RawValue) {
-        let slot = u32::from(slot) as usize;
+    pub fn set(&mut self, slot: GlobalIndex, value: RawValue) {
+        let slot = slot.to_usize();
         if slot >= self.values.len() {
             self.values.resize(slot + 1, ().into());
         }
@@ -37,8 +41,8 @@ impl Globals {
     }
 
     /// Returns the global in the given slot, or `Nil` if there's no global there.
-    pub fn get(&self, slot: Opr24) -> RawValue {
-        let slot = u32::from(slot) as usize;
+    pub fn get(&self, slot: GlobalIndex) -> RawValue {
+        let slot = slot.to_usize();
         self.values.get(slot).cloned().unwrap_or(().into())
     }
 
@@ -48,8 +52,8 @@ impl Globals {
     ///
     /// This is only safe to use by the VM. The code generator ensures that all globals are set
     /// before use.
-    unsafe fn get_unchecked(&self, slot: Opr24) -> RawValue {
-        let slot = u32::from(slot) as usize;
+    unsafe fn get_unchecked(&self, slot: GlobalIndex) -> RawValue {
+        let slot = slot.to_usize();
         *self.values.get_unchecked(slot)
     }
 
@@ -348,7 +352,7 @@ impl Fiber {
         &mut self,
         env: &Environment,
         gc: &mut Memory,
-        function_id: Opr24,
+        function_id: FunctionIndex,
         name: Rc<str>,
     ) -> GcRaw<Closure> {
         let function = unsafe { env.get_function_unchecked(function_id) };
@@ -357,12 +361,12 @@ impl Fiber {
             for capture in captured_locals {
                 captures.push(match capture {
                     CaptureKind::Local(slot) => {
-                        self.get_upvalue_for_local(self.stack_bottom as u32 + u32::from(*slot))
+                        self.get_upvalue_for_local(self.stack_bottom as u32 + slot.to_u32())
                     }
                     CaptureKind::Upvalue(index) => {
                         let closure = unsafe { self.closure.unwrap_unchecked() };
                         let closure = unsafe { closure.get() };
-                        Pin::clone(&closure.captures[u32::from(*index) as usize])
+                        Pin::clone(&closure.captures[index.to_u32() as usize])
                     }
                 });
             }
@@ -392,7 +396,7 @@ impl Fiber {
     /// Each function's name is prepended with `type_name.`.
     fn initialize_dtable(
         &mut self,
-        methods: impl Iterator<Item = (u16, Opr24)>,
+        methods: impl Iterator<Item = (MethodIndex, FunctionIndex)>,
         env: &Environment,
         gc: &mut Memory,
         dtable: &mut DispatchTable,
@@ -407,17 +411,17 @@ impl Fiber {
 
     fn initialize_dtable_with_trait_methods(
         &mut self,
-        methods: impl Iterator<Item = (Rc<str>, u16, u16, Opr24)>,
+        methods: impl Iterator<Item = (Rc<str>, u16, ImplementedTraitIndex, FunctionIndex)>,
         traits: &[GcRaw<Trait>],
         env: &Environment,
         gc: &mut Memory,
         dtable: &mut DispatchTable,
-        unimplemented_methods: &mut HashSet<u16>,
+        unimplemented_methods: &mut HashSet<MethodIndex>,
     ) -> Result<(), ErrorKind> {
         for (name, arity, trait_index, function_id) in methods {
-            let trait_handle = unsafe { traits[trait_index as usize].get() };
+            let trait_handle = unsafe { traits[trait_index.to_usize()].get() };
             let trait_id = trait_handle.id;
-            let method_signature = FunctionSignature {
+            let method_signature = MethodSignature {
                 name: Rc::clone(&name),
                 arity: Some(arity),
                 trait_id: Some(trait_id),
@@ -525,9 +529,10 @@ impl Fiber {
                 }
                 Opcode::CreateClosure => {
                     unsafe { gc.auto_collect(self.roots(globals)) };
-                    let function_id = operand;
+                    let function_id = FunctionIndex::from_opr24(operand);
                     let function = unsafe { env.get_function_unchecked(function_id) };
-                    let closure = self.create_closure(env, gc, operand, Rc::clone(&function.name));
+                    let closure =
+                        self.create_closure(env, gc, function_id, Rc::clone(&function.name));
                     self.push(RawValue::from(closure));
                 }
                 Opcode::CreateType => {
@@ -541,25 +546,26 @@ impl Fiber {
                 Opcode::CreateStruct => {
                     unsafe { gc.auto_collect(self.roots(globals)) };
                     let type_struct = unsafe { self.pop().get_raw_struct_unchecked() };
-                    let field_count = u32::from(operand) as usize;
+                    let field_count = usize::from(operand);
                     let instance = unsafe { type_struct.get().new_instance(field_count) };
                     let instance = gc.allocate(instance);
                     self.push(RawValue::from(instance));
                 }
                 Opcode::CreateTrait => {
-                    let instance = create_trait(env, gc, operand);
+                    let trait_index = TraitIndex::from_opr24(operand);
+                    let instance = create_trait(env, gc, trait_index);
                     self.push(RawValue::from(instance));
                 }
                 Opcode::CreateList => {
                     unsafe { gc.auto_collect(self.roots(globals)) };
-                    let len = u32::from(operand) as usize;
+                    let len = usize::from(operand);
                     let elements = self.stack.drain(self.stack.len() - len..).collect();
                     let list = gc.allocate(List::new(elements));
                     self.push(RawValue::from(list));
                 }
                 Opcode::CreateDict => {
                     unsafe { gc.auto_collect(self.roots(globals)) };
-                    let npairs = u32::from(operand) as usize;
+                    let npairs = usize::from(operand);
                     let dict = Dict::new();
                     {
                         let mut pairs = self.stack.drain(self.stack.len() - npairs * 2..);
@@ -573,46 +579,49 @@ impl Fiber {
                 }
 
                 Opcode::AssignGlobal => {
+                    let global_index = GlobalIndex::from_opr24(operand);
                     let value = self.stack_top();
-                    globals.set(operand, value);
+                    globals.set(global_index, value);
                 }
                 Opcode::SinkGlobal => {
+                    let global_index = GlobalIndex::from_opr24(operand);
                     let value = self.pop();
-                    globals.set(operand, value);
+                    globals.set(global_index, value);
                 }
                 Opcode::GetGlobal => {
-                    let value = unsafe { globals.get_unchecked(operand) };
+                    let global_index = GlobalIndex::from_opr24(operand);
+                    let value = unsafe { globals.get_unchecked(global_index) };
                     self.push(value);
                 }
                 Opcode::AssignLocal => {
-                    let slot = u32::from(operand) as usize;
+                    let slot = usize::from(operand);
                     let value = self.stack_top();
                     self.stack[self.stack_bottom + slot] = value;
                 }
                 Opcode::SinkLocal => {
-                    let slot = u32::from(operand) as usize;
+                    let slot = usize::from(operand);
                     let value = self.pop();
                     self.stack[self.stack_bottom + slot] = value;
                 }
                 Opcode::GetLocal => {
-                    let slot = u32::from(operand) as usize;
+                    let slot = usize::from(operand);
                     let value = self.stack[self.stack_bottom + slot];
                     self.push(value);
                 }
                 Opcode::AssignUpvalue => {
-                    let index = u32::from(operand) as usize;
+                    let index = usize::from(operand);
                     let closure = unsafe { self.closure.as_ref().unwrap_unchecked().get() };
                     let value = self.stack_top();
                     unsafe { Upvalue::set(&closure.captures[index], value) }
                 }
                 Opcode::SinkUpvalue => {
-                    let index = u32::from(operand) as usize;
+                    let index = usize::from(operand);
                     let value = self.pop();
                     let closure = unsafe { self.closure.as_ref().unwrap_unchecked().get() };
                     unsafe { Upvalue::set(&closure.captures[index], value) }
                 }
                 Opcode::GetUpvalue => {
-                    let index = u32::from(operand) as usize;
+                    let index = usize::from(operand);
                     let closure = unsafe { self.closure.as_ref().unwrap_unchecked().get() };
                     let value = unsafe { closure.captures[index].get() };
                     self.push(value);
@@ -634,18 +643,18 @@ impl Fiber {
                     let value = self.pop();
                     let struct_v = unsafe { struct_v.get_raw_struct_unchecked() };
                     self.push(value);
-                    unsafe { struct_v.get().set_field(u32::from(operand) as usize, value) }
+                    unsafe { struct_v.get().set_field(usize::from(operand), value) }
                 }
                 Opcode::SinkField => {
                     let struct_v = self.pop();
                     let value = self.pop();
                     let struct_v = unsafe { struct_v.get_raw_struct_unchecked() };
-                    unsafe { struct_v.get().set_field(u32::from(operand) as usize, value) }
+                    unsafe { struct_v.get().set_field(usize::from(operand), value) }
                 }
                 Opcode::GetField => {
                     let struct_v = self.pop();
                     let struct_v = unsafe { struct_v.get_raw_struct_unchecked() };
-                    let value = unsafe { struct_v.get().get_field(u32::from(operand) as usize) };
+                    let value = unsafe { struct_v.get().get_field(usize::from(operand)) };
                     self.push(value);
                 }
 
@@ -658,23 +667,23 @@ impl Fiber {
                 }
 
                 Opcode::JumpForward => {
-                    let amount = u32::from(operand) as usize;
+                    let amount = usize::from(operand);
                     self.pc += amount;
                 }
                 Opcode::JumpForwardIfFalsy => {
-                    let amount = u32::from(operand) as usize;
+                    let amount = usize::from(operand);
                     if self.stack_top().is_falsy() {
                         self.pc += amount;
                     }
                 }
                 Opcode::JumpForwardIfTruthy => {
-                    let amount = u32::from(operand) as usize;
+                    let amount = usize::from(operand);
                     if self.stack_top().is_truthy() {
                         self.pc += amount;
                     }
                 }
                 Opcode::JumpBackward => {
-                    let amount = u32::from(operand) as usize;
+                    let amount = usize::from(operand);
                     self.pc -= amount;
                 }
 
@@ -698,13 +707,14 @@ impl Fiber {
                 Opcode::Call => {
                     // Add 1 to count in the called function itself, which is treated like an
                     // argument.
-                    let argument_count = u32::from(operand) as usize + 1;
+                    let argument_count = usize::from(operand) + 1;
                     let function = self.nth_from_top(argument_count);
                     let closure = wrap_error!(function.ensure_raw_function());
                     self.enter_function(env, globals, gc, closure, argument_count)?;
                 }
                 Opcode::CallMethod => {
                     let (method_index, argument_count) = operand.unpack();
+                    let method_index = MethodIndex::from_u16(method_index);
                     let receiver = self.nth_from_top(argument_count as usize);
                     let dtable = Self::get_dispatch_table(receiver, env);
                     #[cfg(feature = "trace-vm-calls")]
@@ -722,7 +732,7 @@ impl Fiber {
                         let signature = env
                             .get_method_signature(method_index)
                             .cloned()
-                            .unwrap_or_else(|| FunctionSignature {
+                            .unwrap_or_else(|| MethodSignature {
                                 name: Rc::from("(invalid method index)"),
                                 arity: None,
                                 trait_id: None,
@@ -741,7 +751,8 @@ impl Fiber {
                 }
 
                 Opcode::Implement => {
-                    let proto = unsafe { env.get_prototype_unchecked(operand) };
+                    let prototype_index = PrototypeIndex::from_opr24(operand);
+                    let proto = unsafe { env.get_prototype_unchecked(prototype_index) };
                     let struct_position = proto.implemented_trait_count as usize + 1;
 
                     let traits: Vec<_> = {

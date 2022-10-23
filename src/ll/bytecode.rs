@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
 };
 
+use super::codegen::{LocalIndex, UpvalueIndex};
 use crate::ll::{
     codegen::TraitBuilder,
     common::{ErrorKind, Location, RenderedSignature},
@@ -519,9 +520,9 @@ impl EncodeInstruction for Opcode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CaptureKind {
     /// Capture a local from the current scope.
-    Local(Opr24),
+    Local(LocalIndex),
     /// Capture an existing upvalue from the current closure.
-    Upvalue(Opr24),
+    Upvalue(UpvalueIndex),
 }
 
 /// The ABI of a raw foreign function.
@@ -554,6 +555,20 @@ impl std::fmt::Debug for FunctionKind {
     }
 }
 
+/// The unique index of a function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FunctionIndex(Opr24);
+
+impl FunctionIndex {
+    pub(crate) fn from_opr24(x: Opr24) -> Self {
+        Self(x)
+    }
+
+    pub(crate) fn to_opr24(self) -> Opr24 {
+        self.0
+    }
+}
+
 /// A function prototype.
 #[derive(Debug)]
 pub struct Function {
@@ -568,19 +583,33 @@ pub struct Function {
     pub hidden_in_stack_traces: bool,
 }
 
-/// The signature of a function (its name, argument count, and enclosing trait).
+/// The index of a method that corresponds to a signature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MethodIndex(u16);
+
+impl MethodIndex {
+    pub(crate) fn from_u16(x: u16) -> MethodIndex {
+        Self(x)
+    }
+
+    pub(crate) fn to_u16(self) -> u16 {
+        self.0
+    }
+}
+
+/// The signature of a method (its name, argument count, and enclosing trait).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FunctionSignature {
+pub struct MethodSignature {
     pub name: Rc<str>,
     /// This arity number does not include the implicit `self` argument.
     pub arity: Option<u16>,
     /// The index of the trait this signature belongs to.
     /// When `None`, the function is free and does not belong to any trait.
-    pub trait_id: Option<Opr24>,
+    pub trait_id: Option<TraitIndex>,
 }
 
-impl FunctionSignature {
-    /// Creates a new function signature for a function that does not belong to a trait.
+impl MethodSignature {
+    /// Creates a new method signature for a method that does not belong to a trait.
     pub fn new(name: impl Into<Rc<str>>, arity: impl Into<Option<u16>>) -> Self {
         Self { name: name.into(), arity: arity.into(), trait_id: None }
     }
@@ -599,17 +628,64 @@ impl FunctionSignature {
     }
 }
 
+/// The index of a global in the global storage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct GlobalIndex(Opr24);
+
+impl GlobalIndex {
+    pub(crate) fn to_usize(self) -> usize {
+        usize::from(self.0)
+    }
+
+    pub(crate) fn from_opr24(x: Opr24) -> Self {
+        Self(x)
+    }
+
+    pub(crate) fn to_opr24(self) -> Opr24 {
+        self.0
+    }
+}
+
+/// The unique index of a prototype.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PrototypeIndex(Opr24);
+
+impl PrototypeIndex {
+    pub(crate) fn from_opr24(x: Opr24) -> Self {
+        Self(x)
+    }
+
+    pub(crate) fn to_opr24(self) -> Opr24 {
+        self.0
+    }
+}
+
+/// The unique index of a trait.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TraitIndex(Opr24);
+
+impl TraitIndex {
+    pub(crate) fn from_opr24(x: Opr24) -> Self {
+        Self(x)
+    }
+
+    pub(crate) fn to_opr24(self) -> Opr24 {
+        self.0
+    }
+}
+
 /// An environment containing information about declared globals, functions, vtables.
 #[derive(Debug)]
 pub struct Environment {
     /// Mapping from global names to global slots.
-    globals: HashMap<String, Opr24>,
+    globals: HashMap<String, GlobalIndex>,
     /// Functions in the environment.
     functions: Vec<Function>,
     /// Mapping from named function signatures to method indices.
-    method_indices: HashMap<FunctionSignature, u16>,
+    method_indices: HashMap<MethodSignature, MethodIndex>,
     /// Mapping from method indices to function signatures.
-    method_signatures: Vec<FunctionSignature>,
+    method_signatures: Vec<MethodSignature>,
     /// Dispatch tables for builtin types.
     pub builtin_dtables: BuiltinDispatchTables,
     /// `impl` prototypes.
@@ -634,26 +710,28 @@ impl Environment {
 
     /// Tries to create a global. Returns the global slot number, or an error if there are too many
     /// globals.
-    pub fn create_global(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
+    pub fn create_global(&mut self, name: &str) -> Result<GlobalIndex, ErrorKind> {
         if self.globals.contains_key(name) {
             Ok(*self.globals.get(name).unwrap())
         } else {
             let slot =
                 Opr24::try_from(self.globals.len()).map_err(|_| ErrorKind::TooManyGlobals)?;
+            let slot = GlobalIndex(slot);
             self.globals.insert(name.to_owned(), slot);
             Ok(slot)
         }
     }
 
     /// Tries to look up a global. Returns `None` if the global doesn't exist.
-    pub fn get_global(&self, name: &str) -> Option<Opr24> {
+    pub fn get_global(&self, name: &str) -> Option<GlobalIndex> {
         self.globals.get(name).copied()
     }
 
     /// Creates a function and returns its ID.
-    pub fn create_function(&mut self, function: Function) -> Result<Opr24, ErrorKind> {
+    pub fn create_function(&mut self, function: Function) -> Result<FunctionIndex, ErrorKind> {
         let slot =
             Opr24::try_from(self.functions.len()).map_err(|_| ErrorKind::TooManyFunctions)?;
+        let slot = FunctionIndex(slot);
         self.functions.push(function);
         Ok(slot)
     }
@@ -661,7 +739,8 @@ impl Environment {
     /// Returns the function with the given ID, as returned by `create_function`.
     /// This function is for internal use in the VM and does not perform any checks, thus is marked
     /// `unsafe`.
-    pub(crate) unsafe fn get_function_unchecked(&self, id: Opr24) -> &Function {
+    pub(crate) unsafe fn get_function_unchecked(&self, id: FunctionIndex) -> &Function {
+        let FunctionIndex(id) = id;
         self.functions.get_unchecked(u32::from(id) as usize)
     }
 
@@ -670,8 +749,8 @@ impl Environment {
     /// function signatures in this environment.
     pub fn get_or_create_method_index(
         &mut self,
-        signature: &FunctionSignature,
-    ) -> Result<u16, ErrorKind> {
+        signature: &MethodSignature,
+    ) -> Result<MethodIndex, ErrorKind> {
         // Don't use `entry` here to avoid cloning the signature.
         if let Some(&index) = self.method_indices.get(signature) {
             Ok(index)
@@ -680,6 +759,7 @@ impl Environment {
             // equal, so we can use their `len`s interchangably.
             let index =
                 u16::try_from(self.method_indices.len()).map_err(|_| ErrorKind::TooManyMethods)?;
+            let index = MethodIndex(index);
             self.method_indices.insert(signature.clone(), index);
             self.method_signatures.push(signature.clone());
             Ok(index)
@@ -687,19 +767,23 @@ impl Environment {
     }
 
     /// Looks up the index of a method
-    pub(crate) fn get_method_index(&self, signature: &FunctionSignature) -> Option<u16> {
+    pub(crate) fn get_method_index(&self, signature: &MethodSignature) -> Option<MethodIndex> {
         self.method_indices.get(signature).copied()
     }
 
     /// Returns the signature for the method with the given ID, or `None` if the method index is
     /// invalid.
-    pub fn get_method_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
-        self.method_signatures.get(method_index as usize)
+    pub fn get_method_signature(&self, method_index: MethodIndex) -> Option<&MethodSignature> {
+        self.method_signatures.get(usize::from(method_index.0))
     }
 
     /// Creates a prototype and returns its ID.
-    pub(crate) fn create_prototype(&mut self, proto: Prototype) -> Result<Opr24, ErrorKind> {
+    pub(crate) fn create_prototype(
+        &mut self,
+        proto: Prototype,
+    ) -> Result<PrototypeIndex, ErrorKind> {
         let slot = Opr24::try_from(self.prototypes.len()).map_err(|_| ErrorKind::TooManyImpls)?;
+        let slot = PrototypeIndex(slot);
         self.prototypes.push(Some(proto));
         Ok(slot)
     }
@@ -707,27 +791,30 @@ impl Environment {
     /// Takes out the prototype with the given ID, as returned by `create_prototype`.
     /// This function is for internal use in the VM and does not perform any checks, thus is marked
     /// `unsafe`.
-    pub(crate) unsafe fn get_prototype_unchecked(&self, id: Opr24) -> &Prototype {
-        let proto =
-            self.prototypes.get_unchecked(u32::from(id) as usize).as_ref().unwrap_unchecked();
+    pub(crate) unsafe fn get_prototype_unchecked(&self, id: PrototypeIndex) -> &Prototype {
+        let PrototypeIndex(id) = id;
+        let proto = self.prototypes.get_unchecked(usize::from(id)).as_ref().unwrap_unchecked();
         proto
     }
 
     /// Creates a trait and returns its ID. Use `get_trait_mut` afterwards to modify the trait.
-    pub fn create_trait(&mut self, name: Rc<str>) -> Result<Opr24, ErrorKind> {
+    pub fn create_trait(&mut self, name: Rc<str>) -> Result<TraitIndex, ErrorKind> {
         let slot_index = self.traits.len();
         let slot = Opr24::try_from(slot_index).map_err(|_| ErrorKind::TooManyTraits)?;
+        let slot = TraitIndex(slot);
         self.traits.push(TraitPrototype { name, required: HashSet::new(), shims: vec![] });
         Ok(slot)
     }
 
     /// Returns a reference to the trait with the given ID.
-    pub fn get_trait(&self, id: Opr24) -> Option<&TraitPrototype> {
+    pub fn get_trait(&self, id: TraitIndex) -> Option<&TraitPrototype> {
+        let TraitIndex(id) = id;
         self.traits.get(usize::from(id))
     }
 
     /// Returns a mutable reference to the trait with the given ID.
-    pub fn get_trait_mut(&mut self, id: Opr24) -> Option<&mut TraitPrototype> {
+    pub fn get_trait_mut(&mut self, id: TraitIndex) -> Option<&mut TraitPrototype> {
+        let TraitIndex(id) = id;
         self.traits.get_mut(usize::from(id))
     }
 }
@@ -768,13 +855,13 @@ impl DispatchTable {
     }
 
     /// Returns a reference to the method at the given index.
-    pub fn get_method(&self, index: u16) -> Option<GcRaw<Closure>> {
-        self.methods.get(index as usize).into_iter().flatten().copied().next()
+    pub fn get_method(&self, index: MethodIndex) -> Option<GcRaw<Closure>> {
+        self.methods.get(index.0 as usize).into_iter().flatten().copied().next()
     }
 
     /// Adds a method into the dispatch table.
-    pub fn set_method(&mut self, index: u16, closure: GcRaw<Closure>) {
-        let index = index as usize;
+    pub fn set_method(&mut self, index: MethodIndex, closure: GcRaw<Closure>) {
+        let index = index.0 as usize;
         if index >= self.methods.len() {
             self.methods.resize(index + 1, None);
         }
@@ -817,9 +904,9 @@ impl BuiltinDispatchTables {
 
 /// IDs of built-in traits and their methods.
 pub struct BuiltinTraits {
-    pub iterator: Opr24,
-    pub iterator_has_next: u16,
-    pub iterator_next: u16,
+    pub iterator: TraitIndex,
+    pub iterator_has_next: MethodIndex,
+    pub iterator_next: MethodIndex,
 }
 
 impl BuiltinTraits {
@@ -843,28 +930,47 @@ impl BuiltinTraits {
     }
 }
 
+/// The index of a trait in an `impl` block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImplementedTraitIndex(u16);
+
+impl ImplementedTraitIndex {
+    pub(crate) fn to_usize(self) -> usize {
+        usize::from(self.0)
+    }
+}
+
 /// The prototype of a struct. This contains a list of functions, from which closures are
 /// constructed at runtime to form a dispatch table.
 #[derive(Debug, Default)]
 pub(crate) struct Prototype {
     /// Map of method IDs to instance methods. This doesn't include trait methods, which have
     /// to be resolved dynamically.
-    pub(crate) instance: HashMap<u16, Opr24>,
+    pub(crate) instance: HashMap<MethodIndex, FunctionIndex>,
 
     /// List of implemented trait methods. Because an implemented trait in `as` can be any
     /// expression, we have no way of knowing what the method ID is going to be, so we have to map
     /// trait methods by `(name, arity, trait_index)` pairs rather than method ID.
-    pub(crate) trait_instance: HashMap<(Rc<str>, u16, u16), Opr24>,
+    pub(crate) trait_instance: HashMap<(Rc<str>, u16, ImplementedTraitIndex), FunctionIndex>,
 
     /// Same as `instance`, but lists methods that are added to the type dtable rather than the
     /// instance dtable.
     ///
     /// Even though we don't support `static` methods in traits, the type is kept the same to
     /// reduce code duplication.
-    pub(crate) statics: HashMap<u16, Opr24>,
+    pub(crate) statics: HashMap<MethodIndex, FunctionIndex>,
 
     /// The total number of traits implemented by this struct.
     pub(crate) implemented_trait_count: u16,
+}
+
+impl Prototype {
+    pub(crate) fn implement_next_trait(&mut self) -> Result<ImplementedTraitIndex, ErrorKind> {
+        let trait_index = self.implemented_trait_count;
+        self.implemented_trait_count =
+            self.implemented_trait_count.checked_add(1).ok_or(ErrorKind::TooManyTraitsInImpl)?;
+        Ok(ImplementedTraitIndex(trait_index))
+    }
 }
 
 /// The prototype of a trait. Contains a list of all method IDs the trait must implement.
@@ -872,7 +978,7 @@ pub(crate) struct Prototype {
 pub struct TraitPrototype {
     pub name: Rc<str>,
     /// List of method IDs that this trait requires.
-    pub required: HashSet<u16>,
+    pub required: HashSet<MethodIndex>,
     /// List of `(method_id, function_id)` mappings that make up the dtable of shims for the trait.
-    pub shims: Vec<(u16, Opr24)>,
+    pub shims: Vec<(MethodIndex, FunctionIndex)>,
 }

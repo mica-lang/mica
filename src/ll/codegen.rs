@@ -6,19 +6,42 @@ use std::{
     rc::Rc,
 };
 
+use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, MethodIndex, TraitIndex};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{
-        BuiltinTraits, CaptureKind, Chunk, Environment, Function, FunctionKind, FunctionSignature,
+        BuiltinTraits, CaptureKind, Chunk, Environment, Function, FunctionKind, MethodSignature,
         Opcode, Opr24, Prototype,
     },
     common::{Error, ErrorKind, Location, RenderedSignature},
 };
 
+/// The index of a local on the stack.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct LocalIndex(Opr24);
+
+impl LocalIndex {
+    pub(crate) fn to_u32(self) -> u32 {
+        u32::from(self.0)
+    }
+}
+
+/// The index of an upvalue in a closure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct UpvalueIndex(Opr24);
+
+impl UpvalueIndex {
+    pub(crate) fn to_u32(self) -> u32 {
+        u32::from(self.0)
+    }
+}
+
 /// Info about a local variable on the stack.
 #[derive(Debug)]
 struct Variable {
-    stack_slot: Opr24,
+    stack_slot: LocalIndex,
     is_captured: bool,
 }
 
@@ -31,9 +54,9 @@ struct Scope {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum VariablePlace {
-    Global(Opr24),
-    Local(Opr24),
-    Upvalue(Opr24),
+    Global(GlobalIndex),
+    Local(LocalIndex),
+    Upvalue(UpvalueIndex),
 }
 
 /// The kind of a variable allocation.
@@ -70,8 +93,8 @@ impl Locals {
         name: &str,
         allocation: VariableAllocation,
     ) -> Result<VariablePlace, ErrorKind> {
-        let slot = self.local_count;
-        let slot = Opr24::new(slot).map_err(|_| ErrorKind::TooManyLocals)?;
+        let slot = Opr24::new(self.local_count).map_err(|_| ErrorKind::TooManyLocals)?;
+        let slot = LocalIndex(slot);
         let scope = self.scopes.last_mut().unwrap();
         scope
             .variables_by_name
@@ -92,7 +115,7 @@ impl Locals {
     }
 
     /// Returns the index of the given capture.
-    fn capture_index(&mut self, capture: CaptureKind) -> Result<Opr24, ErrorKind> {
+    fn capture_index(&mut self, capture: CaptureKind) -> Result<UpvalueIndex, ErrorKind> {
         // Iterating over captures maybe isn't most efficient here but it's not like we have
         // thousands of them anyways. Unless somebody absolutely crazy starts writing Mica code.
         // Then all I can say is: I hate you.
@@ -101,7 +124,7 @@ impl Locals {
             self.captures.push(capture);
             index
         });
-        Opr24::try_from(index).map_err(|_| ErrorKind::TooManyCaptures)
+        Ok(UpvalueIndex(Opr24::try_from(index).map_err(|_| ErrorKind::TooManyCaptures)?))
     }
 
     /// Performs a local variable lookup. This may modify parent Locals and capture upvalues.
@@ -262,7 +285,7 @@ impl<'e> CodeGenerator<'e> {
         let scope = self.locals.pop_scope();
         for variable in scope.variables_by_name.into_values() {
             if variable.is_captured {
-                self.chunk.emit((Opcode::CloseLocal, variable.stack_slot));
+                self.chunk.emit((Opcode::CloseLocal, variable.stack_slot.0));
             }
         }
     }
@@ -270,27 +293,27 @@ impl<'e> CodeGenerator<'e> {
     /// Generates a variable load instruction (GetLocal, GetGlobal, GetUpvalue).
     fn generate_variable_load(&mut self, variable: VariablePlace) {
         self.chunk.emit(match variable {
-            VariablePlace::Global(slot) => (Opcode::GetGlobal, slot),
-            VariablePlace::Local(slot) => (Opcode::GetLocal, slot),
-            VariablePlace::Upvalue(slot) => (Opcode::GetUpvalue, slot),
+            VariablePlace::Global(slot) => (Opcode::GetGlobal, slot.to_opr24()),
+            VariablePlace::Local(slot) => (Opcode::GetLocal, slot.0),
+            VariablePlace::Upvalue(slot) => (Opcode::GetUpvalue, slot.0),
         });
     }
 
     /// Generates a variable assign instruction (AssignLocal, AssignGlobal, AssignUpvalue).
     fn generate_variable_assign(&mut self, variable: VariablePlace) {
         self.chunk.emit(match variable {
-            VariablePlace::Global(slot) => (Opcode::AssignGlobal, slot),
-            VariablePlace::Local(slot) => (Opcode::AssignLocal, slot),
-            VariablePlace::Upvalue(slot) => (Opcode::AssignUpvalue, slot),
+            VariablePlace::Global(slot) => (Opcode::AssignGlobal, slot.to_opr24()),
+            VariablePlace::Local(slot) => (Opcode::AssignLocal, slot.0),
+            VariablePlace::Upvalue(slot) => (Opcode::AssignUpvalue, slot.0),
         });
     }
 
     /// Generates a variable sink instruction (SinkLocal, SinkGlobal, SinkUpvalue).
     fn generate_variable_sink(&mut self, variable: VariablePlace) {
         self.chunk.emit(match variable {
-            VariablePlace::Global(slot) => (Opcode::SinkGlobal, slot),
-            VariablePlace::Local(slot) => (Opcode::SinkLocal, slot),
-            VariablePlace::Upvalue(slot) => (Opcode::SinkUpvalue, slot),
+            VariablePlace::Global(slot) => (Opcode::SinkGlobal, slot.to_opr24()),
+            VariablePlace::Local(slot) => (Opcode::SinkLocal, slot.0),
+            VariablePlace::Upvalue(slot) => (Opcode::SinkUpvalue, slot.0),
         });
     }
 
@@ -732,7 +755,7 @@ impl<'e> CodeGenerator<'e> {
                 generator.generate_variable_load(iterator_var);
                 generator.chunk.emit((
                     Opcode::CallMethod,
-                    Opr24::pack((generator.builtin_traits.iterator_has_next, 1)),
+                    Opr24::pack((generator.builtin_traits.iterator_has_next.to_u16(), 1)),
                 ));
                 Ok(())
             },
@@ -740,7 +763,7 @@ impl<'e> CodeGenerator<'e> {
                 generator.generate_variable_load(iterator_var);
                 generator.chunk.emit((
                     Opcode::CallMethod,
-                    Opr24::pack((generator.builtin_traits.iterator_next, 1)),
+                    Opr24::pack((generator.builtin_traits.iterator_next.to_u16(), 1)),
                 ));
                 generator.generate_pattern_destructuring(ast, binding)?;
                 generator.generate_node_list(ast, body)?;
@@ -794,12 +817,12 @@ impl<'e> CodeGenerator<'e> {
                     // ↑ Add 1 for the receiver, which is also an argument.
                     .try_into()
                     .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
-                let signature = FunctionSignature::new(Rc::clone(name), arity as u16);
+                let signature = MethodSignature::new(Rc::clone(name), arity as u16);
                 let method_index = self
                     .env
                     .get_or_create_method_index(&signature)
                     .map_err(|kind| ast.error(node, kind))?;
-                self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, arity))));
+                self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), arity))));
             }
             _ => {
                 self.generate_node(ast, function, Expression::Used)?;
@@ -825,12 +848,12 @@ impl<'e> CodeGenerator<'e> {
         if ast.kind(method) != NodeKind::Identifier {
             return Err(ast.error(method, ErrorKind::InvalidMethodName));
         }
-        let signature = FunctionSignature::new(Rc::clone(ast.string(method).unwrap()), 1);
+        let signature = MethodSignature::new(Rc::clone(ast.string(method).unwrap()), 1);
         let method_index = self
             .env
             .get_or_create_method_index(&signature)
             .map_err(|kind| ast.error(node, kind))?;
-        self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, 1))));
+        self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
 
         Ok(ExpressionResult::Present)
     }
@@ -986,7 +1009,7 @@ impl<'e> CodeGenerator<'e> {
             GenerateFunctionOptions { name: Rc::clone(name), call_conv: FunctionCallConv::Bare },
         )?;
 
-        self.chunk.emit((Opcode::CreateClosure, function.id));
+        self.chunk.emit((Opcode::CreateClosure, function.id.to_opr24()));
         self.generate_variable_sink(variable);
 
         Ok(ExpressionResult::Absent)
@@ -1009,7 +1032,7 @@ impl<'e> CodeGenerator<'e> {
             },
         )?;
 
-        self.chunk.emit((Opcode::CreateClosure, function.id));
+        self.chunk.emit((Opcode::CreateClosure, function.id.to_opr24()));
         Ok(ExpressionResult::Present)
     }
 
@@ -1056,14 +1079,17 @@ impl<'e> CodeGenerator<'e> {
         self.struct_data = Some(Box::new(StructData::default()));
 
         let mut proto = Prototype::default();
-        let mut state =
-            ImplGenerationState { proto: &mut proto, has_constructor: false, trait_index: None };
+        let mut state = ImplGenerationState {
+            proto: &mut proto,
+            has_constructor: false,
+            implemented_trait_index: None,
+        };
         for &node in items {
             self.generate_impl_item(ast, node, &mut state, true)?;
         }
 
         let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
-        self.chunk.emit((Opcode::Implement, proto_id));
+        self.chunk.emit((Opcode::Implement, proto_id.to_opr24()));
 
         self.struct_data = None;
 
@@ -1104,7 +1130,7 @@ impl<'e> CodeGenerator<'e> {
                     GenerateFunctionOptions { name: Rc::clone(&name), call_conv },
                 )?;
 
-                if let Some(trait_index) = state.trait_index {
+                if let Some(trait_index) = state.implemented_trait_index {
                     // For trait instance methods, method ID resolution is performed at runtime.
                     let key = (Rc::clone(&name), 1 + function.parameter_count, trait_index);
                     if state.proto.trait_instance.insert(key, function.id).is_some() {
@@ -1123,7 +1149,7 @@ impl<'e> CodeGenerator<'e> {
                 } else {
                     // For regular instance methods, method ID resolution is performed during
                     // compilation.
-                    let signature = FunctionSignature::new(name, 1 + function.parameter_count);
+                    let signature = MethodSignature::new(name, 1 + function.parameter_count);
                     let method_id = self
                         .env
                         .get_or_create_method_index(&signature)
@@ -1154,15 +1180,11 @@ impl<'e> CodeGenerator<'e> {
                 let (trait_expr, _) = ast.node_pair(node);
                 let as_items = ast.children(node).unwrap();
                 self.generate_node(ast, trait_expr, Expression::Used)?;
-                let trait_index = state.proto.implemented_trait_count;
-                state.proto.implemented_trait_count = state
-                    .proto
-                    .implemented_trait_count
-                    .checked_add(1)
-                    .ok_or_else(|| ast.error(node, ErrorKind::TooManyTraitsInImpl))?;
+                let trait_index =
+                    state.proto.implement_next_trait().map_err(|e| ast.error(node, e))?;
                 let mut state = ImplGenerationState {
                     proto: state.proto,
-                    trait_index: Some(trait_index),
+                    implemented_trait_index: Some(trait_index),
                     ..*state
                 };
                 for &item in as_items {
@@ -1216,7 +1238,7 @@ impl<'e> CodeGenerator<'e> {
 
         let (trait_id, _) = builder.build();
 
-        self.chunk.emit((Opcode::CreateTrait, trait_id));
+        self.chunk.emit((Opcode::CreateTrait, trait_id.to_opr24()));
         let variable = self
             .create_variable(trait_name, VariableAllocation::Allocate)
             .map_err(|k| ast.error(node, k))?;
@@ -1363,7 +1385,7 @@ struct GenerateFunctionOptions {
 }
 
 struct GeneratedFunction {
-    id: Opr24,
+    id: FunctionIndex,
     parameter_count: u16,
 }
 
@@ -1391,15 +1413,15 @@ enum ExpressionResult {
 struct ImplGenerationState<'p> {
     proto: &'p mut Prototype,
     has_constructor: bool,
-    trait_index: Option<u16>,
+    implemented_trait_index: Option<ImplementedTraitIndex>,
 }
 
 pub struct TraitBuilder<'b> {
     pub env: &'b mut Environment,
     parent_chunk: Option<&'b Chunk>,
-    trait_id: Opr24,
-    required_methods: HashSet<u16>,
-    shims: Vec<(u16, Opr24)>,
+    trait_id: TraitIndex,
+    required_methods: HashSet<MethodIndex>,
+    shims: Vec<(MethodIndex, FunctionIndex)>,
 }
 
 impl<'b> TraitBuilder<'b> {
@@ -1417,9 +1439,9 @@ impl<'b> TraitBuilder<'b> {
     fn generate_method_shim(
         &mut self,
         trait_name: &str,
-        method_id: u16,
-        method_signature: &FunctionSignature,
-    ) -> Result<Opr24, ErrorKind> {
+        method_id: MethodIndex,
+        method_signature: &MethodSignature,
+    ) -> Result<FunctionIndex, ErrorKind> {
         let arity = method_signature.arity.unwrap() as u8;
 
         let (module_name, codegen_location) = if let Some(parent_chunk) = self.parent_chunk {
@@ -1430,7 +1452,7 @@ impl<'b> TraitBuilder<'b> {
 
         let mut chunk = Chunk::new(module_name);
         chunk.codegen_location = codegen_location;
-        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id, arity as u8))));
+        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), arity as u8))));
         chunk.emit(Opcode::Return);
 
         let shim_name = Rc::from(format!("trait {trait_name}.{} <shim>", method_signature.name));
@@ -1448,16 +1470,16 @@ impl<'b> TraitBuilder<'b> {
     /// Adds a function into the trait and returns its method ID and function ID.
     ///
     /// The arity does not include the `self` parameter.
-    pub fn add_method(&mut self, name: Rc<str>, arity: u16) -> Result<u16, ErrorKind> {
+    pub fn add_method(&mut self, name: Rc<str>, arity: u16) -> Result<MethodIndex, ErrorKind> {
         let trait_name = Rc::clone(&self.env.get_trait(self.trait_id).unwrap().name);
-        let signature = FunctionSignature {
+        let signature = MethodSignature {
             name,
             arity: Some(arity.checked_add(1).ok_or(ErrorKind::TooManyParameters)?),
             trait_id: Some(self.trait_id),
         };
         let method_id = self.env.get_or_create_method_index(&signature)?;
 
-        let shim_signature = FunctionSignature {
+        let shim_signature = MethodSignature {
             // Add 2 for the receiving trait and self.
             arity: Some(arity.checked_add(2).ok_or(ErrorKind::TooManyParameters)?),
             trait_id: None,
@@ -1481,7 +1503,7 @@ impl<'b> TraitBuilder<'b> {
 
     /// Finishes building the trait, returns its trait ID, and gives back the mutable reference to
     /// the environment.
-    pub fn build(self) -> (Opr24, &'b mut Environment) {
+    pub fn build(self) -> (TraitIndex, &'b mut Environment) {
         let prototype = self.env.get_trait_mut(self.trait_id).unwrap();
         prototype.required = self.required_methods;
         prototype.shims = self.shims;

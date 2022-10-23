@@ -8,7 +8,7 @@ use crate::ll::{
         CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, MethodSignature,
         Opcode, PrototypeIndex, TraitIndex,
     },
-    common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
+    error::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
     value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
 };

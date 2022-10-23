@@ -1,7 +1,7 @@
 use std::{cell::UnsafeCell, cmp::Ordering};
 
 use super::RawValue;
-use crate::ll::common::ErrorKind;
+use crate::ll::error::ErrorKind;
 
 /// A Mica list.
 pub struct List {

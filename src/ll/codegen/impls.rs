@@ -10,7 +10,7 @@ use super::{
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{ImplementedTraitIndex, MethodSignature, Opcode, Prototype},
-    common::{Error, ErrorKind, RenderedSignature},
+    error::{Error, ErrorKind, RenderedSignature},
 };
 
 /// The state of generating an `impl` block.

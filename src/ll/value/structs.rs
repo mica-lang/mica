@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 
 use super::RawValue;
-use crate::ll::{bytecode::DispatchTable, common::ErrorKind, gc::GcRaw};
+use crate::ll::{bytecode::DispatchTable, error::ErrorKind, gc::GcRaw};
 
 /// The innards of a struct.
 ///

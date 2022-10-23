@@ -18,7 +18,7 @@ pub use lists::*;
 pub use structs::*;
 pub use traits::*;
 
-use crate::ll::{bytecode::DispatchTable, common::ErrorKind, gc::GcRaw};
+use crate::ll::{bytecode::DispatchTable, error::ErrorKind, gc::GcRaw};
 
 /// The kind of a [`RawValue`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

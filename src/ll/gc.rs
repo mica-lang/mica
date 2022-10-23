@@ -234,7 +234,7 @@ impl Memory {
         if self.auto_strategy.satisfied(self) {
             #[cfg(feature = "trace-gc")]
             {
-                println!("gc | strategy satisfied, collecting",);
+                println!("gc | strategy satisfied, collecting");
             }
             self.collect(roots);
             self.auto_strategy = self.auto_strategy.update(self);

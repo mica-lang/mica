@@ -4,7 +4,7 @@ use super::{variables::VariableAllocation, CodeGenerator, Expression, Expression
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{Opcode, Opr24},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
 };
 
 #[derive(Debug, Default)]

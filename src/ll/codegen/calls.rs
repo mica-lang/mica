@@ -6,7 +6,7 @@ use super::{CodeGenerator, Expression, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{MethodSignature, Opcode, Opr24},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
 };
 
 impl<'e> CodeGenerator<'e> {

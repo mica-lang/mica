@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::Chunk;
 use crate::ll::{
     codegen::variables::{LocalIndex, UpvalueIndex},
-    common::ErrorKind,
+    error::ErrorKind,
     gc::Memory,
     value::RawValue,
 };

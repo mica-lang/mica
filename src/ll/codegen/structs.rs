@@ -9,7 +9,7 @@ use super::{
 use crate::ll::{
     ast::{Ast, NodeId},
     bytecode::{Opcode, Opr24},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
 };
 
 #[derive(Debug, Default)]

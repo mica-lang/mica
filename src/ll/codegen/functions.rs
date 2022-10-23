@@ -6,7 +6,7 @@ use super::{variables::VariableAllocation, CodeGenerator, Expression, Expression
 use crate::ll::{
     ast::{Ast, NodeId},
     bytecode::{Function, FunctionIndex, FunctionKind, Opcode, Opr24},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
 };
 
 /// The calling convention of a function.

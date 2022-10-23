@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use crate::ll::common::{Error, ErrorKind, Location};
+use crate::ll::error::{Error, ErrorKind, Location};
 
 /// The kind of a token.
 #[derive(Debug, Clone, PartialEq)]

@@ -9,7 +9,7 @@ use crate::ll::{
         Chunk, Environment, Function, FunctionIndex, FunctionKind, MethodIndex, MethodSignature,
         Opcode, Opr24, TraitIndex,
     },
-    common::{Error, ErrorKind, Location, RenderedSignature},
+    error::{Error, ErrorKind, Location, RenderedSignature},
 };
 
 pub struct TraitBuilder<'b> {

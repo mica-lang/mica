@@ -10,7 +10,7 @@
 pub mod ast;
 pub mod bytecode;
 pub mod codegen;
-pub mod common;
+pub mod error;
 pub mod gc;
 pub mod lexer;
 pub mod parser;

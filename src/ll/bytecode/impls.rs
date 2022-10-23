@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{Environment, FunctionIndex, MethodIndex, TraitIndex};
-use crate::ll::{codegen::TraitBuilder, common::ErrorKind};
+use crate::ll::{codegen::TraitBuilder, error::ErrorKind};
 
 /// The index of a trait in an `impl` block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

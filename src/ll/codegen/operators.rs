@@ -4,7 +4,7 @@ use super::{CodeGenerator, Expression, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::Opcode,
-    common::Error,
+    error::Error,
 };
 
 impl<'e> CodeGenerator<'e> {

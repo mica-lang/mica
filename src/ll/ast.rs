@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::ll::common::{Error, ErrorKind, Location};
+use crate::ll::error::{Error, ErrorKind, Location};
 
 /// A lightweight handle to a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

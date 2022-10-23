@@ -3,7 +3,7 @@
 use std::{fmt, mem::size_of, rc::Rc};
 
 use super::{EncodeInstruction, Opcode, Opr24};
-use crate::ll::common::Location;
+use crate::ll::error::Location;
 
 /// A chunk of bytecode.
 pub struct Chunk {

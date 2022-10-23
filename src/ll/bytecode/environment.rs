@@ -6,7 +6,7 @@ use std::{
 };
 
 use super::{BuiltinDispatchTables, Function, Opr24, Prototype, TraitPrototype};
-use crate::ll::common::{ErrorKind, RenderedSignature};
+use crate::ll::error::{ErrorKind, RenderedSignature};
 
 /// The unique index of a function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

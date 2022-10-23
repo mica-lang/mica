@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
     lexer::{Lexer, Token, TokenKind},
 };
 

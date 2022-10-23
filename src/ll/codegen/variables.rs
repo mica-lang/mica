@@ -6,7 +6,7 @@ use super::{CodeGenerator, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId},
     bytecode::{CaptureKind, GlobalIndex, Opcode, Opr24},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
 };
 
 /// The index of a local on the stack.

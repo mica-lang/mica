@@ -7,7 +7,7 @@ use self::{control_flow::BreakableBlock, structs::StructData, variables::Locals}
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{BuiltinTraits, Chunk, Environment, Opcode},
-    common::{Error, ErrorKind},
+    error::{Error, ErrorKind},
 };
 
 pub struct CodeGenerator<'e> {

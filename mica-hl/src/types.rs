@@ -52,17 +52,19 @@ impl DispatchTableDescriptor {
         signature: UnresolvedFunctionSignature,
         f: FunctionKind,
     ) -> Result<(), Error> {
+        let name = Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name));
         let function_id = env
             .create_function(Function {
-                name: Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name)),
+                name: Rc::clone(&name),
                 parameter_count: signature.arity,
                 kind: f,
                 hidden_in_stack_traces: false,
             })
             .map_err(|_| Error::TooManyFunctions)?;
         let signature = signature.resolve(builtin_traits);
-        let index = env.get_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
-        dtable.set_method(index, gc.allocate(Closure { function_id, captures: Vec::new() }));
+        let index =
+            env.get_or_create_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
+        dtable.set_method(index, gc.allocate(Closure { name, function_id, captures: Vec::new() }));
         Ok(())
     }
 

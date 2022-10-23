@@ -614,8 +614,6 @@ pub struct Environment {
     pub builtin_dtables: BuiltinDispatchTables,
     /// `impl` prototypes.
     prototypes: Vec<Option<Prototype>>,
-    /// `prototypes` indices that have been taken out of the vec.
-    free_prototypes: Vec<Opr24>,
     /// Trait prototypes.
     traits: Vec<TraitPrototype>,
 }
@@ -630,7 +628,6 @@ impl Environment {
             method_signatures: Vec::new(),
             builtin_dtables,
             prototypes: Vec::new(),
-            free_prototypes: Vec::new(),
             traits: Vec::new(),
         }
     }
@@ -668,16 +665,13 @@ impl Environment {
         self.functions.get_unchecked(u32::from(id) as usize)
     }
 
-    /// Returns the function with the given ID, as returned by `create_function`.
-    /// This function is for internal use in the VM and does not perform any checks, thus is marked
-    /// `unsafe`.
-    pub(crate) unsafe fn get_function_unchecked_mut(&mut self, id: Opr24) -> &mut Function {
-        self.functions.get_unchecked_mut(u32::from(id) as usize)
-    }
-
-    /// Tries to look up the index of a method, based on a function signature. Returns `None` if
-    /// there are too many function signatures in this environment.
-    pub fn get_method_index(&mut self, signature: &FunctionSignature) -> Result<u16, ErrorKind> {
+    /// Tries to look up the index of a method, based on a function signature. Creates a new method
+    /// index if there isn't one for the given signature. Returns `Err` if there are too many
+    /// function signatures in this environment.
+    pub fn get_or_create_method_index(
+        &mut self,
+        signature: &FunctionSignature,
+    ) -> Result<u16, ErrorKind> {
         // Don't use `entry` here to avoid cloning the signature.
         if let Some(&index) = self.method_indices.get(signature) {
             Ok(index)
@@ -692,6 +686,11 @@ impl Environment {
         }
     }
 
+    /// Looks up the index of a method
+    pub(crate) fn get_method_index(&self, signature: &FunctionSignature) -> Option<u16> {
+        self.method_indices.get(signature).copied()
+    }
+
     /// Returns the signature for the method with the given ID, or `None` if the method index is
     /// invalid.
     pub fn get_method_signature(&self, method_index: u16) -> Option<&FunctionSignature> {
@@ -700,25 +699,17 @@ impl Environment {
 
     /// Creates a prototype and returns its ID.
     pub(crate) fn create_prototype(&mut self, proto: Prototype) -> Result<Opr24, ErrorKind> {
-        let slot = if let Some(slot) = self.free_prototypes.pop() {
-            self.prototypes[u32::from(slot) as usize] = Some(proto);
-            slot
-        } else {
-            let slot =
-                Opr24::try_from(self.prototypes.len()).map_err(|_| ErrorKind::TooManyImpls)?;
-            self.prototypes.push(Some(proto));
-            slot
-        };
+        let slot = Opr24::try_from(self.prototypes.len()).map_err(|_| ErrorKind::TooManyImpls)?;
+        self.prototypes.push(Some(proto));
         Ok(slot)
     }
 
     /// Takes out the prototype with the given ID, as returned by `create_prototype`.
     /// This function is for internal use in the VM and does not perform any checks, thus is marked
     /// `unsafe`.
-    pub(crate) unsafe fn take_prototype_unchecked(&mut self, id: Opr24) -> Prototype {
+    pub(crate) unsafe fn get_prototype_unchecked(&self, id: Opr24) -> &Prototype {
         let proto =
-            self.prototypes.get_unchecked_mut(u32::from(id) as usize).take().unwrap_unchecked();
-        self.free_prototypes.push(id);
+            self.prototypes.get_unchecked(u32::from(id) as usize).as_ref().unwrap_unchecked();
         proto
     }
 

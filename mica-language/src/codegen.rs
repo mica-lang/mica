@@ -795,8 +795,10 @@ impl<'e> CodeGenerator<'e> {
                     .try_into()
                     .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
                 let signature = FunctionSignature::new(Rc::clone(name), arity as u16);
-                let method_index =
-                    self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+                let method_index = self
+                    .env
+                    .get_or_create_method_index(&signature)
+                    .map_err(|kind| ast.error(node, kind))?;
                 self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, arity))));
             }
             _ => {
@@ -824,8 +826,10 @@ impl<'e> CodeGenerator<'e> {
             return Err(ast.error(method, ErrorKind::InvalidMethodName));
         }
         let signature = FunctionSignature::new(Rc::clone(ast.string(method).unwrap()), 1);
-        let method_index =
-            self.env.get_method_index(&signature).map_err(|kind| ast.error(node, kind))?;
+        let method_index = self
+            .env
+            .get_or_create_method_index(&signature)
+            .map_err(|kind| ast.error(node, kind))?;
         self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index, 1))));
 
         Ok(ExpressionResult::Present)
@@ -1122,7 +1126,7 @@ impl<'e> CodeGenerator<'e> {
                     let signature = FunctionSignature::new(name, 1 + function.parameter_count);
                     let method_id = self
                         .env
-                        .get_method_index(&signature)
+                        .get_or_create_method_index(&signature)
                         .map_err(|kind| ast.error(node, kind))?;
 
                     let map = match ast.kind(kind) {
@@ -1451,7 +1455,7 @@ impl<'b> TraitBuilder<'b> {
             arity: Some(arity.checked_add(1).ok_or(ErrorKind::TooManyParameters)?),
             trait_id: Some(self.trait_id),
         };
-        let method_id = self.env.get_method_index(&signature)?;
+        let method_id = self.env.get_or_create_method_index(&signature)?;
 
         let shim_signature = FunctionSignature {
             // Add 2 for the receiving trait and self.
@@ -1459,7 +1463,7 @@ impl<'b> TraitBuilder<'b> {
             trait_id: None,
             ..signature.clone()
         };
-        let shim_method_id = self.env.get_method_index(&shim_signature)?;
+        let shim_method_id = self.env.get_or_create_method_index(&shim_signature)?;
         let shim_function_id = self.generate_method_shim(&trait_name, method_id, &signature)?;
         self.shims.push((shim_method_id, shim_function_id));
 

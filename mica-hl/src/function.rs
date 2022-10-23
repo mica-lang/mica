@@ -3,7 +3,7 @@ use mica_language::{gc::Memory, value::RawValue};
 use crate::{Error, LanguageErrorKind, RawForeignFunction, TryFromValue, Value};
 
 fn create_rawff(
-    f: impl FnMut(&mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind> + 'static,
+    f: impl Fn(&mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind> + 'static,
 ) -> RawForeignFunction {
     Box::new(f)
 }
@@ -264,7 +264,7 @@ macro_rules! impl_non_varargs {
         > $crate::ForeignFunction<$crate::ffvariants::$variant<$($variant_args,)+>> for Fun // :)
         where
             $($genericty: $bound + 'static,)+
-            Fun: FnMut $params -> $ret + 'static,
+            Fun: Fn $params -> $ret + 'static,
             $($types: TryFromValue + 'static,)*
         {
             fn parameter_count() -> Option<u16> {
@@ -285,7 +285,7 @@ macro_rules! impl_non_varargs {
                 Some(N)
             }
 
-            fn into_raw_foreign_function(mut self) -> RawForeignFunction {
+            fn into_raw_foreign_function(self) -> RawForeignFunction {
                 #[allow(unused_imports)]
                 use $crate::MicaLanguageResultExt;
                 create_rawff(move |$gc, args| {
@@ -484,13 +484,13 @@ impl<Ret, Err, F> ForeignFunction<ffvariants::VarargsFallible> for F
 where
     Ret: Into<Value> + 'static,
     Err: std::error::Error + 'static,
-    F: FnMut(Arguments) -> Result<Ret, Err> + 'static,
+    F: Fn(Arguments) -> Result<Ret, Err> + 'static,
 {
     fn parameter_count() -> Option<u16> {
         None
     }
 
-    fn into_raw_foreign_function(mut self) -> RawForeignFunction {
+    fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |gc, args| {
             self(Arguments::new(args))
                 .map(|value| value.into().to_raw(gc))
@@ -503,13 +503,13 @@ where
 impl<Ret, F> ForeignFunction<ffvariants::VarargsInfallible> for F
 where
     Ret: Into<Value> + 'static,
-    F: FnMut(Arguments) -> Ret + 'static,
+    F: Fn(Arguments) -> Ret + 'static,
 {
     fn parameter_count() -> Option<u16> {
         None
     }
 
-    fn into_raw_foreign_function(mut self) -> RawForeignFunction {
+    fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |gc, args| Ok(self(Arguments::new(args)).into().to_raw(gc)))
     }
 }

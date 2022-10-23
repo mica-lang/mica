@@ -6,7 +6,7 @@ mod string;
 use mica_hl::{language::value::Dict, RawValue, StandardLibrary, TypeBuilder};
 
 /// Converts a function that takes a `self` parameter to one that takes a `&self` parameter.
-fn ref_self1<A, R>(mut f: impl FnMut(A) -> R) -> impl FnMut(&A) -> R
+fn ref_self1<A, R>(f: impl Fn(A) -> R) -> impl Fn(&A) -> R
 where
     A: Copy,
 {
@@ -15,7 +15,7 @@ where
 
 /// Converts a function that takes a `self` and one arbitrary parameter to one that takes a `&self`
 /// and one arbitrary parameter.
-fn ref_self2<A, B, R>(mut f: impl FnMut(A, B) -> R) -> impl FnMut(&A, B) -> R
+fn ref_self2<A, B, R>(f: impl Fn(A, B) -> R) -> impl Fn(&A, B) -> R
 where
     A: Copy,
 {

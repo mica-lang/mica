@@ -313,17 +313,18 @@ impl Engine {
         f: FunctionKind,
     ) -> Result<(), Error> {
         let global_id = name.to_global_id(&mut self.env)?;
+        let name = Rc::from(name);
         let function_id = self
             .env
             .create_function(Function {
-                name: Rc::from(name),
+                name: Rc::clone(&name),
                 parameter_count: parameter_count.into(), // doesn't matter for non-methods
                 kind: f,
                 hidden_in_stack_traces: false,
             })
             .map_err(|_| Error::TooManyFunctions)?;
         let function =
-            RawValue::from(self.gc.allocate(Closure { function_id, captures: Vec::new() }));
+            RawValue::from(self.gc.allocate(Closure { name, function_id, captures: Vec::new() }));
         self.globals.set(global_id.0, function);
         Ok(())
     }
@@ -489,7 +490,7 @@ impl MethodSignature for MethodId {
 /// For instance, `("cat", 1)` represents the method `cat/1`.
 impl MethodSignature for (&str, u8) {
     fn to_method_id(&self, env: &mut Environment) -> Result<MethodId, Error> {
-        env.get_method_index(&FunctionSignature {
+        env.get_or_create_method_index(&FunctionSignature {
             name: Rc::from(self.0),
             arity: Some(self.1 as u16 + 1),
             trait_id: None,

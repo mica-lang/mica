@@ -69,6 +69,7 @@ impl Upvalue {
 #[derive(Debug)]
 #[repr(align(8))]
 pub struct Closure {
+    pub name: Rc<str>,
     pub function_id: Opr24,
     pub captures: Vec<Pin<Rc<Upvalue>>>,
 }

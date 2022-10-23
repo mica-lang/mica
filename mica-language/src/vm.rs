@@ -349,6 +349,7 @@ impl Fiber {
         env: &Environment,
         gc: &mut Memory,
         function_id: Opr24,
+        name: Rc<str>,
     ) -> GcRaw<Closure> {
         let function = unsafe { env.get_function_unchecked(function_id) };
         let mut captures = Vec::new();
@@ -366,7 +367,7 @@ impl Fiber {
                 });
             }
         }
-        gc.allocate(Closure { function_id, captures })
+        gc.allocate(Closure { name, function_id, captures })
     }
 
     /// Returns the dispatch table of the given value.
@@ -398,8 +399,8 @@ impl Fiber {
     ) {
         for (method_id, function_id) in methods {
             let function = unsafe { env.get_function_unchecked(function_id) };
-            function.name = Rc::from(format!("{}.{}", dtable.pretty_name, function.name));
-            let closure = self.create_closure(env, gc, function_id);
+            let name = Rc::from(format!("{}.{}", dtable.pretty_name, function.name));
+            let closure = self.create_closure(env, gc, function_id, name);
             dtable.set_method(method_id, closure);
         }
     }
@@ -416,14 +417,17 @@ impl Fiber {
         for (name, arity, trait_index, function_id) in methods {
             let trait_handle = unsafe { traits[trait_index as usize].get() };
             let trait_id = trait_handle.id;
-            let method_signature =
-                FunctionSignature { name, arity: Some(arity), trait_id: Some(trait_id) };
+            let method_signature = FunctionSignature {
+                name: Rc::clone(&name),
+                arity: Some(arity),
+                trait_id: Some(trait_id),
+            };
             // NOTE: This should never panic because trait method indices are created during the
             // trait's declaration. New method indices should not be made here.
             let method_id = env
                 .get_method_index(&method_signature)
                 .expect("existing method index must be found");
-            let closure = self.create_closure(env, gc, function_id);
+            let closure = self.create_closure(env, gc, function_id, name);
             dtable.set_method(method_id, closure);
 
             if !unimplemented_methods.remove(&method_id) {
@@ -521,7 +525,9 @@ impl Fiber {
                 }
                 Opcode::CreateClosure => {
                     unsafe { gc.auto_collect(self.roots(globals)) };
-                    let closure = self.create_closure(env, gc, operand);
+                    let function_id = operand;
+                    let function = unsafe { env.get_function_unchecked(function_id) };
+                    let closure = self.create_closure(env, gc, operand, Rc::clone(&function.name));
                     self.push(RawValue::from(closure));
                 }
                 Opcode::CreateType => {
@@ -735,7 +741,7 @@ impl Fiber {
                 }
 
                 Opcode::Implement => {
-                    let proto = unsafe { env.take_prototype_unchecked(operand) };
+                    let proto = unsafe { env.get_prototype_unchecked(operand) };
                     let struct_position = proto.implemented_trait_count as usize + 1;
 
                     let traits: Vec<_> = {

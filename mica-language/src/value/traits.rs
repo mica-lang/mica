@@ -26,7 +26,9 @@ pub fn create_trait(env: &Environment, gc: &mut Memory, trait_id: Opr24) -> GcRa
     let mut dispatch_table = DispatchTable::new_for_type(Rc::clone(name));
     dispatch_table.pretty_name = Rc::from(format!("trait {name}"));
     for &(method_id, function_id) in &prototype.shims {
-        let closure = gc.allocate(Closure { function_id, captures: vec![] });
+        let function = unsafe { env.get_function_unchecked(function_id) };
+        let closure =
+            gc.allocate(Closure { name: Rc::clone(&function.name), function_id, captures: vec![] });
         dispatch_table.set_method(method_id, closure);
     }
     let dispatch_table = gc.allocate(dispatch_table);

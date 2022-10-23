@@ -216,8 +216,8 @@ can only have up to 8 arguments. If more arguments, or a variable amount is need
 accept [`Arguments`] as its sole argument, and use it to process arguments.
 
 Do note however that [`Arguments`]' API is comparatively low-level and will have you working with
-[`RawValue`]s that are unsafe in many ways. If you really need that many arguments, maybe it's time
-to rethink your APIs.
+[`RawValue`][crate::ll::value::RawValue]s that are unsafe in many ways. If you really need that many
+arguments, maybe it's time to rethink your APIs.
 
 ## Rust types in Mica
 

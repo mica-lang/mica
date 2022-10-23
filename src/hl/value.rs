@@ -38,6 +38,8 @@ pub enum Value {
     /// A GC'd `String`.
     String(Gc<String>),
     /// A function.
+    ///
+    /// Functions can be called with [`Engine::call`][crate::Engine::call].
     Function(Hidden<Closure>),
     /// An opaque struct.
     Struct(Hidden<Struct>),

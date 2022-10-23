@@ -8,6 +8,11 @@ repository = "https://github.com/liquidev/mica"
 keywords = ["language", "scripting", "embeddable"]
 categories = ["compilers"]
 
+[workspace]
+members = [
+    "mica-cli",
+]
+
 [features]
 default = []
 

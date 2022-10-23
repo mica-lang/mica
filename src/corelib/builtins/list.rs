@@ -1,4 +1,4 @@
-use crate::{Arguments, RawFunctionKind, RawValue, TypeBuilder};
+use crate::{ll::value::RawValue, Arguments, RawFunctionKind, TypeBuilder};
 
 pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
     builder

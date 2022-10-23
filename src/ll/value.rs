@@ -70,7 +70,7 @@ fn _check_implementations() {
 /// An **unsafe** value used internally in the VM.
 ///
 /// Does not provide any safety guarantees as to GC'd object lifetimes.
-/// You almost always want [`Value`] instead of this.
+/// You almost always want [`Value`][crate::Value] instead of this.
 #[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
 pub struct RawValue(ValueImpl);

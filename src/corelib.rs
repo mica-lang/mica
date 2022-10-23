@@ -1,7 +1,10 @@
 //! The Mica core library. Provides the fundamental set of functions and types.
 
 use self::{builtins::*, core::load_core};
-use crate::{ll::value::Dict, CoreLibrary, Engine, Error, RawValue, TypeBuilder};
+use crate::{
+    ll::value::{Dict, RawValue},
+    CoreLibrary, Engine, Error, TypeBuilder,
+};
 
 mod builtins;
 mod core;

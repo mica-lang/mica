@@ -2,9 +2,9 @@
 
 use std::{borrow::Cow, fmt};
 
-/// A raw [`mica-language`][`crate::language`] error, with metadata such as stack traces.
+/// A raw [`ll`][crate::ll] error, with metadata such as stack traces.
 pub type LanguageError = crate::ll::common::Error;
-/// A raw [`mica-language`][`crate::language`] error kind.
+/// A raw [`ll`][crate::ll] error kind.
 pub type LanguageErrorKind = crate::ll::common::ErrorKind;
 
 /// An error.

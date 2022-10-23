@@ -1,8 +1,8 @@
 //! The `Gc` type.
 
 use crate::{
-    ll::{bytecode::Control, gc::AutoStrategy},
-    Arguments, Engine, Error, RawFunctionKind, RawValue, TypeBuilder, UserData,
+    ll::{bytecode::Control, gc::AutoStrategy, value::RawValue},
+    Arguments, Engine, Error, RawFunctionKind, TypeBuilder, UserData,
 };
 
 struct GcType;

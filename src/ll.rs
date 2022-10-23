@@ -1,8 +1,10 @@
-//! The low-level implementation of the Mica programming language.
+//! The **l**ow-**l**evel (`ll`) implementation of the Mica programming language.
 //!
-//! You usually want to use the [high-level API][crate] instead. This API is **more unstable** and
-//! may not be documented as well as the high-level API.
+//! You usually want to use the [high-level API][crate] instead. This API is **much more unstable**
+//! and may not be documented as well as the high-level API.
 
+// See? I told you it's not as documented.
+// And it doesn't have to be.
 #![allow(missing_docs)]
 
 pub mod ast;

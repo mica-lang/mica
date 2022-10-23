@@ -21,7 +21,4 @@ pub use types::*;
 pub use userdata::*;
 pub use value::*;
 
-pub use crate::ll::{
-    gc::Gc,
-    value::{RawValue, ValueKind as RawValueKind},
-};
+pub use crate::ll::gc::Gc;

@@ -1,4 +1,8 @@
+#![allow(clippy::or_fun_call)]
 #![doc = include_str!("lib.md")]
 
-pub use mica_hl::*;
-pub use mica_std as std;
+pub mod corelib;
+mod hl;
+pub mod ll;
+
+pub use hl::*;

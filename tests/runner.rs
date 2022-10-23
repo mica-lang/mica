@@ -276,13 +276,6 @@ impl From<Result<(), mica::Error>> for Outcome {
     }
 }
 
-/// Sets up a new engine with the standard library.
-fn engine() -> Result<Engine, Error> {
-    let mut engine = Engine::new(mica_std::lib());
-    mica_std::load(&mut engine)?;
-    Ok(engine)
-}
-
 /// Starts a new fiber and returns an iterator over its yielded values.
 fn interpret<'e>(
     engine: &'e mut Engine,
@@ -302,7 +295,7 @@ fn interpret<'e>(
 
 /// Evaluates a script, discarding its result and reporting any errors along the way.
 fn evaluate(test_name: &str, code: &str) -> Result<(), mica::Error> {
-    let mut engine = engine()?;
+    let mut engine = Engine::new();
     for result in interpret(&mut engine, test_name, code)? {
         result?;
     }

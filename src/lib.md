@@ -36,12 +36,11 @@ end
 Seeing you're here, you probably want to embed Mica into your own program. Worry not! There's an
 easy-to-use, high-level API just waiting to be discovered by adventurous people like you.
 
-To start out, build an [`Engine`] and load the [standard library][`std`] into it:
+To start out, build an [`Engine`]:
 ```rust
 use mica::Engine;
 
-let mut engine = Engine::new(mica::std::lib());
-mica::std::load(&mut engine);
+let mut engine = Engine::new();
 ```
 
 ## Running code
@@ -53,8 +52,7 @@ Thus, the script mutably borrows the engine it was compiled by, so that you don'
 about confusing two engines.
 ```rust
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 // The first argument passed is the file name, which is used in error messages.
 let mut script = engine.compile("hello.mi", r#" print("Hello, world!") "#)?;
 # Ok(())
@@ -67,8 +65,7 @@ pausable thread of execution.<br>
 
 ```rust
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 # let mut script = engine.compile("hello.mi", r#" print("Hello, world!") "#)?;
 let mut fiber = script.start();
 # Ok(())
@@ -78,8 +75,7 @@ A fiber doesn't start running immediately though. To make it start interpreting 
 [`resume`][`Fiber::resume`]:
 ```rust
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 # let mut script = engine.compile("hello.mi", r#" print("Hello, world!") "#)?;
 # let mut fiber = script.start();
 use mica::Value;
@@ -100,8 +96,7 @@ Note that this function discards all intermediary values returned by the VM.
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 # let mut script = engine.compile("hello.mi", r#" print("Hello, world!") "#)?;
 # let mut fiber = script.start();
 let result: Value = fiber.trampoline()?;
@@ -121,8 +116,7 @@ conveniently converts the returned value to a user-specified type.
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 // Tip: A fiber can be started immediately after compiling a script, by using Engine::start.
 let mut fiber = engine.start("arithmetic.mi", r#" 2 + 2 * 2 "#)?;
 let result: f64 = fiber.trampoline()?;
@@ -137,8 +131,7 @@ using [`Engine::get`].
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 engine.set("x", 1.0f64);
 engine.set("y", 2.0f64);
 let result: f64 = engine.start("globals.mi", r#" x + y * 10 "#)?.trampoline()?;
@@ -151,8 +144,7 @@ of just returning values.
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 // The unit type implements TryFromValue that expects a nil value.
 let _: () =
     engine.start(
@@ -174,8 +166,7 @@ calling Rust functions. To register a Rust function in the VM, [`Engine::add_fun
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 engine.add_function("double", |x: f64| x * x)?;
 assert_eq!(
     engine.start("ffi.mi", "double(2)")?.trampoline::<f64>()?,
@@ -192,8 +183,7 @@ Rust functions registered in the VM can also be fallible, and return a [`Result<
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 // Note that the API also understands numeric types other than `f64`. However, the only type of
 // numbers Mica supports natively is `f64`, so converting from bigger types incurs a precision loss.
 engine.add_function("parse_integer_with_radix", |s: String, radix: u32| {
@@ -211,8 +201,7 @@ raise a runtime error in the VM.
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 # engine.add_function("parse_integer_with_radix", |s: String, radix: u32| {
 #    usize::from_str_radix(&s, radix)
 # })?;
@@ -253,8 +242,7 @@ With a type set up, you can then create a [`TypeBuilder`] and use it in [`Engine
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 # struct Counter {
 #    value: usize,
 #    increment: usize,
@@ -311,8 +299,7 @@ function may be used.
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 let get_greeting =
     engine
         .start(
@@ -332,8 +319,7 @@ Apart from bare functions, it's also possible to call methods, by using [`Engine
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 let greeter_type =
     engine
         .start(
@@ -370,8 +356,7 @@ requires less indirections, which improves performance.
 ```rust
 # use mica::Value;
 # fn main() -> Result<(), Box<dyn std::error::Error>> {
-# let mut engine = mica::Engine::new(mica::std::lib());
-# mica::std::load(&mut engine);
+# let mut engine = mica::Engine::new();
 let mut builder = engine.build_trait("RandomNumberGenerator")?;
 // NB: You *must not* reuse m_generate across different Engines.
 let m_generate = builder.add_function("generate", 0)?;

@@ -12,6 +12,7 @@ mod gc;
 mod iterators;
 
 /// Unit struct representing the core library.
+#[derive(Debug, Clone, Copy)]
 pub struct Lib;
 
 impl CoreLibrary for Lib {

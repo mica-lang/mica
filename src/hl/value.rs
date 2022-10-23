@@ -14,6 +14,7 @@ use crate::{
 
 /// A GC'd type whose content cannot be safely accessed.
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct Hidden<T>(pub(crate) Gc<T>);
 
 impl<T> Clone for Hidden<T> {

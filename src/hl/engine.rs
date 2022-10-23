@@ -1,4 +1,4 @@
-use std::{any::Any, ops::Deref, rc::Rc};
+use std::{any::Any, fmt, ops::Deref, rc::Rc};
 
 /// The implementation of a raw foreign function.
 pub use crate::ll::bytecode::ForeignFunction as RawForeignFunction;
@@ -35,6 +35,7 @@ pub struct DebugOptions {
 
 /// **Start here!** An execution engine. Contains information about things like globals, registered
 /// types, etc.
+#[derive(Debug)]
 pub struct Engine {
     pub(crate) env: Environment,
     pub(crate) builtin_traits: BuiltinTraits,
@@ -409,6 +410,12 @@ impl<'e> Script<'e> {
             engine: self.engine,
             inner: vm::Fiber::new(Rc::clone(&self.main_chunk), Vec::new()),
         }
+    }
+}
+
+impl<'e> fmt::Debug for Script<'e> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Script").field("main_chunk", &self.main_chunk).finish_non_exhaustive()
     }
 }
 

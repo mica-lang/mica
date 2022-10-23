@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::{ll::vm, Engine, Error, TryFromValue, Value};
 
 /// A fiber represents an independent, pausable thread of code execution.
@@ -34,5 +36,11 @@ impl<'e> Fiber<'e> {
             result = v;
         }
         T::try_from_value(&result)
+    }
+}
+
+impl<'e> fmt::Debug for Fiber<'e> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Fiber").finish_non_exhaustive()
     }
 }

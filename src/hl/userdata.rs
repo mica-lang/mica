@@ -19,6 +19,7 @@ use crate::{
 pub trait UserData: Any {}
 
 /// A type. This is used to represent user-defined Rust types in the VM (but not their instances).
+#[derive(Debug)]
 pub struct Type<T> {
     dtable: Gc<DispatchTable>,
     _data: PhantomData<T>,
@@ -57,6 +58,7 @@ pub trait ObjectConstructor<T> {
 /// Built-in types such as [`f64`] shouldn't be used as the `T` of an `Object`, because they are
 /// can be represented by values inherently. `Object` however may be used for binding types that are
 /// not directly supported by the VM, like [`std::fs::File`].
+#[derive(Debug)]
 pub struct Object<T> {
     pub(crate) dtable: Gc<DispatchTable>,
     // The functionality of the RefCell unfortunately has to be replicated because we need unsafe
@@ -118,6 +120,7 @@ where
 /// is not guaranteed using the borrow checker. This type is needed because generic associated types
 /// haven't been stabilized yet.
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct UnsafeRefGuard<T> {
     object: *const Object<T>,
 }
@@ -137,6 +140,7 @@ impl<T> Drop for UnsafeRefGuard<T> {
 /// is not guaranteed using the borrow checker. This type is needed because generic associated types
 /// haven't been stabilized yet.
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct UnsafeMutGuard<T> {
     object: *const Object<T>,
 }

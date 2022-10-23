@@ -288,6 +288,14 @@ impl Drop for Memory {
     }
 }
 
+impl fmt::Debug for Memory {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Memory")
+            .field("allocated_bytes", &self.allocated_bytes)
+            .finish_non_exhaustive()
+    }
+}
+
 /// An allocation with metadata.
 #[repr(C, align(8))]
 pub(crate) struct GcMem<T> {

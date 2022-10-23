@@ -1,6 +1,6 @@
 //! Code generation for traits. Includes public API for building new traits programatically.
 
-use std::{collections::HashSet, rc::Rc};
+use std::{collections::HashSet, fmt, rc::Rc};
 
 use super::{variables::VariableAllocation, CodeGenerator, ExpressionResult};
 use crate::ll::{
@@ -104,6 +104,12 @@ impl<'b> TraitBuilder<'b> {
         prototype.required = self.required_methods;
         prototype.shims = self.shims;
         (self.trait_id, self.env)
+    }
+}
+
+impl<'e> fmt::Debug for TraitBuilder<'e> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TraitBuilder").finish_non_exhaustive()
     }
 }
 

@@ -1,6 +1,6 @@
 //! Bytecode generation.
 
-use std::{collections::HashSet, rc::Rc};
+use std::{collections::HashSet, fmt, rc::Rc};
 
 pub use self::traits::TraitBuilder;
 use self::{control_flow::BreakableBlock, structs::StructData, variables::Locals};
@@ -160,6 +160,12 @@ impl<'e> CodeGenerator<'e> {
         self.generate_node(ast, root_node, Expression::Used)?;
         self.chunk.emit(Opcode::Halt);
         Ok(Rc::new(self.chunk))
+    }
+}
+
+impl<'e> fmt::Debug for CodeGenerator<'e> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CodeGenerator").finish_non_exhaustive()
     }
 }
 

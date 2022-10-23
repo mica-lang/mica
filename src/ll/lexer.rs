@@ -1,6 +1,6 @@
 //! The lexer.
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use crate::ll::error::{Error, ErrorKind, Location};
 
@@ -508,5 +508,11 @@ impl Lexer {
         let token = self.next_token()?;
         self.location = location;
         Ok(token)
+    }
+}
+
+impl fmt::Debug for Lexer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Lexer").finish_non_exhaustive()
     }
 }

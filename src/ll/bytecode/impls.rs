@@ -63,6 +63,7 @@ pub struct TraitPrototype {
 }
 
 /// IDs of built-in traits and their methods.
+#[derive(Debug)]
 pub struct BuiltinTraits {
     pub iterator: TraitIndex,
     pub iterator_has_next: MethodIndex,

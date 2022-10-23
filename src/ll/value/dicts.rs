@@ -24,7 +24,7 @@ struct DictInner {
 ///
 /// Note that this type has interior mutability. This is because dicts in Mica are shared by
 /// reference; creating a new dict requires using `clone`.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Dict {
     inner: UnsafeCell<DictInner>,
 }

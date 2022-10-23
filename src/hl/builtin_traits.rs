@@ -55,10 +55,12 @@ pub mod iterator {
     use super::*;
 
     /// `Iterator.has_next`, can be implemented with `fn (&mut self) -> T`.
+    #[derive(Debug)]
     pub struct HasNext;
     implement_builtin_trait_function!(HasNext, "has_next", (), BuiltinTrait::Iterator);
 
     /// `Iterator.next`, can be implemented with `fn (&mut self) -> T`.
+    #[derive(Debug)]
     pub struct Next;
     implement_builtin_trait_function!(Next, "next", (), BuiltinTrait::Iterator);
 }

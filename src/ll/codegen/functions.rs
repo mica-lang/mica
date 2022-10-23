@@ -44,13 +44,13 @@ impl FunctionCallConv {
 }
 
 pub(super) struct GenerateFunctionOptions {
-    pub name: Rc<str>,
-    pub call_conv: FunctionCallConv,
+    pub(crate) name: Rc<str>,
+    pub(crate) call_conv: FunctionCallConv,
 }
 
 pub(super) struct GeneratedFunction {
-    pub id: FunctionIndex,
-    pub parameter_count: u16,
+    pub(crate) id: FunctionIndex,
+    pub(crate) parameter_count: u16,
 }
 
 impl<'e> CodeGenerator<'e> {

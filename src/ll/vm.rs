@@ -1,6 +1,6 @@
 //! The virtual machine.
 
-use std::{collections::HashSet, pin::Pin, ptr, rc::Rc};
+use std::{collections::HashSet, fmt, pin::Pin, ptr, rc::Rc};
 
 use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, MethodIndex};
 use crate::ll::{
@@ -66,7 +66,8 @@ impl Default for Globals {
     }
 }
 
-/// The return point saved before entering a functi
+/// The return point saved before entering a function.
+#[derive(Debug)]
 struct ReturnPoint {
     chunk: Option<Rc<Chunk>>,
     closure: Option<GcRaw<Closure>>,
@@ -873,5 +874,11 @@ impl Fiber {
         );
 
         Ok(result)
+    }
+}
+
+impl fmt::Debug for Fiber {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Fiber").finish_non_exhaustive()
     }
 }

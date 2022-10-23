@@ -123,7 +123,14 @@ impl Ast {
     }
 }
 
+impl fmt::Debug for Ast {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Ast").finish_non_exhaustive()
+    }
+}
+
 /// A node builder.
+#[derive(Debug)]
 pub struct NodeBuilder<'a> {
     ast: &'a mut Ast,
     node: NodeId,

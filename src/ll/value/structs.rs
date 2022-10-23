@@ -8,6 +8,7 @@ use crate::ll::{bytecode::DispatchTable, error::ErrorKind, gc::GcRaw};
 /// Note that both types and actual constructed structs use the same representation. The difference
 /// is that types do not contain associated fields (Mica does not have static fields.)
 #[repr(align(8))]
+#[derive(Debug)]
 pub struct Struct {
     /// The disptach table of the struct. This may only be set once, and setting it seals the
     /// struct.

@@ -20,7 +20,7 @@ fn _size_and_alignment_checks() {
 
 /// The NaN-boxed implementation of values.
 #[derive(Clone, Copy)]
-pub struct ValueImpl(u64);
+pub(crate) struct ValueImpl(u64);
 
 impl ValueImpl {
     const QNAN: u64 = 0b1111111111111 << 50;

@@ -12,6 +12,7 @@ fn create_rawff(
 /// Arguments passed to a varargs function.
 ///
 /// This is a wrapper that does things like type-checking and arity-checking.
+#[derive(Debug)]
 pub struct Arguments<'a> {
     this: RawValue,
     inner: &'a [RawValue],
@@ -83,6 +84,7 @@ impl<'a> Arguments<'a> {
 /// Wrapper struct for marking functions that use the with-raw-self calling convention.
 ///
 /// This `Deref`s to the inner value.
+#[derive(Debug)]
 #[repr(transparent)]
 pub struct RawSelf<'a>(&'a RawValue);
 
@@ -150,6 +152,7 @@ pub trait ForeignFunction<V> {
 /// module, such that eg. the traits `ForeignFunction<foreign::GenericResult>` and
 /// `ForeignFunction<foreign::Infallible>` are different, but can both be matched by using a generic
 /// parameter.
+#[allow(missing_debug_implementations)]
 pub mod ffvariants {
     use std::marker::PhantomData;
 

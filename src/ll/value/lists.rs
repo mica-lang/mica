@@ -4,6 +4,7 @@ use super::RawValue;
 use crate::ll::error::ErrorKind;
 
 /// A Mica list.
+#[derive(Debug)]
 pub struct List {
     elements: UnsafeCell<Vec<RawValue>>,
 }

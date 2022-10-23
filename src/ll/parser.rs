@@ -1,6 +1,6 @@
 //! The parser.
 
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
@@ -639,4 +639,10 @@ impl Parser {
 enum Associativity {
     Left,
     Right,
+}
+
+impl fmt::Debug for Parser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Parser").finish_non_exhaustive()
+    }
 }

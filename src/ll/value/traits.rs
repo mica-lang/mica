@@ -7,6 +7,7 @@ use crate::ll::{
 };
 
 /// Instance of a trait.
+#[derive(Debug)]
 pub struct Trait {
     pub(crate) id: TraitIndex,
     pub(crate) dtable: GcRaw<DispatchTable>,

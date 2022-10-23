@@ -15,9 +15,9 @@ use crate::ll::{
 #[derive(Debug, Default)]
 pub(super) struct StructData {
     /// Mapping from field names to indices.
-    pub fields: HashMap<Rc<str>, Opr24>,
+    pub(crate) fields: HashMap<Rc<str>, Opr24>,
     /// The `self` variable. Used in `@field` lookups.
-    pub receiver: Option<VariablePlace>,
+    pub(crate) receiver: Option<VariablePlace>,
 }
 
 impl StructData {

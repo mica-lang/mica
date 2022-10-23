@@ -6,6 +6,6 @@ mod nanbox;
 mod portable;
 
 #[cfg(target_arch = "x86_64")]
-pub use nanbox::ValueImpl;
+pub(crate) use nanbox::ValueImpl;
 #[cfg(not(target_arch = "x86_64"))]
-pub use portable::ValueImpl;
+pub(crate) use portable::ValueImpl;

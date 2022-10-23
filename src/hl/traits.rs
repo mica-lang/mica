@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt, rc::Rc};
 
 use crate::{
     ll::{
@@ -33,6 +33,12 @@ impl<'e> TraitBuilder<'e> {
     pub fn build(self) -> Value {
         let (trait_id, env) = self.inner.build();
         create_trait_value(env, self.gc, trait_id)
+    }
+}
+
+impl<'e> fmt::Debug for TraitBuilder<'e> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TraitBuilder").finish_non_exhaustive()
     }
 }
 

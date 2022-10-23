@@ -1,4 +1,4 @@
-use std::{any::Any, marker::PhantomData, rc::Rc};
+use std::{any::Any, fmt, marker::PhantomData, rc::Rc};
 
 use crate::{
     builtin_traits::{BuiltinTrait, BuiltinTraitFunction},
@@ -339,6 +339,12 @@ where
             type_name: self.type_name,
             _data: PhantomData,
         })
+    }
+}
+
+impl<T> fmt::Debug for TypeBuilder<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TypeBuilder").finish_non_exhaustive()
     }
 }
 

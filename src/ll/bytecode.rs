@@ -557,6 +557,7 @@ impl std::fmt::Debug for FunctionKind {
 
 /// The unique index of a function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct FunctionIndex(Opr24);
 
 impl FunctionIndex {
@@ -585,6 +586,7 @@ pub struct Function {
 
 /// The index of a method that corresponds to a signature.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct MethodIndex(u16);
 
 impl MethodIndex {
@@ -649,6 +651,7 @@ impl GlobalIndex {
 
 /// The unique index of a prototype.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct PrototypeIndex(Opr24);
 
 impl PrototypeIndex {
@@ -663,6 +666,7 @@ impl PrototypeIndex {
 
 /// The unique index of a trait.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct TraitIndex(Opr24);
 
 impl TraitIndex {
@@ -932,6 +936,7 @@ impl BuiltinTraits {
 
 /// The index of a trait in an `impl` block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
 pub struct ImplementedTraitIndex(u16);
 
 impl ImplementedTraitIndex {

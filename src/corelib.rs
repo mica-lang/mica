@@ -3,10 +3,10 @@
 use self::{builtins::*, core::load_core};
 use crate::{ll::value::Dict, CoreLibrary, Engine, Error, RawValue, TypeBuilder};
 
-pub mod builtins;
-pub mod core;
-pub mod gc;
-pub mod iterators;
+mod builtins;
+mod core;
+mod gc;
+mod iterators;
 
 /// Unit struct representing the core library.
 pub struct Lib;

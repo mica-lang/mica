@@ -256,14 +256,14 @@ impl Fiber {
     /// function's chunk. For foreign functions it simply calls the function.
     fn enter_function(
         &mut self,
-        env: &mut Environment,
+        env: &Environment,
         globals: &mut Globals,
         gc: &mut Memory,
         closure: GcRaw<Closure>,
         argument_count: usize,
     ) -> Result<(), Error> {
-        let function = unsafe { env.get_function_unchecked_mut(closure.get().function_id) };
-        match &mut function.kind {
+        let function = unsafe { env.get_function_unchecked(closure.get().function_id) };
+        match &function.kind {
             FunctionKind::Bytecode { chunk, .. } => {
                 self.save_return_point();
                 self.chunk = Rc::clone(chunk);
@@ -286,7 +286,7 @@ impl Fiber {
                 }
                 self.push(result);
             }
-            &mut FunctionKind::Control(ctl) => {
+            &FunctionKind::Control(ctl) => {
                 self.call_control(env, globals, gc, ctl, argument_count)?;
             }
         }
@@ -346,11 +346,11 @@ impl Fiber {
     /// Constructs a closure from surrounding stack variables and upvalues.
     fn create_closure(
         &mut self,
-        env: &mut Environment,
+        env: &Environment,
         gc: &mut Memory,
         function_id: Opr24,
     ) -> GcRaw<Closure> {
-        let function = unsafe { env.get_function_unchecked_mut(function_id) };
+        let function = unsafe { env.get_function_unchecked(function_id) };
         let mut captures = Vec::new();
         if let FunctionKind::Bytecode { captured_locals, .. } = &function.kind {
             for capture in captured_locals {
@@ -392,12 +392,12 @@ impl Fiber {
     fn initialize_dtable(
         &mut self,
         methods: impl Iterator<Item = (u16, Opr24)>,
-        env: &mut Environment,
+        env: &Environment,
         gc: &mut Memory,
         dtable: &mut DispatchTable,
     ) {
         for (method_id, function_id) in methods {
-            let function = unsafe { env.get_function_unchecked_mut(function_id) };
+            let function = unsafe { env.get_function_unchecked(function_id) };
             function.name = Rc::from(format!("{}.{}", dtable.pretty_name, function.name));
             let closure = self.create_closure(env, gc, function_id);
             dtable.set_method(method_id, closure);
@@ -408,7 +408,7 @@ impl Fiber {
         &mut self,
         methods: impl Iterator<Item = (Rc<str>, u16, u16, Opr24)>,
         traits: &[GcRaw<Trait>],
-        env: &mut Environment,
+        env: &Environment,
         gc: &mut Memory,
         dtable: &mut DispatchTable,
         unimplemented_methods: &mut HashSet<u16>,
@@ -465,7 +465,7 @@ impl Fiber {
     /// Interprets bytecode in the chunk, with the provided user state.
     pub fn interpret(
         &mut self,
-        env: &mut Environment,
+        env: &Environment,
         globals: &mut Globals,
         gc: &mut Memory,
     ) -> Result<RawValue, Error> {

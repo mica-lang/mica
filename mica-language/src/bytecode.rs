@@ -525,7 +525,7 @@ pub enum CaptureKind {
 }
 
 /// The ABI of a raw foreign function.
-pub type ForeignFunction = Box<dyn FnMut(&mut Memory, &[RawValue]) -> Result<RawValue, ErrorKind>>;
+pub type ForeignFunction = Box<dyn Fn(&mut Memory, &[RawValue]) -> Result<RawValue, ErrorKind>>;
 
 /// The kind of a controlling function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -20,7 +20,7 @@ impl Trait {
 }
 
 /// Creates a new instance of a trait inside the given GC memory.
-pub fn create_trait(env: &mut Environment, gc: &mut Memory, trait_id: Opr24) -> GcRaw<Trait> {
+pub fn create_trait(env: &Environment, gc: &mut Memory, trait_id: Opr24) -> GcRaw<Trait> {
     let prototype = env.get_trait(trait_id).expect("trait with given ID does not exist");
     let name = &prototype.name;
     let mut dispatch_table = DispatchTable::new_for_type(Rc::clone(name));

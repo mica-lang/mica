@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::{language::gc::Gc, TypeBuilder};
+use crate::{ll::gc::Gc, TypeBuilder};
 
 pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
     builder

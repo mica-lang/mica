@@ -34,9 +34,9 @@ impl std::fmt::Display for Location {
     }
 }
 
-/// A [`FunctionSignature`][crate::bytecode::FunctionSignature] that can be rendered into text. One
+/// A [`MethodSignature`][crate::ll::bytecode::MethodSignature] that can be rendered into text. One
 /// can be obtained by calling
-/// [`FunctionSignature::render`][crate::bytecode::FunctionSignature::render].
+/// [`MethodSignature::render`][crate::ll::bytecode::MethodSignature::render].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenderedSignature {
     pub name: Rc<str>,

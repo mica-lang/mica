@@ -11,7 +11,7 @@ use crate::{
         bytecode,
         bytecode::{
             BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function,
-            FunctionKind, Opcode, Opr24,
+            FunctionKind, GlobalIndex, MethodIndex, Opcode, Opr24,
         },
         codegen::{self, CodeGenerator},
         gc::{Gc, Memory},
@@ -20,8 +20,8 @@ use crate::{
         value::{Closure, RawValue},
         vm::{self, Globals},
     },
-    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, GlobalIndex, MethodIndex, MicaResultExt,
-    TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
+    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, MicaResultExt, TraitBuilder,
+    TryFromValue, TypeBuilder, UserData, Value,
 };
 
 /// Options for debugging the language implementation.

@@ -18,6 +18,8 @@ pub struct Arguments<'a> {
 }
 
 impl<'a> Arguments<'a> {
+    /// Creates a new [`Arguments`] from a raw argument list, as is passed into a
+    /// [raw function][RawForeignFunction].
     pub fn new(raw_arguments: &'a [RawValue]) -> Self {
         // Skip the first argument, which is `self` (or the currently called function).
         Self { this: raw_arguments[0], inner: &raw_arguments[1..] }

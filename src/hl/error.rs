@@ -27,11 +27,28 @@ pub enum Error {
     /// A trait method with too many parameters was created.
     TooManyParametersInTraitMethod,
     /// A type mismatch occured.
-    TypeMismatch { expected: Cow<'static, str>, got: Cow<'static, str> },
+    TypeMismatch {
+        /// The name of the expected type.
+        expected: Cow<'static, str>,
+        /// The name of the actual type obtained.
+        got: Cow<'static, str>,
+    },
     /// Incorrect amount of arguments passed to a function.
-    ArgumentCount { expected: usize, got: usize },
+    ArgumentCount {
+        /// The number of arguments that was expected.
+        expected: usize,
+        /// The actual number of arguments obtained.
+        got: usize,
+    },
     /// A type mismatch occured in function arguments.
-    ArgumentTypeMismatch { index: usize, expected: Cow<'static, str>, got: Cow<'static, str> },
+    ArgumentTypeMismatch {
+        /// Which argument had a type mismatch.
+        index: usize,
+        /// The name of the expected type.
+        expected: Cow<'static, str>,
+        /// The name of the actual type obtained.
+        got: Cow<'static, str>,
+    },
     /// A value was mutably borrowed twice.
     ReentrantMutableBorrow,
     /// A user-defined error.

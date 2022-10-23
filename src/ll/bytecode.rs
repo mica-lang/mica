@@ -525,7 +525,7 @@ pub enum CaptureKind {
     Upvalue(UpvalueIndex),
 }
 
-/// The ABI of a raw foreign function.
+/// The signature of a raw foreign function.
 pub type ForeignFunction = Box<dyn Fn(&mut Memory, &[RawValue]) -> Result<RawValue, ErrorKind>>;
 
 /// The kind of a controlling function.

@@ -74,6 +74,7 @@ impl Value {
 ///
 /// This should never be implemented manually unless you know what you're doing.
 pub trait SelfFromRawValue {
+    /// A scoped guard, ensuring safe access to `Self`.
     type Guard;
 
     /// Returns a shared reference to `Self` **without checking that the value is of the correct
@@ -166,6 +167,7 @@ pub trait MutSelfFromRawValue
 where
     Self: Sized,
 {
+    /// A scoped guard, ensuring safe access to `Self`.
     type Guard;
 
     /// Returns a mutable reference to `Self` **without checking that the value is of the correct

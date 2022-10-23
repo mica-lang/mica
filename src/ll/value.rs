@@ -20,7 +20,7 @@ pub use traits::*;
 
 use crate::ll::{bytecode::DispatchTable, common::ErrorKind, gc::GcRaw};
 
-/// The kind of a value.
+/// The kind of a [`RawValue`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ValueKind {
     Nil,
@@ -67,7 +67,10 @@ fn _check_implementations() {
     check_value::<ValueImpl>();
 }
 
-/// A dynamically-typed, raw value. Does not provide **any** safety guarantees.
+/// An **unsafe** value used internally in the VM.
+///
+/// Does not provide any safety guarantees as to GC'd object lifetimes.
+/// You almost always want [`Value`] instead of this.
 #[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
 pub struct RawValue(ValueImpl);

@@ -25,16 +25,33 @@ impl<T> Clone for Hidden<T> {
 /// A dynamically typed value.
 #[derive(Clone)]
 pub enum Value {
+    /// The `nil` literal.
     Nil,
+    /// The `false` literal.
     False,
+    /// The `true` literal.
+    ///
+    /// Do note that despite booleans using two different enum variants, they have the same type.
     True,
+    /// A `Number` value.
     Number(f64),
+    /// A GC'd `String`.
     String(Gc<String>),
+    /// A function.
     Function(Hidden<Closure>),
+    /// An opaque struct.
     Struct(Hidden<Struct>),
+    /// An opaque trait.
     Trait(Hidden<Trait>),
+    /// A list.
+    ///
+    /// Lists are opaque to the Rust API and must be converted into a typed `Vec<T>`.
     List(Hidden<List>),
+    /// A dict.
+    ///
+    /// Dicts are opaque to the Rust API, no conversion function currently exists for them.
     Dict(Hidden<Dict>),
+    /// Arbitrarily typed user data.
     UserData(Gc<Box<dyn UserData>>),
 }
 
@@ -200,6 +217,7 @@ pub trait TryFromValue
 where
     Self: Sized,
 {
+    /// Tries to perform the conversion, returning an [`Error`] on failure.
     fn try_from_value(value: &Value) -> Result<Self, Error>;
 }
 
@@ -302,6 +320,24 @@ where
                     unreachable!()
                 }
             })?)),
+        }
+    }
+}
+
+impl<T> TryFromValue for Vec<T>
+where
+    T: TryFromValue,
+{
+    fn try_from_value(value: &Value) -> Result<Self, Error> {
+        if let Value::List(l) = value {
+            let elements = unsafe { l.0.as_slice() };
+            let mut result = vec![];
+            for &element in elements {
+                result.push(T::try_from_value(&Value::from_raw(element))?);
+            }
+            Ok(result)
+        } else {
+            Err(type_mismatch("List", value))
         }
     }
 }

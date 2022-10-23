@@ -2,18 +2,15 @@
 
 use std::{collections::HashSet, pin::Pin, ptr, rc::Rc};
 
-use super::bytecode::{FunctionIndex, ImplementedTraitIndex, MethodIndex};
-use crate::{
-    ll::{
-        bytecode::{
-            CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, MethodSignature,
-            Opcode, PrototypeIndex, TraitIndex,
-        },
-        common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
-        gc::{GcRaw, Memory},
-        value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
+use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, MethodIndex};
+use crate::ll::{
+    bytecode::{
+        CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, MethodSignature,
+        Opcode, PrototypeIndex, TraitIndex,
     },
-    GlobalIndex,
+    common::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
+    gc::{GcRaw, Memory},
+    value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
 };
 
 /// Storage for global variables.

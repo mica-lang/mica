@@ -1,7 +1,6 @@
 use std::fmt::Display;
 
-use mica::Engine;
-
+mod stress;
 mod traits;
 
 pub trait RevealResultExt<T> {
@@ -21,10 +20,4 @@ where
             }
         }
     }
-}
-
-pub fn create_engine() -> Engine {
-    let mut engine = Engine::new(mica::std::lib());
-    mica::std::load(&mut engine).expect("cannot load stdlib");
-    engine
 }

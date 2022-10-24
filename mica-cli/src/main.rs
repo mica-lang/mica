@@ -43,7 +43,7 @@ impl Completer for MicaValidator {
 
 impl Validator for MicaValidator {
     fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
-        let mut engine = Engine::new(mica::std::lib());
+        let mut engine = Engine::new();
         if let Err(error) = engine.compile("(repl)", ctx.input()) {
             use LanguageErrorKind as ErrorKind;
             if let Error::Compile(LanguageError::Compile {
@@ -85,13 +85,11 @@ fn interpret<'e>(
     .flatten())
 }
 
-fn engine(options: &EngineOptions) -> Result<Engine, mica::Error> {
-    let mut engine = Engine::with_debug_options(
-        mica::std::lib(),
+fn engine(options: &EngineOptions) -> Engine {
+    Engine::with_debug_options(
+        mica::corelib::Lib,
         mica::DebugOptions { dump_ast: options.dump_ast, dump_bytecode: options.dump_bytecode },
-    );
-    mica::std::load(&mut engine)?;
-    Ok(engine)
+    )
 }
 
 fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
@@ -103,7 +101,7 @@ fn repl(engine_options: &EngineOptions) -> Result<(), mica::Error> {
         Editor::with_config(rustyline::Config::builder().auto_add_history(true).build());
     editor.set_helper(Some(MicaValidator));
 
-    let mut engine = engine(engine_options)?;
+    let mut engine = engine(engine_options);
     while let Ok(line) = editor.readline("> ") {
         let iterator = match interpret(&mut engine, "(repl)", line) {
             Ok(iterator) => iterator,
@@ -122,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts = Options::parse();
     if let Some(path) = &opts.file {
         let file = std::fs::read_to_string(path)?;
-        let mut engine = engine(&opts.engine_options)?;
+        let mut engine = engine(&opts.engine_options);
         let fiber = match interpret(&mut engine, path.to_str().unwrap(), file) {
             Ok(iterator) => iterator,
             Err(_) => std::process::exit(-1),

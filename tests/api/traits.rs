@@ -1,11 +1,10 @@
-use mica::{builtin_traits::iterator, TypeBuilder, UserData, Value};
+use mica::{builtin_traits::iterator, Engine, TypeBuilder, UserData, Value};
 
-use super::create_engine;
 use crate::api::RevealResultExt;
 
 #[test]
 fn exposing_traits_from_rust() {
-    let mut engine = create_engine();
+    let mut engine = Engine::new();
 
     let mut builder = engine.build_trait("GameLoop").reveal();
     let m_draw = builder.add_function("draw", 1).reveal();
@@ -31,7 +30,7 @@ fn exposing_traits_from_rust() {
 
 #[test]
 fn binding_type_that_implements_builtin_traits() {
-    let mut engine = create_engine();
+    let mut engine = Engine::new();
 
     struct CountUp {
         current: usize,

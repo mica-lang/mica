@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.66"
+camino = "1.1.1"
+clap = { version = "4.0.18", features = ["derive"] }
+tracing = { version = "0.1.37", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }

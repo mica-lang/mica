@@ -11,6 +11,8 @@ mod types;
 mod userdata;
 mod value;
 
+mod generated;
+
 pub use engine::*;
 pub use error::*;
 pub use fiber::*;

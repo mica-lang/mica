@@ -136,6 +136,13 @@ where
     }
 }
 
+pub(crate) fn wrap_in_language_error<T, E>(r: Result<T, E>) -> Result<T, LanguageErrorKind>
+where
+    E: std::error::Error + 'static,
+{
+    r.map_err(|error| LanguageErrorKind::User(Box::new(error)))
+}
+
 /// Extensions for converting [`Result`]s into a `mica-language` FFI-friendly structure.
 pub trait MicaLanguageResultExt<T> {
     /// Maps the error in the result to a [`LanguageErrorKind`].
@@ -144,6 +151,6 @@ pub trait MicaLanguageResultExt<T> {
 
 impl<T> MicaLanguageResultExt<T> for Result<T, Error> {
     fn to_language_error(self) -> Result<T, LanguageErrorKind> {
-        self.map_err(|error| LanguageErrorKind::User(Box::new(error)))
+        wrap_in_language_error(self)
     }
 }

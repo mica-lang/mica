@@ -32,4 +32,5 @@ clap = { version = "3.2.22", features = ["derive"] }
 
 [workspace.metadata.release]
 allow-branch = ["master"]
-tag-name = "{{version}}"
+# We use a single tag for all crates, cargo-release shouldn't create its own set of tags.
+tag = false

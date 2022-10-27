@@ -47,21 +47,57 @@ pub struct Engine {
 
 impl Engine {
     /// Creates a new engine using the [default core library][corelib].
+    ///
+    /// Although [`Engine::with_debug_options`] and likewise [`Engine::with_corelib`] can panic
+    /// if the core library is much too big, the official core library is not big enough to cause
+    /// this.
+    ///
+    /// # Examples
+    /// ```
+    /// use mica::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    /// ```
     pub fn new() -> Self {
         Self::with_corelib(corelib::Lib)
     }
 
     /// Creates a new engine with an alternative core library.
+    ///
+    /// # Panics
+    /// Constructing the engine can panic if the core library defines too many globals, functions,
+    /// methods, or the like. See [`Engine::with_debug_options`] for more remarks.
+    ///
+    /// # Examples
+    /// ```
+    /// use mica::Engine;
+    ///
+    /// let mut engine = Engine::with_corelib(mica::corelib::Lib);
+    /// ```
     pub fn with_corelib(corelib: impl CoreLibrary) -> Self {
         Self::with_debug_options(corelib, Default::default())
     }
 
     /// Creates a new engine with specific debug options.
     ///
-    /// [`Engine::new`] creates an engine with [`Default`] debug options, and should generally be
-    /// preferred unless you're debugging the language's internals.
+    /// [`Engine::new`] and [`Engine::with_corelib`] create engines with [`Default`] debug options,
+    /// and should generally be preferred unless you're debugging the language's internals.
     ///
-    /// Constructing the engine can fail if the standard library defines way too many methods.
+    /// # Panics
+    /// Constructing the engine can panic if the core library defines too many globals, functions,
+    /// methods, or the like. In reality this is only really a problem if you let users control
+    /// the amount of methods registered by your core library (which you should never, ever do.)
+    ///
+    /// # Examples
+    /// ```
+    /// use mica::{Engine, DebugOptions};
+    ///
+    /// // Create a loud engine that prints a bunch of debugging information to stdout.
+    /// let mut engine = Engine::with_debug_options(mica::corelib::Lib, DebugOptions {
+    ///     dump_ast: true,
+    ///     dump_bytecode: true,
+    /// });
+    /// ```
     pub fn with_debug_options(mut corelib: impl CoreLibrary, debug_options: DebugOptions) -> Self {
         let mut gc = Memory::new();
         // This is a little bad because it allocates a bunch of empty dtables only to discard them.
@@ -109,10 +145,20 @@ impl Engine {
         engine
     }
 
-    /// Compiles a script.
+    /// Compiles a script without executing it.
     ///
-    /// # Errors
-    ///  - [`Error::Compile`] - Syntax or semantic error
+    /// The filename is used for reporting compilation errors and in stack traces.
+    ///
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    /// let script = engine.compile("example.mi", "2 + 2")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn compile(
         &mut self,
         filename: impl AsRef<str>,
@@ -138,12 +184,20 @@ impl Engine {
         Ok(Script { engine: self, main_chunk })
     }
 
-    /// Compiles and starts running a script.
+    /// Compiles and starts executing a script in a fiber.
     ///
-    /// This can be used as a shorthand if you don't intend to reuse the compiled bytecode.
+    /// This can be used as a shorthand if you don't intend to reuse the compiled [`Script`].
     ///
-    /// # Errors
-    /// See [`compile`][`Self::compile`].
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    /// let mut fiber = engine.start("example.mi", "2 + 2")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn start(
         &mut self,
         filename: impl AsRef<str>,
@@ -153,14 +207,23 @@ impl Engine {
         Ok(script.into_fiber())
     }
 
-    /// Calls the provided function with the given arguments.
+    /// Calls a function with the given arguments.
     ///
-    /// # Errors
+    /// The function is called in a new fiber, and execution is [trampolined][Fiber::trampoline]
+    /// until the fiber finishes executing.
     ///
-    /// - [`Error::Runtime`] - if a runtime error occurs - `function` isn't callable or an error is
-    ///   raised during execution
-    /// - [`Error::TooManyArguments`] - if more arguments than the implementation can support is
-    ///   passed to the function
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, Value};
+    ///
+    /// let mut engine = Engine::new();
+    /// let f: Value = engine.start("example.mi", r#" (func (x) = x + 2) "#)?.trampoline()?;
+    /// let result: f64 = engine.call(f, [Value::from(1.0)])?;
+    /// assert_eq!(result, 3.0);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn call<T>(
         &mut self,
         function: Value,
@@ -190,13 +253,26 @@ impl Engine {
     /// Returns the unique ID of a method with a given name and arity.
     ///
     /// Note that there can only exist about 65 thousand unique method signatures. This is usually
-    /// not a problem as method names often repeat. Also note that unlike functions, a method can
-    /// only accept up to 256 arguments. Which, to be quite frankly honest, should be enough for
-    /// anyone.
+    /// not a problem as method names often repeat between types. Also note that unlike functions,
+    /// a method can only accept up to 255 arguments. Which, to be quite frankly honest, should be
+    /// enough for anyone.
     ///
-    /// # Errors
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::Engine;
     ///
-    /// - [`Error::TooManyMethods`] - raised when too many unique method signatures exist at once
+    /// let mut engine = Engine::new();
+    ///
+    /// // Two identical calls to method_id always return the same ID.
+    /// let m_to_string_1 = engine.method_id(("to_string", 0))?;
+    /// let m_to_string_2 = engine.method_id(("to_string", 0))?;
+    /// let m_pi = engine.method_id(("pi", 0))?;
+    /// assert_eq!(m_to_string_1, m_to_string_2);
+    /// assert_ne!(m_to_string_1, m_pi);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn method_id(&mut self, signature: impl MethodSignature) -> Result<MethodId, Error> {
         signature.to_method_id(&mut self.env)
     }
@@ -205,18 +281,27 @@ impl Engine {
     ///
     /// Note that if you're calling a method often, it's cheaper to precompute the method signature
     /// into a [`MethodId`] by using the [`method_id`][`Self::method_id`] function, compared to
-    /// passing a name+arity pair every single time.
+    /// passing a (name, arity) pair every single time.
     ///
-    /// # Errors
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, Value};
     ///
-    /// - [`Error::Runtime`] - if a runtime error occurs - `function` isn't callable or an error is
-    ///   raised during execution
-    /// - [`Error::TooManyArguments`] - if more arguments than the implementation can support is
-    ///   passed to the function
-    /// - [`Error::TooManyMethods`] - if too many methods with different signatures exist at the
-    ///   same time
-    /// - [`Error::ArgumentCount`] - if `arguments.count()` does not match the argument count of the
-    ///   signature
+    /// let mut engine = Engine::new();
+    /// let example = engine
+    ///     .start(
+    ///         "dog.mi",
+    ///         r#" struct Example impl
+    ///                 func new() constructor = nil
+    ///             end "#
+    ///     )?
+    ///     .trampoline()?;
+    /// let instance: Value = engine.call_method(example, ("new", 0), [])?;
+    /// assert!(matches!(instance, Value::Struct(..)));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn call_method<T>(
         &mut self,
         receiver: Value,
@@ -256,8 +341,22 @@ impl Engine {
     /// hitting that limit unless you're stress-testing the VM or accepting untrusted input as
     /// globals.
     ///
-    /// # Errors
-    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    ///
+    /// // Two identical calls to global_id always return the same ID.
+    /// let g_print_1 = engine.global_id("print")?;
+    /// let g_print_2 = engine.global_id("print")?;
+    /// let g_debug = engine.global_id("debug")?;
+    /// assert_eq!(g_print_1, g_print_2);
+    /// assert_ne!(g_print_1, g_debug);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn global_id(&mut self, name: impl GlobalName) -> Result<GlobalId, Error> {
         name.to_global_id(&mut self.env)
     }
@@ -266,13 +365,20 @@ impl Engine {
     ///
     /// The `id` parameter can be either an `&str` or a prefetched [`global_id`][`Self::global_id`].
     ///
-    /// # Errors
-    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-    pub fn set<G, T>(&mut self, id: G, value: T) -> Result<(), Error>
-    where
-        G: GlobalName,
-        T: Into<Value>,
-    {
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, Value};
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.set("x", 1.0_f64);
+    /// let _: Value = engine
+    ///     .start("assertion.mi", "assert(x == 1)")?
+    ///     .trampoline()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set(&mut self, id: impl GlobalName, value: impl Into<Value>) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
         self.globals.set(id.0, value.into().to_raw(&mut self.gc));
         Ok(())
@@ -282,12 +388,22 @@ impl Engine {
     ///
     /// The `id` parameter can be either an `&str` or a prefetched [`global_id`][`Self::global_id`].
     ///
-    /// # Errors
-    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-    ///  - [`Error::TypeMismatch`] - The type of the value is not convertible to `T`
-    pub fn get<G, T>(&self, id: G) -> Result<T, Error>
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, Value};
+    ///
+    /// let mut engine = Engine::new();
+    /// let _: Value = engine
+    ///     .start("assertion.mi", "x = 1")?
+    ///     .trampoline()?;
+    /// let x: f64 = engine.get("x")?;
+    /// assert_eq!(x, 1.0);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn get<T>(&self, id: impl OptionalGlobalName) -> Result<T, Error>
     where
-        G: OptionalGlobalName,
         T: TryFromValue,
     {
         if let Some(id) = id.try_to_global_id(&self.env) {
@@ -309,9 +425,26 @@ impl Engine {
     /// function accepts a variable number of arguments. Note that because this function omits type
     /// checks you may receive a different amount of arguments than specified.
     ///
-    /// # Errors
-    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, Value};
+    /// use mica::ll::{bytecode::FunctionKind, value::RawValue};
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.add_raw_function(
+    ///     "a_raw_understanding",
+    ///     Some(0),
+    ///     FunctionKind::Foreign(Box::new(|gc, arguments| {
+    ///         Ok(RawValue::from(1.0))
+    ///     })),
+    /// );
+    /// let _: Value = engine
+    ///     .start("assertion.mi", "assert(a_raw_understanding() == 1.0)")?
+    ///     .trampoline()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn add_raw_function(
         &mut self,
         name: &str,
@@ -337,11 +470,23 @@ impl Engine {
 
     /// Declares a function in the global scope.
     ///
-    /// # Errors
-    /// See [`add_raw_function`][`Self::add_raw_function`].
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::Engine;
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.add_function("add", |x: f64, y: f64| x + y);
+    /// let x: f64 = engine
+    ///     .start("example.mi", "add(1, 2)")?
+    ///     .trampoline()?;
+    /// assert_eq!(x, 3.0);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn add_function<F, V>(&mut self, name: &str, f: F) -> Result<(), Error>
     where
-        V: ffvariants::Bare,
+        V: ffvariants::BareMaybeVarargs,
         F: ForeignFunction<V>,
     {
         self.add_raw_function(
@@ -353,13 +498,11 @@ impl Engine {
 
     /// Declares a type in the global scope.
     ///
-    /// # Errors
-    ///  - [`Error::TooManyGlobals`] - Too many globals with unique names were created
-    ///  - [`Error::TooManyFunctions`] - Too many functions were registered into the engine
-    ///  - [`Error::TooManyMethods`] - Too many unique method signatures were created
+    /// # Examples
+    /// See [`TypeBuilder<T>`] for examples.
     pub fn add_type<T>(&mut self, builder: TypeBuilder<T>) -> Result<(), Error>
     where
-        T: Any + UserData,
+        T: UserData,
     {
         let built = builder.build(&mut self.env, &mut self.gc, &self.builtin_traits)?;
         self.set_built_type(&built)?;
@@ -375,6 +518,9 @@ impl Engine {
     }
 
     /// Starts building a new trait.
+    ///
+    /// # Examples
+    /// See [`TraitBuilder`] for examples.
     pub fn build_trait(&mut self, name: &str) -> Result<TraitBuilder<'_>, Error> {
         Ok(TraitBuilder {
             inner: codegen::TraitBuilder::new(&mut self.env, None, Rc::from(name)).mica()?,

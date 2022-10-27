@@ -11,6 +11,60 @@ use crate::{
 };
 
 /// Allows you to build traits programatically from Rust code.
+///
+/// Using traits is the intended way of calling Mica methods from Rust, because it's faster
+/// (involving less indirections) and avoids calling unrelated methods unintentionally, because
+/// every type defined in Mica must explicitly opt into implementing a trait.
+///
+/// # Limitations
+///
+/// Right now there exists no interface for implementing trait functions from within Rust for any
+/// traits other than [the built-ins][crate::builtin_traits], and it's possible that there will
+/// never be a way of doing so without violating type safety, which would increase the risk of bugs.
+///
+/// That said, this not a hard "no;" it just hasn't been researched nor implemented at the moment.
+///
+/// # Example
+/// ```
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// use mica::{Engine, TraitBuilder, Value};
+///
+/// let mut engine = Engine::new();
+///
+/// let mut game_builder = engine.build_trait("Game")?;
+/// let game_tick = game_builder.add_function("tick", 0)?;
+/// let game_tick_count = game_builder.add_function("tick_count", 0)?;
+/// let game = game_builder.build();
+/// engine.set("Game", game);
+///
+/// let my_game: Value = engine
+///     .start(
+///         "game.mi",
+///         r#" tick_count = 0
+///
+///             struct MyGame impl
+///                 func new() constructor = nil
+///
+///                 as Game
+///                     func tick() =
+///                         tick_count = tick_count + 1
+///
+///                     func tick_count() = tick_count
+///                 end
+///             end
+///             .new() "#
+///     )?
+///     .trampoline()?;
+///
+/// let expected_tick_count = 10_usize;
+/// for _ in 0..expected_tick_count {
+///     let _: Value = engine.call_method(my_game.clone(), game_tick, [])?;
+/// }
+/// let got_tick_count: usize = engine.call_method(my_game, game_tick_count, [])?;
+/// assert_eq!(got_tick_count, expected_tick_count);
+/// # Ok(())
+/// # }
+/// ```
 pub struct TraitBuilder<'e> {
     pub(crate) inner: codegen::TraitBuilder<'e>,
     pub(crate) gc: &'e mut Memory,

@@ -188,6 +188,12 @@ where
         )
     }
 
+    /// Adds a constructor function to the struct.
+    ///
+    /// A constructor is a static function responsible for creating instances of a type. The
+    /// function passed to this one must return another function that actually constructs the
+    /// object.
+    ///
     /// # Examples
     /// See [`TypeBuilder::add_function`].
     pub fn add_constructor<C, F, V>(self, name: &str, f: C) -> Self

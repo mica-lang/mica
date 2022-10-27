@@ -92,12 +92,12 @@ impl DispatchTableDescriptor {
 ///
 /// Currently the ability to use custom types in Mica is quite limited. Here's a list of all the
 /// limitations:
-/// - Your type can only be the `self` parameter of a function, even if it's `Clone`.
-/// - Your type must implement [`UserData`][crate::UserData].
+/// - Your type can only be the `self` parameter of a function, even if it's [`Clone`].
+/// - By extension, you cannot take custom types as function arguments by reference.
 /// - Your type must be constructed from a special constructor function that's only available as
 ///   part of [`add_constructor`][TypeBuilder::add_constructor]'s callback.
 ///
-/// Eventually, all of these limitations will be lifted because they greatly limit the potential of
+/// Eventually, most of these limitations will be lifted because they greatly limit the potential of
 /// what can be done with Mica, and all are solvable in a reasonable manner. But the current version
 /// unfortunately has its limits and you will have to work around them (or use a more mature
 /// language. Not that there are many choices.)
@@ -121,6 +121,8 @@ where
     /// The `type_name` is used for referring to the type inside scripts and should reflect the Rust
     /// type name. For generic types, it's best to define a concrete [type alias][type] to make the
     /// binding code a little bit more self-documenting.
+    ///
+    ///   [type]: https://doc.rust-lang.org/stable/std/keyword.type.html
     ///
     /// # Examples
     /// ```
@@ -274,8 +276,8 @@ where
     /// Adds a function that's part of a built-in trait implementation.
     ///
     /// The function must have a signature that's compatible with the built-in trait in question.
-    /// See the [`builtin_traits`] module for more information on each trait, its methods, and
-    /// their signatures.
+    /// See the [`builtin_traits`][crate::builtin_traits] module for more information on each trait,
+    /// its methods, and their signatures.
     ///
     /// # Examples
     /// ```

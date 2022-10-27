@@ -29,3 +29,6 @@ path = "tests/runner.rs"
 rayon = "1.5.3"
 owo-colors = "3.5.0"
 clap = { version = "3.2.22", features = ["derive"] }
+
+[workspace.metadata.release]
+allow-branch = ["master"]

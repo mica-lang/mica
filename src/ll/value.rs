@@ -9,7 +9,7 @@ mod lists;
 mod structs;
 mod traits;
 
-use std::{any::Any, borrow::Cow, cmp::Ordering, fmt, fmt::Write, ops::Deref};
+use std::{any::Any, borrow::Cow, cmp::Ordering, fmt, fmt::Write, marker::PhantomData, ops::Deref};
 
 pub use closures::*;
 pub use dicts::*;
@@ -73,7 +73,7 @@ fn _check_implementations() {
 /// You almost always want [`Value`][crate::Value] instead of this.
 #[derive(Clone, Copy, PartialEq)]
 #[repr(transparent)]
-pub struct RawValue(ValueImpl);
+pub struct RawValue(ValueImpl, PhantomData<*const ()>);
 
 impl RawValue {
     /// Returns the kind of value stored.
@@ -312,67 +312,67 @@ impl RawValue {
 
 impl Default for RawValue {
     fn default() -> Self {
-        Self(ValueImpl::new_nil())
+        Self(ValueImpl::new_nil(), PhantomData)
     }
 }
 
 impl From<()> for RawValue {
     fn from(_: ()) -> Self {
-        Self(ValueImpl::new_nil())
+        Self(ValueImpl::new_nil(), PhantomData)
     }
 }
 
 impl From<bool> for RawValue {
     fn from(b: bool) -> Self {
-        Self(ValueImpl::new_boolean(b))
+        Self(ValueImpl::new_boolean(b), PhantomData)
     }
 }
 
 impl From<f64> for RawValue {
     fn from(x: f64) -> Self {
-        Self(ValueImpl::new_number(x))
+        Self(ValueImpl::new_number(x), PhantomData)
     }
 }
 
 impl From<GcRaw<String>> for RawValue {
     fn from(s: GcRaw<String>) -> Self {
-        Self(ValueImpl::new_string(s))
+        Self(ValueImpl::new_string(s), PhantomData)
     }
 }
 
 impl From<GcRaw<Closure>> for RawValue {
     fn from(f: GcRaw<Closure>) -> Self {
-        Self(ValueImpl::new_function(f))
+        Self(ValueImpl::new_function(f), PhantomData)
     }
 }
 
 impl From<GcRaw<Struct>> for RawValue {
     fn from(s: GcRaw<Struct>) -> Self {
-        Self(ValueImpl::new_struct(s))
+        Self(ValueImpl::new_struct(s), PhantomData)
     }
 }
 
 impl From<GcRaw<Trait>> for RawValue {
     fn from(t: GcRaw<Trait>) -> Self {
-        Self(ValueImpl::new_trait(t))
+        Self(ValueImpl::new_trait(t), PhantomData)
     }
 }
 
 impl From<GcRaw<List>> for RawValue {
     fn from(s: GcRaw<List>) -> Self {
-        Self(ValueImpl::new_list(s))
+        Self(ValueImpl::new_list(s), PhantomData)
     }
 }
 
 impl From<GcRaw<Dict>> for RawValue {
     fn from(s: GcRaw<Dict>) -> Self {
-        Self(ValueImpl::new_dict(s))
+        Self(ValueImpl::new_dict(s), PhantomData)
     }
 }
 
 impl From<GcRaw<Box<dyn UserData>>> for RawValue {
     fn from(u: GcRaw<Box<dyn UserData>>) -> Self {
-        Self(ValueImpl::new_user_data(u))
+        Self(ValueImpl::new_user_data(u), PhantomData)
     }
 }
 

@@ -177,36 +177,31 @@ where
     /// # }
     /// ```
     pub fn add_static<F, V>(self, name: &str, f: F) -> Self
+    where
+        V: ffvariants::BareExactArgs,
+        F: ForeignFunction<V>,
+    {
+        self.add_raw_static(
+            name,
+            F::parameter_count().expect("BareExactArgs functions must not be varargs") + 1,
+            FunctionKind::Foreign(f.into_raw_foreign_function()),
+        )
     }
 
-    /// Adds a constructor to the type.
-    ///
-    /// A constructor is a static function responsible for creating instances of a type. The
-    /// function passed to this one must return another function that actually constructs the
-    /// object.
-    ///
-    /// Constructors use the "bare" calling convention, in that they don't accept a `self`
-    /// parameter.
-    ///
     /// # Examples
     /// See [`TypeBuilder::add_function`].
-    /// Note that this function _consumes_ the builder; this is because calls to functions that add
-    /// into the type are meant to be chained together in one expression.
-    pub fn add_raw_constructor(
-        mut self,
-        name: &str,
-        parameter_count: Option<u16>,
-        f: Constructor<T>,
-    ) -> Self {
-        self.constructors.push((
-            UnresolvedFunctionSignature {
-                name: Rc::from(name),
-                arity: parameter_count,
-                builtin_trait: BuiltinTrait::None,
-            },
-            f,
-        ));
-        self
+    pub fn add_constructor<C, F, V>(self, name: &str, f: C) -> Self
+    where
+        V: ffvariants::BareExactArgs,
+        C: FnOnce(Rc<dyn ObjectConstructor<T>>) -> F,
+        C: 'static,
+        F: ForeignFunction<V>,
+    {
+        self.add_raw_constructor(
+            name,
+            F::parameter_count().expect("BareExactArgs functions must not be varargs") + 1,
+            Box::new(|ctor| f(ctor).into_raw_foreign_function()),
+        )
     }
 
     /// Adds an instance function to the struct.
@@ -265,7 +260,7 @@ where
     {
         self.add_raw_function(
             name,
-            F::parameter_count(),
+            F::parameter_count().expect("Method functions must not be varargs"),
             FunctionKind::Foreign(f.into_raw_foreign_function()),
         )
     }
@@ -339,46 +334,69 @@ where
         self
     }
 
-    /// Adds a static function to the struct.
+    /// Adds a _raw_ instance function to the type.
     ///
-    /// The function must follow the "bare" calling convention, in that it doesn't accept a
-    /// reference to `T` as its first parameter.
-    pub fn add_static<F, V>(self, name: &str, f: F) -> Self
-    where
-        V: ffvariants::Bare,
-        F: ForeignFunction<V>,
-    {
-        self.add_raw_static(
-            name,
-            F::parameter_count().map(|x| {
-                // Add 1 for the static receiver, which isn't counted into the bare function's
-                // signature.
-                x + 1
-            }),
-            FunctionKind::Foreign(f.into_raw_foreign_function()),
-        )
+    /// You should generally prefer [`add_function`][`Self::add_function`] instead of this.
+    ///
+    /// `parameter_count` should reflect the parameter count of the function. Method calls resolve
+    /// differently from function calls, because they match the parameter count exactly - it is
+    /// impossible to call the method `my_method/2` with three parameters. Thus, you can expect
+    /// the `arguments` array inside of foreign functions to always have `parameter_count` elements.
+    pub fn add_raw_function(mut self, name: &str, parameter_count: u16, f: FunctionKind) -> Self {
+        self.instance_dtable.methods.push((
+            UnresolvedFunctionSignature {
+                name: Rc::from(name),
+                arity: Some(parameter_count),
+                builtin_trait: BuiltinTrait::None,
+            },
+            f,
+        ));
+        self
     }
 
-    /// Adds a constructor to the type.
+    /// Adds a _raw_ static function to the type.
     ///
-    /// A constructor is a static function responsible for creating instances of a type. The
-    /// function passed to this one must return another function that actually constructs the
-    /// object.
+    /// You should generally prefer [`add_static`][`Self::add_static`] instead of this.
     ///
-    /// Constructors use the "bare" calling convention, in that they don't accept a `self`
-    /// parameter.
-    pub fn add_constructor<F, G, V>(self, name: &str, f: F) -> Self
-    where
-        V: ffvariants::Bare,
-        F: FnOnce(Rc<dyn ObjectConstructor<T>>) -> G,
-        F: 'static,
-        G: ForeignFunction<V>,
-    {
-        self.add_raw_constructor(
-            name,
-            G::parameter_count().map(|x| x + 1),
-            Box::new(|ctor| f(ctor).into_raw_foreign_function()),
-        )
+    /// `parameter_count` should reflect the parameter count of the function. Method calls resolve
+    /// differently from function calls, because they match the parameter count exactly - it is
+    /// impossible to call the method `my_method/2` with three parameters. Thus, you can expect
+    /// the `arguments` array inside of foreign functions to always have `parameter_count` elements.
+    pub fn add_raw_static(mut self, name: &str, parameter_count: u16, f: FunctionKind) -> Self {
+        self.type_dtable.methods.push((
+            UnresolvedFunctionSignature {
+                name: Rc::from(name),
+                arity: Some(parameter_count),
+                builtin_trait: BuiltinTrait::None,
+            },
+            f,
+        ));
+        self
+    }
+
+    /// Adds a _raw_ constructor to the type.
+    ///
+    /// You should generally prefer [`add_constructor`][`Self::add_constructor`] instead of this.
+    ///
+    /// `parameter_count` should reflect the parameter count of the function. Method calls resolve
+    /// differently from function calls, because they match the parameter count exactly - it is
+    /// impossible to call the method `my_method/2` with three parameters. Thus, you can expect
+    /// the `arguments` array inside of foreign functions to always have `parameter_count` elements.
+    pub fn add_raw_constructor(
+        mut self,
+        name: &str,
+        parameter_count: u16,
+        f: Constructor<T>,
+    ) -> Self {
+        self.constructors.push((
+            UnresolvedFunctionSignature {
+                name: Rc::from(name),
+                arity: Some(parameter_count),
+                builtin_trait: BuiltinTrait::None,
+            },
+            f,
+        ));
+        self
     }
 
     /// Builds the struct builder into its type dtable and instance dtable, respectively.

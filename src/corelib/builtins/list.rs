@@ -8,7 +8,7 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
         // conversion to and from a safe Value, which is not zero-cost as of now.
         .add_raw_function(
             "get",
-            Some(2),
+            2,
             RawFunctionKind::Foreign(Box::new(|_, args| {
                 let arguments = Arguments::new(args);
                 let v =

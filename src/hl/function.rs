@@ -177,13 +177,22 @@ pub mod ffvariants {
     /// Marker trait for all functions that _don't_ accept a `self` reference as the first
     /// parameter.
     ///
-    /// See also [`Method`].
-    pub trait Bare: bare::Sealed {}
+    /// See also [`Method`] and [`BareExactArgs`].
+    pub trait BareMaybeVarargs: bare::Sealed {}
 
-    impl<Args> Bare for Fallible<Args> {}
-    impl<Args> Bare for Infallible<Args> {}
-    impl Bare for VarargsFallible {}
-    impl Bare for VarargsInfallible {}
+    impl<Args> BareMaybeVarargs for Fallible<Args> {}
+    impl<Args> BareMaybeVarargs for Infallible<Args> {}
+    impl BareMaybeVarargs for VarargsFallible {}
+    impl BareMaybeVarargs for VarargsInfallible {}
+
+    /// Marker trait for all functions that don't accept a `self` reference as the first
+    /// parameter and are not varargs.
+    ///
+    /// See also [`Method`] and [`BareMaybeVarargs`].
+    pub trait BareExactArgs: bare::Sealed {}
+
+    impl<Args> BareExactArgs for Fallible<Args> {}
+    impl<Args> BareExactArgs for Infallible<Args> {}
 
     // S is the self type (`ImmutableSelf` or `MutableSelf`).
     /// A fallible function with `RawSelf`.
@@ -226,7 +235,7 @@ pub mod ffvariants {
 
     /// Marker trait for all functions that accept a `self` reference as the first parameter.
     ///
-    /// See also [`Bare`].
+    /// See also [`BareMaybeVarargs`] and [`BareExactArgs`].
     pub trait Method<S>: method::Sealed
     where
         S: ?Sized,

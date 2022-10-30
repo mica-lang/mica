@@ -4,7 +4,7 @@ use super::{variables::VariableAllocation, CodeGenerator, Expression, Expression
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{Opcode, Opr24},
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
 };
 
 #[derive(Debug, Default)]
@@ -42,7 +42,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let children = ast.children(node).unwrap();
         self.push_scope();
         self.generate_node_list(ast, children)?;
@@ -55,7 +55,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let branches = ast.children(node).unwrap();
         let mut jumps_to_end = Vec::new();
 
@@ -82,7 +82,7 @@ impl<'e> CodeGenerator<'e> {
                     self.chunk.patch(
                         jump,
                         Opcode::jump_forward_if_falsy(jump, self.chunk.len())
-                            .map_err(|_| ast.error(branch, ErrorKind::IfBranchTooLarge))?,
+                            .map_err(|_| ast.error(branch, LanguageErrorKind::IfBranchTooLarge))?,
                     );
                 }
 
@@ -107,7 +107,7 @@ impl<'e> CodeGenerator<'e> {
             self.chunk.patch(
                 jump,
                 Opcode::jump_forward(jump, self.chunk.len())
-                    .map_err(|_| ast.error(node, ErrorKind::IfExpressionTooLarge))?,
+                    .map_err(|_| ast.error(node, LanguageErrorKind::IfExpressionTooLarge))?,
             );
         }
 
@@ -119,7 +119,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (left, right) = ast.node_pair(node);
         self.push_scope();
         self.generate_node(ast, left, Expression::Used)?;
@@ -129,7 +129,7 @@ impl<'e> CodeGenerator<'e> {
         self.chunk.patch(
             jump_past_right,
             Opcode::jump_forward_if_falsy(jump_past_right, self.chunk.len())
-                .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
+                .map_err(|_| ast.error(node, LanguageErrorKind::OperatorRhsTooLarge))?,
         );
         self.pop_scope();
         Ok(ExpressionResult::Present)
@@ -140,7 +140,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (left, right) = ast.node_pair(node);
         self.push_scope();
         self.generate_node(ast, left, Expression::Used)?;
@@ -150,7 +150,7 @@ impl<'e> CodeGenerator<'e> {
         self.chunk.patch(
             jump_past_right,
             Opcode::jump_forward_if_truthy(jump_past_right, self.chunk.len())
-                .map_err(|_| ast.error(node, ErrorKind::OperatorRhsTooLarge))?,
+                .map_err(|_| ast.error(node, LanguageErrorKind::OperatorRhsTooLarge))?,
         );
         self.pop_scope();
         Ok(ExpressionResult::Present)
@@ -160,9 +160,9 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-        generate_condition: &dyn Fn(&mut CodeGenerator<'_>) -> Result<(), Error>,
-        generate_body: &dyn Fn(&mut CodeGenerator<'_>) -> Result<(), Error>,
-    ) -> Result<(), Error> {
+        generate_condition: &dyn Fn(&mut CodeGenerator<'_>) -> Result<(), LanguageError>,
+        generate_body: &dyn Fn(&mut CodeGenerator<'_>) -> Result<(), LanguageError>,
+    ) -> Result<(), LanguageError> {
         // The outer scope, so that variables can be declared in the condition.
         self.push_scope();
         // The breakable block.
@@ -180,12 +180,12 @@ impl<'e> CodeGenerator<'e> {
 
         self.chunk.emit(
             Opcode::jump_backward(self.chunk.len(), start)
-                .map_err(|_| ast.error(node, ErrorKind::LoopTooLarge))?,
+                .map_err(|_| ast.error(node, LanguageErrorKind::LoopTooLarge))?,
         );
         self.chunk.patch(
             jump_to_end,
             Opcode::jump_forward_if_falsy(jump_to_end, self.chunk.len())
-                .map_err(|_| ast.error(node, ErrorKind::LoopTooLarge))?,
+                .map_err(|_| ast.error(node, LanguageErrorKind::LoopTooLarge))?,
         );
         // Discard the condition if it's false.
         self.chunk.emit(Opcode::Discard);
@@ -206,7 +206,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (condition, _) = ast.node_pair(node);
         let body = ast.children(node).unwrap();
 
@@ -225,7 +225,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (binding, iterator) = ast.node_pair(node);
         let body = ast.children(node).unwrap();
 
@@ -270,7 +270,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (right, _) = ast.node_pair(node);
         if right != NodeId::EMPTY {
             self.generate_node(ast, right, Expression::Used)?;
@@ -281,7 +281,7 @@ impl<'e> CodeGenerator<'e> {
         if let Some(block) = self.breakable_blocks.last_mut() {
             block.breaks.push(jump);
         } else {
-            return Err(ast.error(node, ErrorKind::BreakOutsideOfLoop));
+            return Err(ast.error(node, LanguageErrorKind::BreakOutsideOfLoop));
         }
         Ok(ExpressionResult::NoReturn)
     }
@@ -291,7 +291,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (value, _) = ast.node_pair(node);
         // Unlike breaking out of a loop, returning is super simple, as it implies that all locals
         // are taken off the stack.

@@ -6,7 +6,7 @@ use super::{CodeGenerator, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId},
     bytecode::{CaptureKind, GlobalIndex, Opcode, Opr24},
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
 };
 
 /// The index of a local on the stack.
@@ -85,8 +85,8 @@ impl Locals {
         &mut self,
         name: &str,
         allocation: VariableAllocation,
-    ) -> Result<VariablePlace, ErrorKind> {
-        let slot = Opr24::new(self.local_count).map_err(|_| ErrorKind::TooManyLocals)?;
+    ) -> Result<VariablePlace, LanguageErrorKind> {
+        let slot = Opr24::new(self.local_count).map_err(|_| LanguageErrorKind::TooManyLocals)?;
         let slot = LocalIndex(slot);
         let scope = self.scopes.last_mut().unwrap();
         scope
@@ -108,7 +108,7 @@ impl Locals {
     }
 
     /// Returns the index of the given capture.
-    fn capture_index(&mut self, capture: CaptureKind) -> Result<UpvalueIndex, ErrorKind> {
+    fn capture_index(&mut self, capture: CaptureKind) -> Result<UpvalueIndex, LanguageErrorKind> {
         // Iterating over captures maybe isn't most efficient here but it's not like we have
         // thousands of them anyways. Unless somebody absolutely crazy starts writing Mica code.
         // Then all I can say is: I hate you.
@@ -117,11 +117,11 @@ impl Locals {
             self.captures.push(capture);
             index
         });
-        Ok(UpvalueIndex(Opr24::try_from(index).map_err(|_| ErrorKind::TooManyCaptures)?))
+        Ok(UpvalueIndex(Opr24::try_from(index).map_err(|_| LanguageErrorKind::TooManyCaptures)?))
     }
 
     /// Performs a local variable lookup. This may modify parent Locals and capture upvalues.
-    fn lookup(&mut self, name: &str) -> Result<Option<VariablePlace>, ErrorKind> {
+    fn lookup(&mut self, name: &str) -> Result<Option<VariablePlace>, LanguageErrorKind> {
         // Work inside out: try innermost scopes (own locals) first.
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.variables_by_name.get(name) {
@@ -175,7 +175,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         name: &str,
         allocation: VariableAllocation,
-    ) -> Result<VariablePlace, ErrorKind> {
+    ) -> Result<VariablePlace, LanguageErrorKind> {
         if !self.locals.scopes.is_empty() {
             let place = self.locals.create_local(name, allocation)?;
             self.chunk.preallocate_stack_slots =
@@ -192,7 +192,7 @@ impl<'e> CodeGenerator<'e> {
     pub(super) fn lookup_variable(
         &mut self,
         name: &str,
-    ) -> Result<Option<VariablePlace>, ErrorKind> {
+    ) -> Result<Option<VariablePlace>, LanguageErrorKind> {
         // Work from the inside out: check innermost local scopes first.
         if let Some(place) = self.locals.lookup(name)? {
             return Ok(Some(place));
@@ -250,13 +250,13 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let name = ast.string(node).unwrap();
         if let Some(variable) = self.lookup_variable(name).map_err(|kind| ast.error(node, kind))? {
             self.generate_variable_load(variable);
             Ok(ExpressionResult::Present)
         } else {
-            Err(ast.error(node, ErrorKind::VariableDoesNotExist(name.to_owned())))
+            Err(ast.error(node, LanguageErrorKind::VariableDoesNotExist(name.to_owned())))
         }
     }
 }

@@ -2,7 +2,7 @@
 
 use std::{fmt, rc::Rc};
 
-use crate::ll::error::{Error, ErrorKind, Location};
+use crate::ll::error::{LanguageError, LanguageErrorKind, Location};
 
 /// The kind of a token.
 #[derive(Debug, Clone, PartialEq)]
@@ -91,13 +91,13 @@ impl Lexer {
     }
 
     /// Emits an error.
-    fn error(&self, kind: ErrorKind) -> Error {
+    fn error(&self, kind: LanguageErrorKind) -> LanguageError {
         self.error_at(self.location, kind)
     }
 
     /// Emits an error at a specific location.
-    fn error_at(&self, location: Location, kind: ErrorKind) -> Error {
-        Error::Compile { module_name: Rc::clone(&self.module_name), kind, location }
+    fn error_at(&self, location: Location, kind: LanguageErrorKind) -> LanguageError {
+        LanguageError::Compile { module_name: Rc::clone(&self.module_name), kind, location }
     }
 
     /// Emits a token at the `token_start` location.
@@ -149,7 +149,7 @@ impl Lexer {
     }
 
     /// Collects digits into a string.
-    fn collect_digits(&mut self, output: &mut String, radix: u32) -> Result<(), Error> {
+    fn collect_digits(&mut self, output: &mut String, radix: u32) -> Result<(), LanguageError> {
         let start_location = self.location;
         let mut had_digits = false;
         while Self::is_digit_or_underscore(self.get(), radix) {
@@ -160,13 +160,13 @@ impl Lexer {
             self.advance();
         }
         if !had_digits {
-            return Err(self.error_at(start_location, ErrorKind::UnderscoresWithoutDigits));
+            return Err(self.error_at(start_location, LanguageErrorKind::UnderscoresWithoutDigits));
         }
         Ok(())
     }
 
     /// Parses a number.
-    fn number(&mut self) -> Result<f64, Error> {
+    fn number(&mut self) -> Result<f64, LanguageError> {
         let mut number = String::new();
 
         self.collect_digits(&mut number, 10)?;
@@ -181,7 +181,7 @@ impl Lexer {
             } else if Self::is_digit_or_underscore(self.get(), 10) {
                 self.collect_digits(&mut number, 10)?;
             } else {
-                return Err(self.error(ErrorKind::MissingDigitsAfterDecimalPoint));
+                return Err(self.error(LanguageErrorKind::MissingDigitsAfterDecimalPoint));
             }
         }
         if let 'e' | 'E' = self.get() {
@@ -192,7 +192,7 @@ impl Lexer {
                 self.advance();
             }
             if !Self::is_digit_or_underscore(self.get(), 10) {
-                return Err(self.error(ErrorKind::MissingExponent));
+                return Err(self.error(LanguageErrorKind::MissingExponent));
             }
             self.collect_digits(&mut number, 10)?;
         }
@@ -203,40 +203,40 @@ impl Lexer {
     }
 
     /// Parses a 32-bit integer with the specified radix.
-    fn integer(&mut self, radix: u32) -> Result<u32, Error> {
+    fn integer(&mut self, radix: u32) -> Result<u32, LanguageError> {
         let start_location = self.location;
         let mut number = String::new();
         self.collect_digits(&mut number, radix)?;
         if number.is_empty() {
-            return Err(self.error_at(start_location, ErrorKind::UnderscoresWithoutDigits));
+            return Err(self.error_at(start_location, LanguageErrorKind::UnderscoresWithoutDigits));
         }
         u32::from_str_radix(&number, radix)
-            .map_err(|_| self.error_at(start_location, ErrorKind::IntLiteralOutOfRange))
+            .map_err(|_| self.error_at(start_location, LanguageErrorKind::IntLiteralOutOfRange))
     }
 
     /// Parses an extended `\16:123`-style integer with explicit radix.
-    fn integer_with_explicit_radix(&mut self) -> Result<u32, Error> {
+    fn integer_with_explicit_radix(&mut self) -> Result<u32, LanguageError> {
         let radix_location = self.location;
         let radix = self.integer(10)?;
         if !(2..=36).contains(&radix) {
-            return Err(self.error_at(radix_location, ErrorKind::IntRadixOutOfRange));
+            return Err(self.error_at(radix_location, LanguageErrorKind::IntRadixOutOfRange));
         }
         if self.get() != ':' {
-            return Err(self.error(ErrorKind::ColonExpectedAfterRadix));
+            return Err(self.error(LanguageErrorKind::ColonExpectedAfterRadix));
         }
         self.advance();
         self.integer(radix)
     }
 
     /// Parses an extended `\b1100`-style integer with a constant radix.
-    fn integer_with_constant_radix(&mut self, radix: u32) -> Result<Token, Error> {
+    fn integer_with_constant_radix(&mut self, radix: u32) -> Result<Token, LanguageError> {
         self.advance(); // Skip over the initial character (eg. b or x)
         let number = self.integer(radix)? as f64;
         Ok(self.token(TokenKind::Number(number)))
     }
 
     /// Parses a character inside of a string.
-    fn string_char(&mut self) -> Result<char, Error> {
+    fn string_char(&mut self) -> Result<char, LanguageError> {
         let c = self.get();
         self.advance();
         Ok(match c {
@@ -254,7 +254,7 @@ impl Lexer {
                     'u' => {
                         let left_brace_location = self.location;
                         if self.get() != '{' {
-                            return Err(self.error(ErrorKind::UEscapeLeftBraceExpected));
+                            return Err(self.error(LanguageErrorKind::UEscapeLeftBraceExpected));
                         }
                         self.advance();
                         let digits_location = self.location;
@@ -263,25 +263,28 @@ impl Lexer {
                         if self.get() != '}' {
                             return Err(self.error_at(
                                 left_brace_location,
-                                ErrorKind::UEscapeMissingRightBrace,
+                                LanguageErrorKind::UEscapeMissingRightBrace,
                             ));
                         }
                         self.advance();
                         if number.is_empty() {
-                            return Err(self.error_at(digits_location, ErrorKind::UEscapeEmpty));
+                            return Err(
+                                self.error_at(digits_location, LanguageErrorKind::UEscapeEmpty)
+                            );
                         }
                         // The only error here is guaranteed to be overflow.
                         let scalar_value = u32::from_str_radix(&number, 16).map_err(|_| {
-                            self.error_at(digits_location, ErrorKind::UEscapeOutOfRange)
+                            self.error_at(digits_location, LanguageErrorKind::UEscapeOutOfRange)
                         })?;
                         char::try_from(scalar_value).map_err(|_| {
-                            self.error_at(digits_location, ErrorKind::UEscapeOutOfRange)
+                            self.error_at(digits_location, LanguageErrorKind::UEscapeOutOfRange)
                         })?
                     }
                     other => {
-                        return Err(
-                            self.error_at(escape_char_location, ErrorKind::InvalidEscape(other))
-                        )
+                        return Err(self.error_at(
+                            escape_char_location,
+                            LanguageErrorKind::InvalidEscape(other),
+                        ))
                     }
                 }
             }
@@ -290,15 +293,15 @@ impl Lexer {
     }
 
     /// Parses a string.
-    fn string(&mut self, raw: bool) -> Result<String, Error> {
+    fn string(&mut self, raw: bool) -> Result<String, LanguageError> {
         self.advance();
         let mut result = String::new();
         while self.get() != '"' {
             if self.get() == Self::EOF {
-                return Err(self.error(ErrorKind::MissingClosingQuote));
+                return Err(self.error(LanguageErrorKind::MissingClosingQuote));
             }
             if self.get() == '\n' {
-                return Err(self.error(ErrorKind::LineBreakInStringIsNotAllowed));
+                return Err(self.error(LanguageErrorKind::LineBreakInStringIsNotAllowed));
             }
             result.push(if !raw {
                 self.string_char()?
@@ -313,14 +316,14 @@ impl Lexer {
     }
 
     /// Parses a character literal 'a'.
-    fn character(&mut self) -> Result<char, Error> {
+    fn character(&mut self) -> Result<char, LanguageError> {
         if self.get() != '\'' {
-            return Err(self.error(ErrorKind::CharacterMissingOpeningApostrophe));
+            return Err(self.error(LanguageErrorKind::CharacterMissingOpeningApostrophe));
         }
         self.advance();
         let c = self.string_char()?;
         if self.get() != '\'' {
-            return Err(self.error(ErrorKind::CharacterMissingClosingApostrophe));
+            return Err(self.error(LanguageErrorKind::CharacterMissingClosingApostrophe));
         }
         self.advance();
         Ok(c)
@@ -341,7 +344,7 @@ impl Lexer {
     /// Parses an extended (or "backslash") literal, that is, a literal that begins with a
     /// backslash, is discriminated by a single character following the backslash, and continues
     /// onward.
-    fn extended_literal(&mut self) -> Result<Token, Error> {
+    fn extended_literal(&mut self) -> Result<Token, LanguageError> {
         self.advance(); // Skip backslash
         match self.get() {
             'r' => {
@@ -368,7 +371,7 @@ impl Lexer {
             // between 0 and O.
             'o' => self.integer_with_constant_radix(8),
             'x' | 'X' => self.integer_with_constant_radix(16),
-            other => Err(self.error(ErrorKind::InvalidBackslashLiteral(other))),
+            other => Err(self.error(LanguageErrorKind::InvalidBackslashLiteral(other))),
         }
     }
 
@@ -449,7 +452,7 @@ impl Lexer {
     }
 
     /// Parses the next token and returns it.
-    pub fn next_token(&mut self) -> Result<Token, Error> {
+    pub fn next_token(&mut self) -> Result<Token, LanguageError> {
         self.skip_whitespace();
         self.token_start = self.location;
 
@@ -498,12 +501,12 @@ impl Lexer {
             ']' => Ok(self.single_char_token(TokenKind::RightBracket)),
             ',' => Ok(self.single_char_token(TokenKind::Comma)),
             Self::EOF => Ok(self.token(TokenKind::Eof)),
-            other => Err(self.error(ErrorKind::InvalidCharacter(other))),
+            other => Err(self.error(LanguageErrorKind::InvalidCharacter(other))),
         }
     }
 
     /// Peeks at what the next token's going to be without advancing the lexer's position.
-    pub fn peek_token(&mut self) -> Result<Token, Error> {
+    pub fn peek_token(&mut self) -> Result<Token, LanguageError> {
         let location = self.location;
         let token = self.next_token()?;
         self.location = location;

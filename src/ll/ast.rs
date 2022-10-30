@@ -5,7 +5,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::ll::error::{Error, ErrorKind, Location};
+use crate::ll::error::{LanguageError, LanguageErrorKind, Location};
 
 /// A lightweight handle to a node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -114,8 +114,8 @@ impl Ast {
     }
 
     /// Constructs a compile error at the given node.
-    pub fn error(&self, node: NodeId, kind: ErrorKind) -> Error {
-        Error::Compile {
+    pub fn error(&self, node: NodeId, kind: LanguageErrorKind) -> LanguageError {
+        LanguageError::Compile {
             module_name: Rc::clone(&self.module_name),
             kind,
             location: self.location(node),

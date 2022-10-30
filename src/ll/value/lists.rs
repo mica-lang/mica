@@ -1,7 +1,7 @@
 use std::{cell::UnsafeCell, cmp::Ordering};
 
 use super::RawValue;
-use crate::ll::error::ErrorKind;
+use crate::ll::error::LanguageErrorKind;
 
 /// A Mica list.
 #[derive(Debug)]
@@ -35,7 +35,7 @@ impl List {
     pub(crate) unsafe fn try_partial_cmp(
         &self,
         other: &List,
-    ) -> Result<Option<Ordering>, ErrorKind> {
+    ) -> Result<Option<Ordering>, LanguageErrorKind> {
         let (left, right) = (self.as_slice(), other.as_slice());
         let len = left.len().min(right.len());
         let a = &left[..len];

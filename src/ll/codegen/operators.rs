@@ -4,7 +4,7 @@ use super::{CodeGenerator, Expression, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::Opcode,
-    error::Error,
+    error::LanguageError,
 };
 
 impl<'e> CodeGenerator<'e> {
@@ -13,7 +13,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (left, _) = ast.node_pair(node);
         self.generate_node(ast, left, Expression::Used)?;
         match ast.kind(node) {
@@ -29,7 +29,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (left, right) = ast.node_pair(node);
         self.generate_node(ast, left, Expression::Used)?;
         self.generate_node(ast, right, Expression::Used)?;

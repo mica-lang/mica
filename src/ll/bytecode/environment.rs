@@ -7,7 +7,7 @@ use std::{
 
 use super::{BuiltinDispatchTables, Function, Opr24, Prototype, TraitPrototype};
 use crate::{
-    ll::error::{ErrorKind, RenderedSignature},
+    ll::error::{LanguageErrorKind, RenderedSignature},
     MethodParameterCount,
 };
 
@@ -160,12 +160,12 @@ impl Environment {
 
     /// Tries to create a global. Returns the global slot number, or an error if there are too many
     /// globals.
-    pub fn create_global(&mut self, name: &str) -> Result<GlobalIndex, ErrorKind> {
+    pub fn create_global(&mut self, name: &str) -> Result<GlobalIndex, LanguageErrorKind> {
         if self.globals.contains_key(name) {
             Ok(*self.globals.get(name).unwrap())
         } else {
-            let slot =
-                Opr24::try_from(self.globals.len()).map_err(|_| ErrorKind::TooManyGlobals)?;
+            let slot = Opr24::try_from(self.globals.len())
+                .map_err(|_| LanguageErrorKind::TooManyGlobals)?;
             let slot = GlobalIndex(slot);
             self.globals.insert(name.to_owned(), slot);
             Ok(slot)
@@ -178,9 +178,12 @@ impl Environment {
     }
 
     /// Creates a function and returns its ID.
-    pub fn create_function(&mut self, function: Function) -> Result<FunctionIndex, ErrorKind> {
-        let slot =
-            Opr24::try_from(self.functions.len()).map_err(|_| ErrorKind::TooManyFunctions)?;
+    pub fn create_function(
+        &mut self,
+        function: Function,
+    ) -> Result<FunctionIndex, LanguageErrorKind> {
+        let slot = Opr24::try_from(self.functions.len())
+            .map_err(|_| LanguageErrorKind::TooManyFunctions)?;
         let slot = FunctionIndex(slot);
         self.functions.push(function);
         Ok(slot)
@@ -200,15 +203,15 @@ impl Environment {
     pub fn get_or_create_method_index(
         &mut self,
         signature: &MethodSignature,
-    ) -> Result<MethodIndex, ErrorKind> {
+    ) -> Result<MethodIndex, LanguageErrorKind> {
         // Don't use `entry` here to avoid cloning the signature.
         if let Some(&index) = self.method_indices.get(signature) {
             Ok(index)
         } else {
             // The number of entries in self.method_indices and self.function_signatures is always
             // equal, so we can use their `len`s interchangably.
-            let index =
-                u16::try_from(self.method_indices.len()).map_err(|_| ErrorKind::TooManyMethods)?;
+            let index = u16::try_from(self.method_indices.len())
+                .map_err(|_| LanguageErrorKind::TooManyMethods)?;
             let index = MethodIndex(index);
             self.method_indices.insert(signature.clone(), index);
             self.method_signatures.push(signature.clone());
@@ -231,8 +234,9 @@ impl Environment {
     pub(crate) fn create_prototype(
         &mut self,
         proto: Prototype,
-    ) -> Result<PrototypeIndex, ErrorKind> {
-        let slot = Opr24::try_from(self.prototypes.len()).map_err(|_| ErrorKind::TooManyImpls)?;
+    ) -> Result<PrototypeIndex, LanguageErrorKind> {
+        let slot =
+            Opr24::try_from(self.prototypes.len()).map_err(|_| LanguageErrorKind::TooManyImpls)?;
         let slot = PrototypeIndex(slot);
         self.prototypes.push(Some(proto));
         Ok(slot)
@@ -248,9 +252,9 @@ impl Environment {
     }
 
     /// Creates a trait and returns its ID. Use `get_trait_mut` afterwards to modify the trait.
-    pub fn create_trait(&mut self, name: Rc<str>) -> Result<TraitIndex, ErrorKind> {
+    pub fn create_trait(&mut self, name: Rc<str>) -> Result<TraitIndex, LanguageErrorKind> {
         let slot_index = self.traits.len();
-        let slot = Opr24::try_from(slot_index).map_err(|_| ErrorKind::TooManyTraits)?;
+        let slot = Opr24::try_from(slot_index).map_err(|_| LanguageErrorKind::TooManyTraits)?;
         let slot = TraitIndex(slot);
         self.traits.push(TraitPrototype { name, required: HashSet::new(), shims: vec![] });
         Ok(slot)

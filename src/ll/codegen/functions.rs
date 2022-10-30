@@ -7,7 +7,7 @@ use crate::{
     ll::{
         ast::{Ast, NodeId},
         bytecode::{Function, FunctionIndex, FunctionKind, Opcode, Opr24},
-        error::{Error, ErrorKind},
+        error::{LanguageError, LanguageErrorKind},
     },
     FunctionParameterCount,
 };
@@ -67,7 +67,7 @@ impl<'e> CodeGenerator<'e> {
         ast: &Ast,
         node: NodeId,
         GenerateFunctionOptions { name, call_conv }: GenerateFunctionOptions,
-    ) -> Result<GeneratedFunction, Error> {
+    ) -> Result<GeneratedFunction, LanguageError> {
         let (head, body) = ast.node_pair(node);
         let (_, parameters) = ast.node_pair(head);
         let parameter_list = ast.children(parameters).unwrap();
@@ -124,8 +124,9 @@ impl<'e> CodeGenerator<'e> {
         // number of fields.
         if let Some(create_struct) = create_struct {
             let field_count = generator.struct_data.as_ref().unwrap().fields.len();
-            let field_count = Opr24::try_from(field_count)
-                .map_err(|_| ast.error(ast.node_pair(parameters).0, ErrorKind::TooManyFields))?;
+            let field_count = Opr24::try_from(field_count).map_err(|_| {
+                ast.error(ast.node_pair(parameters).0, LanguageErrorKind::TooManyFields)
+            })?;
             generator.chunk.patch(create_struct, (Opcode::CreateStruct, field_count));
             // We also have to discard whatever was at the top of the stack at the moment and
             // return the struct we constructed.
@@ -143,7 +144,7 @@ impl<'e> CodeGenerator<'e> {
                 .cloned()
                 .collect();
             if !missing.is_empty() {
-                return Err(ast.error(node, ErrorKind::MissingFields(missing)));
+                return Err(ast.error(node, LanguageErrorKind::MissingFields(missing)));
             }
         }
 
@@ -159,7 +160,7 @@ impl<'e> CodeGenerator<'e> {
 
         // Construct the function.
         let parameter_count = u16::try_from(parameter_list.len())
-            .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
+            .map_err(|_| ast.error(parameters, LanguageErrorKind::TooManyParameters))?;
         let function = Function {
             name,
             parameter_count: FunctionParameterCount::Fixed(parameter_count),
@@ -176,16 +177,16 @@ impl<'e> CodeGenerator<'e> {
     }
 
     /// Ensures that a `Func` node is a valid bare function - without a kind, and with a body.
-    fn ensure_valid_bare_function(ast: &Ast, node: NodeId) -> Result<(), Error> {
+    fn ensure_valid_bare_function(ast: &Ast, node: NodeId) -> Result<(), LanguageError> {
         let (head, body) = ast.node_pair(node);
         let (_name, parameters) = ast.node_pair(head);
 
         let function_kind = ast.node_pair(parameters).0;
         if function_kind != NodeId::EMPTY {
-            return Err(ast.error(function_kind, ErrorKind::FunctionKindOutsideImpl));
+            return Err(ast.error(function_kind, LanguageErrorKind::FunctionKindOutsideImpl));
         }
         if body == NodeId::EMPTY {
-            return Err(ast.error(node, ErrorKind::MissingFunctionBody));
+            return Err(ast.error(node, LanguageErrorKind::MissingFunctionBody));
         }
         Ok(())
     }
@@ -195,7 +196,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         Self::ensure_valid_bare_function(ast, node)?;
 
         let (head, _) = ast.node_pair(node);
@@ -224,7 +225,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         Self::ensure_valid_bare_function(ast, node)?;
 
         let function = self.generate_function(

@@ -18,7 +18,7 @@ pub use lists::*;
 pub use structs::*;
 pub use traits::*;
 
-use crate::ll::{bytecode::DispatchTable, error::ErrorKind, gc::GcRaw};
+use crate::ll::{bytecode::DispatchTable, error::LanguageErrorKind, gc::GcRaw};
 
 /// The kind of a [`RawValue`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -108,8 +108,8 @@ impl RawValue {
         }
     }
 
-    fn type_error(&self, expected: &'static str) -> ErrorKind {
-        ErrorKind::TypeError { expected: Cow::from(expected), got: self.type_name() }
+    fn type_error(&self, expected: &'static str) -> LanguageErrorKind {
+        LanguageErrorKind::TypeError { expected: Cow::from(expected), got: self.type_name() }
     }
 
     /// Returns a boolean value without performing any checks.
@@ -185,7 +185,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `Nil`, returning a type mismatch error if that's not the case.
-    pub fn ensure_nil(&self) -> Result<(), ErrorKind> {
+    pub fn ensure_nil(&self) -> Result<(), LanguageErrorKind> {
         if self.0.kind() == ValueKind::Nil {
             Ok(())
         } else {
@@ -194,7 +194,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `Boolean`, returning a type mismatch error if that's not the case.
-    pub fn ensure_boolean(&self) -> Result<bool, ErrorKind> {
+    pub fn ensure_boolean(&self) -> Result<bool, LanguageErrorKind> {
         if self.0.kind() == ValueKind::Boolean {
             Ok(unsafe { self.0.get_boolean_unchecked() })
         } else {
@@ -203,7 +203,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `Number`, returning a type mismatch error if that's not the case.
-    pub fn ensure_number(&self) -> Result<f64, ErrorKind> {
+    pub fn ensure_number(&self) -> Result<f64, LanguageErrorKind> {
         if self.0.kind() == ValueKind::Number {
             Ok(unsafe { *self.0.get_number_unchecked() })
         } else {
@@ -212,7 +212,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `String`, returning a type mismatch error if that's not the case.
-    pub fn ensure_raw_string(&self) -> Result<GcRaw<String>, ErrorKind> {
+    pub fn ensure_raw_string(&self) -> Result<GcRaw<String>, LanguageErrorKind> {
         if self.0.kind() == ValueKind::String {
             Ok(unsafe { self.0.get_raw_string_unchecked() })
         } else {
@@ -221,7 +221,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `Function`, returning a type mismatch error if that's not the case.
-    pub fn ensure_raw_function(&self) -> Result<GcRaw<Closure>, ErrorKind> {
+    pub fn ensure_raw_function(&self) -> Result<GcRaw<Closure>, LanguageErrorKind> {
         if self.0.kind() == ValueKind::Function {
             Ok(unsafe { self.0.get_raw_function_unchecked() })
         } else {
@@ -230,7 +230,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `Struct`, returning a type mismatch error if that's not the case.
-    pub fn ensure_raw_struct(&self) -> Result<GcRaw<Struct>, ErrorKind> {
+    pub fn ensure_raw_struct(&self) -> Result<GcRaw<Struct>, LanguageErrorKind> {
         if self.0.kind() == ValueKind::Struct {
             Ok(unsafe { self.0.get_raw_struct_unchecked() })
         } else {
@@ -239,7 +239,7 @@ impl RawValue {
     }
 
     /// Ensures the value is a `Trait`, returning a type mismatch error if that's not the case.
-    pub fn ensure_raw_trait(&self) -> Result<GcRaw<Trait>, ErrorKind> {
+    pub fn ensure_raw_trait(&self) -> Result<GcRaw<Trait>, LanguageErrorKind> {
         if self.0.kind() == ValueKind::Trait {
             Ok(unsafe { self.0.get_raw_trait_unchecked() })
         } else {
@@ -274,9 +274,9 @@ impl RawValue {
     /// Attempts to partially compare this value with another one.
     ///
     /// Returns an error if the types of the two values are not the same.
-    pub fn try_partial_cmp(&self, other: &Self) -> Result<Option<Ordering>, ErrorKind> {
+    pub fn try_partial_cmp(&self, other: &Self) -> Result<Option<Ordering>, LanguageErrorKind> {
         if self.0.kind() != other.0.kind() {
-            Err(ErrorKind::TypeError { expected: self.type_name(), got: other.type_name() })
+            Err(LanguageErrorKind::TypeError { expected: self.type_name(), got: other.type_name() })
         } else {
             match self.0.kind() {
                 ValueKind::Nil => Ok(Some(Ordering::Equal)),

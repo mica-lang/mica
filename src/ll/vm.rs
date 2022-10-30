@@ -8,7 +8,7 @@ use crate::ll::{
         CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind,
         MethodParameterCount, MethodSignature, Opcode, PrototypeIndex, TraitIndex,
     },
-    error::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
+    error::{LanguageError, LanguageErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
     value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
 };
@@ -112,9 +112,9 @@ impl Fiber {
     }
 
     /// Halts the VM and produces an error.
-    fn error(&mut self, env: &Environment, kind: ErrorKind) -> Error {
+    fn error(&mut self, env: &Environment, kind: LanguageErrorKind) -> LanguageError {
         self.halted = true;
-        Error::Runtime {
+        LanguageError::Runtime {
             kind,
             call_stack: self
                 .call_stack
@@ -263,7 +263,7 @@ impl Fiber {
         gc: &mut Memory,
         closure: GcRaw<Closure>,
         argument_count: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LanguageError> {
         let function = unsafe { env.get_function_unchecked(closure.get().function_id) };
         match &function.kind {
             FunctionKind::Bytecode { chunk, .. } => {
@@ -303,14 +303,14 @@ impl Fiber {
         gc: &mut Memory,
         ctl: Control,
         argument_count: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LanguageError> {
         match ctl {
             Control::GcCollect => {
                 if argument_count != 1 {
                     return Err(self.error_outside_function_call(
                         None,
                         env,
-                        ErrorKind::TooManyArguments,
+                        LanguageErrorKind::TooManyArguments,
                     ));
                 }
                 unsafe { gc.collect(self.roots(globals)) }
@@ -326,8 +326,8 @@ impl Fiber {
         &mut self,
         closure: Option<GcRaw<Closure>>,
         env: &Environment,
-        kind: ErrorKind,
-    ) -> Error {
+        kind: LanguageErrorKind,
+    ) -> LanguageError {
         self.save_return_point();
         if let Some(closure) = closure {
             self.call_stack.push(ReturnPoint {
@@ -417,7 +417,7 @@ impl Fiber {
         gc: &mut Memory,
         dtable: &mut DispatchTable,
         unimplemented_methods: &mut HashSet<MethodIndex>,
-    ) -> Result<(), ErrorKind> {
+    ) -> Result<(), LanguageErrorKind> {
         for (name, parameter_count, trait_index, function_id) in methods {
             let trait_handle = unsafe { traits[trait_index.to_usize()].get() };
             let trait_id = trait_handle.id;
@@ -435,7 +435,7 @@ impl Fiber {
             dtable.set_method(method_id, closure);
 
             if !unimplemented_methods.remove(&method_id) {
-                return Err(ErrorKind::DoubleMethodImplementation {
+                return Err(LanguageErrorKind::DoubleMethodImplementation {
                     type_name: Rc::clone(&dtable.pretty_name),
                     signature: method_signature.render(env),
                 });
@@ -460,7 +460,7 @@ impl Fiber {
                     signature.parameter_count,
                 )
             });
-            return Err(ErrorKind::MethodsUnimplemented {
+            return Err(LanguageErrorKind::MethodsUnimplemented {
                 type_name: Rc::clone(&dtable.pretty_name),
                 methods,
             });
@@ -480,7 +480,7 @@ impl Fiber {
         env: &Environment,
         globals: &mut Globals,
         gc: &mut Memory,
-    ) -> Result<RawValue, Error> {
+    ) -> Result<RawValue, LanguageError> {
         self.allocate_chunk_storage_slots(self.chunk.preallocate_stack_slots as usize);
 
         loop {
@@ -737,7 +737,7 @@ impl Fiber {
                             .get_method_signature(method_index)
                             .map(|signature| signature.render(env))
                             .unwrap_or_else(RenderedSignature::invalid);
-                        let error_kind = ErrorKind::MethodDoesNotExist {
+                        let error_kind = LanguageErrorKind::MethodDoesNotExist {
                             type_name: Rc::clone(&dtable.pretty_name),
                             signature,
                         };

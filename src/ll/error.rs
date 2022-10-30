@@ -83,7 +83,7 @@ impl fmt::Display for RenderedSignature {
 /// Check the source code of the `Display` implementation to see which error kind corresponds
 /// to which error message.
 #[derive(Debug)]
-pub enum ErrorKind {
+pub enum LanguageErrorKind {
     // Lexer
     InvalidCharacter(char),
     MissingDigitsAfterDecimalPoint,
@@ -169,7 +169,7 @@ pub enum ErrorKind {
     User(Box<dyn std::error::Error>),
 }
 
-impl std::fmt::Display for ErrorKind {
+impl std::fmt::Display for LanguageErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidCharacter(c) => write!(f, "invalid character: {c:?}"),
@@ -302,14 +302,14 @@ pub struct StackTraceEntry {
 
 /// An error.
 #[derive(Debug)]
-pub enum Error {
+pub enum LanguageError {
     /// A compile-time error.
-    Compile { kind: ErrorKind, module_name: Rc<str>, location: Location },
+    Compile { kind: LanguageErrorKind, module_name: Rc<str>, location: Location },
     /// A runtime error.
-    Runtime { kind: ErrorKind, call_stack: Vec<StackTraceEntry> },
+    Runtime { kind: LanguageErrorKind, call_stack: Vec<StackTraceEntry> },
 }
 
-impl std::fmt::Display for Error {
+impl std::fmt::Display for LanguageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         struct FileLocation<'a>(&'a str, Location);
 
@@ -325,10 +325,10 @@ impl std::fmt::Display for Error {
         }
 
         match self {
-            Error::Compile { kind, module_name, location } => {
+            LanguageError::Compile { kind, module_name, location } => {
                 write!(f, "{module_name}:{location}: error: {kind}")
             }
-            Error::Runtime { kind, call_stack } => {
+            LanguageError::Runtime { kind, call_stack } => {
                 writeln!(f, "error: {}", kind)?;
                 write!(f, "stack traceback (most recent call first):")?;
                 let file_location_width = call_stack

@@ -3,9 +3,9 @@
 use std::{borrow::Cow, fmt};
 
 /// A raw [`ll`][crate::ll] error, with metadata such as stack traces.
-pub type LanguageError = crate::ll::error::Error;
+pub type LanguageError = crate::ll::error::LanguageError;
 /// A raw [`ll`][crate::ll] error kind.
-pub type LanguageErrorKind = crate::ll::error::ErrorKind;
+pub type LanguageErrorKind = crate::ll::error::LanguageErrorKind;
 
 /// An error.
 #[derive(Debug)]

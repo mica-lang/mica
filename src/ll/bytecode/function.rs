@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::Chunk;
 use crate::ll::{
     codegen::variables::{LocalIndex, UpvalueIndex},
-    error::ErrorKind,
+    error::LanguageErrorKind,
     gc::Memory,
     value::RawValue,
 };
@@ -20,7 +20,8 @@ pub enum CaptureKind {
 }
 
 /// The signature of a raw foreign function.
-pub type ForeignFunction = Box<dyn Fn(&mut Memory, &[RawValue]) -> Result<RawValue, ErrorKind>>;
+pub type ForeignFunction =
+    Box<dyn Fn(&mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind>>;
 
 /// The kind of a controlling function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,22 +109,22 @@ pub struct MethodParameterCount(u8);
 /// Converting functions from various sources of parameter counts. This usually doesn't need to be
 /// used in application code, unless you're dealing with the `ll` API.
 impl MethodParameterCount {
-    pub fn from_count_without_self(count: impl TryInto<u8>) -> Result<Self, ErrorKind> {
+    pub fn from_count_without_self(count: impl TryInto<u8>) -> Result<Self, LanguageErrorKind> {
         count
             .try_into()
             .ok()
             .and_then(|x| x.checked_add(1))
             .map(Self)
-            .ok_or(ErrorKind::TooManyParameters)
+            .ok_or(LanguageErrorKind::TooManyParameters)
     }
 
     pub const fn from_count_with_self(count: u8) -> Self {
         Self(count)
     }
 
-    pub fn from_fixed_function_parameter_count(count: u16) -> Result<Self, ErrorKind> {
+    pub fn from_fixed_function_parameter_count(count: u16) -> Result<Self, LanguageErrorKind> {
         Self::from_count_without_self(
-            u8::try_from(count).map_err(|_| ErrorKind::TooManyParameters)?,
+            u8::try_from(count).map_err(|_| LanguageErrorKind::TooManyParameters)?,
         )
     }
 

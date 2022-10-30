@@ -7,7 +7,7 @@ use self::{control_flow::BreakableBlock, structs::StructData, variables::Locals}
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{BuiltinTraits, Chunk, Environment, Opcode},
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
 };
 
 pub struct CodeGenerator<'e> {
@@ -50,7 +50,7 @@ impl<'e> CodeGenerator<'e> {
     /// Generates code for a list of nodes. The last node's value is the one left on the stack.
     ///
     /// If there are no nodes in the list, this is equivalent to a `nil` literal.
-    fn generate_node_list(&mut self, ast: &Ast, nodes: &[NodeId]) -> Result<(), Error> {
+    fn generate_node_list(&mut self, ast: &Ast, nodes: &[NodeId]) -> Result<(), LanguageError> {
         if nodes.is_empty() {
             let _ = self.generate_nil();
         } else {
@@ -68,7 +68,12 @@ impl<'e> CodeGenerator<'e> {
     /// Generates code for a valid expression node.
     ///
     /// Nodes that are not valid expressions cause a panic.
-    fn generate_node(&mut self, ast: &Ast, node: NodeId, expr: Expression) -> Result<(), Error> {
+    fn generate_node(
+        &mut self,
+        ast: &Ast,
+        node: NodeId,
+        expr: Expression,
+    ) -> Result<(), LanguageError> {
         let previous_codegen_location = self.chunk.codegen_location;
         self.chunk.codegen_location = ast.location(node);
         let result = match ast.kind(node) {
@@ -130,7 +135,7 @@ impl<'e> CodeGenerator<'e> {
             NodeKind::Struct => self.generate_struct(ast, node)?,
             NodeKind::Impl => self.generate_impl(ast, node)?,
             NodeKind::Trait => self.generate_trait(ast, node)?,
-            NodeKind::ImplAs => return Err(ast.error(node, ErrorKind::AsOutsideOfImpl)),
+            NodeKind::ImplAs => return Err(ast.error(node, LanguageErrorKind::AsOutsideOfImpl)),
 
             NodeKind::DictPair
             | NodeKind::IfBranch
@@ -156,7 +161,7 @@ impl<'e> CodeGenerator<'e> {
     }
 
     /// Generates code for the given AST.
-    pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Rc<Chunk>, Error> {
+    pub fn generate(mut self, ast: &Ast, root_node: NodeId) -> Result<Rc<Chunk>, LanguageError> {
         self.generate_node(ast, root_node, Expression::Used)?;
         self.chunk.emit(Opcode::Halt);
         Ok(Rc::new(self.chunk))

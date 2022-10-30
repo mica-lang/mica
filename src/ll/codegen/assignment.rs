@@ -6,7 +6,7 @@ use super::{variables::VariableAllocation, CodeGenerator, Expression, Expression
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::Opcode,
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
 };
 
 impl<'e> CodeGenerator<'e> {
@@ -18,7 +18,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LanguageError> {
         match ast.kind(node) {
             NodeKind::Identifier => {
                 let name = ast.string(node).unwrap();
@@ -27,7 +27,7 @@ impl<'e> CodeGenerator<'e> {
                     .map_err(|kind| ast.error(node, kind))?;
                 self.generate_variable_sink(variable);
             }
-            _ => return Err(ast.error(node, ErrorKind::InvalidPattern)),
+            _ => return Err(ast.error(node, LanguageErrorKind::InvalidPattern)),
         }
         Ok(())
     }
@@ -38,7 +38,7 @@ impl<'e> CodeGenerator<'e> {
         ast: &Ast,
         node: NodeId,
         result: Expression,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (target, value) = ast.node_pair(node);
         self.generate_node(ast, value, Expression::Used)?;
 
@@ -68,7 +68,7 @@ impl<'e> CodeGenerator<'e> {
                             .map_err(|kind| ast.error(node, kind))?
                     } else {
                         struct_data.get_field(name).ok_or_else(|| {
-                            ast.error(target, ErrorKind::FieldDoesNotExist(Rc::clone(name)))
+                            ast.error(target, LanguageErrorKind::FieldDoesNotExist(Rc::clone(name)))
                         })?
                     };
                     // Unwrapping is OK here because `receiver` is assigned at the start of each
@@ -80,7 +80,7 @@ impl<'e> CodeGenerator<'e> {
                         Expression::Discarded => (Opcode::SinkField, field),
                     });
                 } else {
-                    return Err(ast.error(target, ErrorKind::FieldOutsideOfImpl));
+                    return Err(ast.error(target, LanguageErrorKind::FieldOutsideOfImpl));
                 }
                 // In constructors, we need to keep track of which fields were assigned to report
                 // errors about missing field values.
@@ -88,7 +88,7 @@ impl<'e> CodeGenerator<'e> {
                     self.assigned_fields.insert(Rc::clone(name));
                 }
             }
-            _ => return Err(ast.error(target, ErrorKind::InvalidAssignment)),
+            _ => return Err(ast.error(target, LanguageErrorKind::InvalidAssignment)),
         }
 
         Ok(match result {

@@ -9,7 +9,7 @@ use super::{
 use crate::ll::{
     ast::{Ast, NodeId},
     bytecode::{Opcode, Opr24},
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
 };
 
 #[derive(Debug, Default)]
@@ -23,9 +23,10 @@ pub(super) struct StructData {
 impl StructData {
     /// Returns the index of the field with the given name, or creates that field if it doesn't
     /// exist yet.
-    pub(super) fn get_or_create_field(&mut self, name: &str) -> Result<Opr24, ErrorKind> {
+    pub(super) fn get_or_create_field(&mut self, name: &str) -> Result<Opr24, LanguageErrorKind> {
         if !self.fields.contains_key(name) {
-            let index = Opr24::try_from(self.fields.len()).map_err(|_| ErrorKind::TooManyFields)?;
+            let index =
+                Opr24::try_from(self.fields.len()).map_err(|_| LanguageErrorKind::TooManyFields)?;
             self.fields.insert(Rc::from(name), index);
             Ok(index)
         } else {
@@ -45,16 +46,16 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (name, _) = ast.node_pair(node);
         let name = ast.string(name).unwrap();
         let struct_data = self
             .struct_data
             .as_deref()
-            .ok_or_else(|| ast.error(node, ErrorKind::FieldOutsideOfImpl))?;
-        let field_id = struct_data
-            .get_field(name)
-            .ok_or_else(|| ast.error(node, ErrorKind::FieldDoesNotExist(Rc::clone(name))))?;
+            .ok_or_else(|| ast.error(node, LanguageErrorKind::FieldOutsideOfImpl))?;
+        let field_id = struct_data.get_field(name).ok_or_else(|| {
+            ast.error(node, LanguageErrorKind::FieldDoesNotExist(Rc::clone(name)))
+        })?;
         // Unwrapping is OK here because fields are not allowed outside of functions, and each
         // function with `StructData` passed in assigns to `receiver` at the start of its
         // code generation.
@@ -69,7 +70,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (name, _) = ast.node_pair(node);
         let name = ast.string(name).unwrap();
 

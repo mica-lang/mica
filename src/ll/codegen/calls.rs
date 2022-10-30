@@ -7,7 +7,7 @@ use crate::{
     ll::{
         ast::{Ast, NodeId, NodeKind},
         bytecode::{MethodSignature, Opcode, Opr24},
-        error::{Error, ErrorKind},
+        error::{LanguageError, LanguageErrorKind},
     },
     MethodParameterCount,
 };
@@ -18,14 +18,14 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (function, _) = ast.node_pair(node);
         match ast.kind(function) {
             // Method calls need special treatment.
             NodeKind::Dot => {
                 let (receiver, name) = ast.node_pair(function);
                 if ast.kind(name) != NodeKind::Identifier {
-                    return Err(ast.error(name, ErrorKind::InvalidMethodName));
+                    return Err(ast.error(name, LanguageErrorKind::InvalidMethodName));
                 }
                 let name = ast.string(name).unwrap();
 
@@ -39,7 +39,7 @@ impl<'e> CodeGenerator<'e> {
                 // Construct the call.
                 let parameter_count =
                     MethodParameterCount::from_count_without_self(arguments.len())
-                        .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
+                        .map_err(|_| ast.error(node, LanguageErrorKind::TooManyArguments))?;
                 let signature = MethodSignature::new(Rc::clone(name), parameter_count);
                 let method_index = self
                     .env
@@ -59,7 +59,7 @@ impl<'e> CodeGenerator<'e> {
                 self.chunk.emit((
                     Opcode::Call,
                     Opr24::try_from(arguments.len())
-                        .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?,
+                        .map_err(|_| ast.error(node, LanguageErrorKind::TooManyArguments))?,
                 ));
             }
         }
@@ -71,12 +71,12 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (left, method) = ast.node_pair(node);
         self.generate_node(ast, left, Expression::Used)?;
 
         if ast.kind(method) != NodeKind::Identifier {
-            return Err(ast.error(method, ErrorKind::InvalidMethodName));
+            return Err(ast.error(method, LanguageErrorKind::InvalidMethodName));
         }
         let signature = MethodSignature::new(
             Rc::clone(ast.string(method).unwrap()),

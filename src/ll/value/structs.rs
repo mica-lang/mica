@@ -1,7 +1,7 @@
 use std::cell::{Cell, UnsafeCell};
 
 use super::RawValue;
-use crate::ll::{bytecode::DispatchTable, error::ErrorKind, gc::GcRaw};
+use crate::ll::{bytecode::DispatchTable, error::LanguageErrorKind, gc::GcRaw};
 
 /// The innards of a struct.
 ///
@@ -52,9 +52,9 @@ impl Struct {
     }
 
     /// Implements the struct with the given dispatch table.
-    pub(crate) fn implement(&self, dtable: GcRaw<DispatchTable>) -> Result<(), ErrorKind> {
+    pub(crate) fn implement(&self, dtable: GcRaw<DispatchTable>) -> Result<(), LanguageErrorKind> {
         if self.sealed.get() {
-            return Err(ErrorKind::StructAlreadyImplemented);
+            return Err(LanguageErrorKind::StructAlreadyImplemented);
         }
         unsafe { *self.dtable.get() = dtable }
         self.sealed.set(true);

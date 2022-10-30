@@ -10,7 +10,7 @@ use super::{
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{ImplementedTraitIndex, MethodParameterCount, MethodSignature, Opcode, Prototype},
-    error::{Error, ErrorKind, RenderedSignature},
+    error::{LanguageError, LanguageErrorKind, RenderedSignature},
 };
 
 /// The state of generating an `impl` block.
@@ -26,7 +26,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (implementee, _) = ast.node_pair(node);
         let items = ast.children(node).unwrap();
 
@@ -63,13 +63,13 @@ impl<'e> CodeGenerator<'e> {
         node: NodeId,
         state: &mut ImplGenerationState,
         allow_as: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LanguageError> {
         match ast.kind(node) {
             NodeKind::Func => {
                 let (head, _) = ast.node_pair(node);
                 let (name_node, parameters) = ast.node_pair(head);
                 if ast.kind(name_node) != NodeKind::Identifier {
-                    return Err(ast.error(node, ErrorKind::MissingMethodName));
+                    return Err(ast.error(node, LanguageErrorKind::MissingMethodName));
                 }
                 let name = Rc::clone(ast.string(name_node).unwrap());
                 let (kind, _) = ast.node_pair(parameters);
@@ -92,14 +92,14 @@ impl<'e> CodeGenerator<'e> {
 
                 let parameter_count =
                     MethodParameterCount::from_count_without_self(function.parameter_count)
-                        .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
+                        .map_err(|_| ast.error(parameters, LanguageErrorKind::TooManyParameters))?;
                 if let Some(trait_index) = state.implemented_trait_index {
                     // For trait instance methods, method ID resolution is performed at runtime.
                     let key = (Rc::clone(&name), parameter_count, trait_index);
                     if state.proto.trait_instance.insert(key, function.id).is_some() {
                         return Err(ast.error(
                             name_node,
-                            ErrorKind::MethodAlreadyImplemented(RenderedSignature {
+                            LanguageErrorKind::MethodAlreadyImplemented(RenderedSignature {
                                 name,
                                 parameter_count: parameter_count.to_count_without_self(),
                                 // Note that we do not have a way of knowing the actual name of the
@@ -125,7 +125,7 @@ impl<'e> CodeGenerator<'e> {
                     if map.insert(method_id, function.id).is_some() {
                         return Err(ast.error(
                             name_node,
-                            ErrorKind::MethodAlreadyImplemented(RenderedSignature {
+                            LanguageErrorKind::MethodAlreadyImplemented(RenderedSignature {
                                 name: signature.name,
                                 parameter_count: parameter_count.to_count_without_self(),
                                 trait_name: None,
@@ -137,7 +137,7 @@ impl<'e> CodeGenerator<'e> {
 
             NodeKind::ImplAs => {
                 if !allow_as {
-                    return Err(ast.error(node, ErrorKind::AsCannotNest));
+                    return Err(ast.error(node, LanguageErrorKind::AsCannotNest));
                 }
                 let (trait_expr, _) = ast.node_pair(node);
                 let as_items = ast.children(node).unwrap();
@@ -156,7 +156,7 @@ impl<'e> CodeGenerator<'e> {
 
             // NB: If other item types are allowed, don't forget to change the error message for
             // InvalidImplItem.
-            _ => return Err(ast.error(node, ErrorKind::InvalidImplItem)),
+            _ => return Err(ast.error(node, LanguageErrorKind::InvalidImplItem)),
         }
 
         Ok(())

@@ -4,7 +4,7 @@ use std::{fmt, rc::Rc};
 
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
     lexer::{Lexer, Token, TokenKind},
 };
 
@@ -21,8 +21,8 @@ impl Parser {
     }
 
     /// Constructs a compilation error located at the given token.
-    fn error(&self, token: &Token, kind: ErrorKind) -> Error {
-        Error::Compile {
+    fn error(&self, token: &Token, kind: LanguageErrorKind) -> LanguageError {
+        LanguageError::Compile {
             module_name: Rc::clone(&self.lexer.module_name),
             kind,
             location: token.location,
@@ -33,8 +33,8 @@ impl Parser {
     fn expect(
         &mut self,
         kind: TokenKind,
-        error: impl FnOnce(&Token) -> ErrorKind,
-    ) -> Result<Token, Error> {
+        error: impl FnOnce(&Token) -> LanguageErrorKind,
+    ) -> Result<Token, LanguageError> {
         let next_token = self.lexer.peek_token()?;
         if next_token.kind == kind {
             Ok(self.lexer.next_token()?)
@@ -45,7 +45,7 @@ impl Parser {
 
     /// If the next token's kind is equal to `kind`, advances to the next token and returns the
     /// token. Otherwise returns `None`.
-    fn try_next(&mut self, kind: TokenKind) -> Result<Option<Token>, Error> {
+    fn try_next(&mut self, kind: TokenKind) -> Result<Option<Token>, LanguageError> {
         let next_token = self.lexer.peek_token()?;
         Ok(if next_token.kind == kind { Some(self.lexer.next_token()?) } else { None })
     }
@@ -110,7 +110,7 @@ impl Parser {
     }
 
     /// Parses a sequence of long string literals.
-    fn parse_long_string(&mut self, first: Token) -> Result<NodeId, Error> {
+    fn parse_long_string(&mut self, first: Token) -> Result<NodeId, LanguageError> {
         let mut content = String::new();
         if let TokenKind::LongString(s) = first.kind {
             content.push_str(&s);
@@ -134,7 +134,7 @@ impl Parser {
     }
 
     /// Parses an identifier.
-    fn parse_identifier(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_identifier(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         if let TokenKind::Identifier(i) = token.kind {
             Ok(self
                 .ast
@@ -143,12 +143,12 @@ impl Parser {
                 .with_string(i)
                 .done())
         } else {
-            Err(self.error(&token, ErrorKind::IdentifierExpected))
+            Err(self.error(&token, LanguageErrorKind::IdentifierExpected))
         }
     }
 
     /// Parses a unary operator.
-    fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
+    fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, LanguageError> {
         let right = self.parse_expression(Self::precedence(&TokenKind::Star))?;
         Ok(self.ast.build_node(kind, right).with_location(token.location).done())
     }
@@ -159,10 +159,10 @@ impl Parser {
         token: &Token,
         children: &mut Vec<NodeId>,
         is_terminator: impl Fn(&TokenKind) -> bool,
-    ) -> Result<(), Error> {
+    ) -> Result<(), LanguageError> {
         while !is_terminator(&self.lexer.peek_token()?.kind) {
             if self.lexer.peek_token()?.kind == TokenKind::Eof {
-                return Err(self.error(token, ErrorKind::MissingEnd));
+                return Err(self.error(token, LanguageErrorKind::MissingEnd));
             }
             children.push(self.parse_item()?);
         }
@@ -174,12 +174,12 @@ impl Parser {
         &mut self,
         dest: &mut Vec<NodeId>,
         end: TokenKind,
-        mut next: impl FnMut(&mut Self) -> Result<NodeId, Error>,
-    ) -> Result<(), Error> {
+        mut next: impl FnMut(&mut Self) -> Result<NodeId, LanguageError>,
+    ) -> Result<(), LanguageError> {
         loop {
             let token = self.lexer.peek_token()?;
             match &token.kind {
-                TokenKind::Eof => return Err(self.error(&token, ErrorKind::UnexpectedEof)),
+                TokenKind::Eof => return Err(self.error(&token, LanguageErrorKind::UnexpectedEof)),
                 kind if *kind == end => {
                     self.lexer.next_token()?;
                     return Ok(());
@@ -190,13 +190,13 @@ impl Parser {
             match self.lexer.next_token()? {
                 Token { kind: TokenKind::Comma, .. } => (),
                 t if t.kind == end => return Ok(()),
-                token => return Err(self.error(&token, ErrorKind::CommaExpected)),
+                token => return Err(self.error(&token, LanguageErrorKind::CommaExpected)),
             }
         }
     }
 
     /// Parses a list or dict literal.
-    fn parse_list_or_dict(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_list_or_dict(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         #[derive(Clone, Copy, PartialEq, Eq)]
         enum Mode {
             Unknown,
@@ -209,7 +209,7 @@ impl Parser {
         if self.lexer.peek_token()?.kind == TokenKind::Colon {
             self.lexer.next_token()?;
             self.expect(TokenKind::RightBracket, |_| {
-                ErrorKind::RightBracketExpectedToCloseEmptyDict
+                LanguageErrorKind::RightBracketExpectedToCloseEmptyDict
             })?;
             mode = Mode::Dict;
         } else {
@@ -231,8 +231,9 @@ impl Parser {
                 }
                 Mode::Dict => {
                     let key = p.parse_expression(0)?;
-                    let colon =
-                        p.expect(TokenKind::Colon, |_| ErrorKind::ColonExpectedAfterDictKey)?;
+                    let colon = p.expect(TokenKind::Colon, |_| {
+                        LanguageErrorKind::ColonExpectedAfterDictKey
+                    })?;
                     let value = p.parse_expression(0)?;
                     Ok(p.ast
                         .build_node(NodeKind::DictPair, (key, value))
@@ -258,7 +259,7 @@ impl Parser {
     }
 
     /// Parses a `do` block.
-    fn parse_do_block(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_do_block(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let mut children = Vec::new();
         self.parse_terminated_block(&token, &mut children, |k| *k == TokenKind::End)?;
         let _end = self.lexer.next_token();
@@ -271,7 +272,7 @@ impl Parser {
     }
 
     /// Parses an `if` expression.
-    fn parse_if_expression(&mut self, if_token: Token) -> Result<NodeId, Error> {
+    fn parse_if_expression(&mut self, if_token: Token) -> Result<NodeId, LanguageError> {
         let mut branches = Vec::new();
         let mut else_token = None;
 
@@ -280,7 +281,7 @@ impl Parser {
                 (None, token)
             } else {
                 let condition = self.parse_expression(0)?;
-                let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
+                let do_token = self.expect(TokenKind::Do, |_| LanguageErrorKind::MissingDo)?;
                 (Some(condition), do_token)
             };
             let mut branch = Vec::new();
@@ -301,15 +302,15 @@ impl Parser {
             match &next_token.kind {
                 TokenKind::Elif => {
                     if else_token.is_some() {
-                        return Err(self.error(&next_token, ErrorKind::BranchAfterElse));
+                        return Err(self.error(&next_token, LanguageErrorKind::BranchAfterElse));
                     }
                 }
                 TokenKind::Else => {
                     else_token = Some(next_token);
                 }
-                TokenKind::Eof => return Err(self.error(&do_token, ErrorKind::MissingEnd)),
+                TokenKind::Eof => return Err(self.error(&do_token, LanguageErrorKind::MissingEnd)),
                 TokenKind::End => break,
-                _ => return Err(self.error(&next_token, ErrorKind::InvalidIfBranchToken)),
+                _ => return Err(self.error(&next_token, LanguageErrorKind::InvalidIfBranchToken)),
             }
         }
 
@@ -322,9 +323,9 @@ impl Parser {
     }
 
     /// Parses a `while` expression.
-    fn parse_while_expression(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_while_expression(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let condition = self.parse_expression(0)?;
-        let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
+        let do_token = self.expect(TokenKind::Do, |_| LanguageErrorKind::MissingDo)?;
         let mut body = Vec::new();
         self.parse_terminated_block(&do_token, &mut body, |k| *k == TokenKind::End)?;
         let _end = self.lexer.next_token();
@@ -337,11 +338,12 @@ impl Parser {
     }
 
     /// Parses a `for` expression.
-    fn parse_for_expression(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_for_expression(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let binding = self.parse_expression(0)?;
-        let _in_token = self.expect(TokenKind::In, |_| ErrorKind::InExpectedAfterForBinding)?;
+        let _in_token =
+            self.expect(TokenKind::In, |_| LanguageErrorKind::InExpectedAfterForBinding)?;
         let iterator = self.parse_expression(0)?;
-        let do_token = self.expect(TokenKind::Do, |_| ErrorKind::MissingDo)?;
+        let do_token = self.expect(TokenKind::Do, |_| LanguageErrorKind::MissingDo)?;
         let mut body = Vec::new();
         self.parse_terminated_block(&do_token, &mut body, |k| *k == TokenKind::End)?;
         let _end = self.lexer.next_token();
@@ -354,7 +356,11 @@ impl Parser {
     }
 
     /// Parses a function. `anonymous` decides if the function has a name or not.
-    fn parse_function(&mut self, func_token: Token, anonymous: bool) -> Result<NodeId, Error> {
+    fn parse_function(
+        &mut self,
+        func_token: Token,
+        anonymous: bool,
+    ) -> Result<NodeId, LanguageError> {
         let name = if !anonymous {
             let name = self.lexer.next_token()?;
             self.parse_identifier(name)?
@@ -362,7 +368,8 @@ impl Parser {
             NodeId::EMPTY
         };
 
-        let left_paren = self.expect(TokenKind::LeftParen, |_| ErrorKind::LeftParenExpected)?;
+        let left_paren =
+            self.expect(TokenKind::LeftParen, |_| LanguageErrorKind::LeftParenExpected)?;
         let mut parameters = Vec::new();
         self.parse_comma_separated(&mut parameters, TokenKind::RightParen, |p| {
             let name = p.lexer.next_token()?;
@@ -409,7 +416,7 @@ impl Parser {
     ///
     /// A break-like expression is a token followed followed by an optional value on the same line
     /// as that token.
-    fn parse_break_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, Error> {
+    fn parse_break_like(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, LanguageError> {
         let next_token = self.lexer.peek_token()?;
         let result = if next_token.location.line > token.location.line
             || matches!(next_token.kind, TokenKind::End)
@@ -422,14 +429,14 @@ impl Parser {
     }
 
     /// Parses a struct declaration.
-    fn parse_struct(&mut self, struct_token: Token) -> Result<NodeId, Error> {
+    fn parse_struct(&mut self, struct_token: Token) -> Result<NodeId, LanguageError> {
         let name = self.lexer.next_token()?;
         let name = self.parse_identifier(name)?;
         Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
     }
 
     /// Parses an `as` block.
-    fn parse_as(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_as(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let implementee = self.parse_expression(0)?;
         let mut items = Vec::new();
         // Note that we parse any type of item inside of the `impl` block.
@@ -445,7 +452,7 @@ impl Parser {
     }
 
     /// Parses a trait declaration.
-    fn parse_trait(&mut self, trait_token: Token) -> Result<NodeId, Error> {
+    fn parse_trait(&mut self, trait_token: Token) -> Result<NodeId, LanguageError> {
         let name = self.lexer.next_token()?;
         let name = self.parse_identifier(name)?;
         let mut items = Vec::new();
@@ -462,7 +469,7 @@ impl Parser {
     }
 
     /// Parses a prefix expression.
-    fn parse_prefix(&mut self, token: Token) -> Result<NodeId, Error> {
+    fn parse_prefix(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         match &token.kind {
             TokenKind::Nil => Ok(self.parse_unit(token, NodeKind::Nil)),
             TokenKind::False => Ok(self.parse_unit(token, NodeKind::False)),
@@ -484,7 +491,7 @@ impl Parser {
             TokenKind::LeftParen => {
                 let inner = self.parse_expression(0)?;
                 if !matches!(self.lexer.next_token()?.kind, TokenKind::RightParen) {
-                    return Err(self.error(&token, ErrorKind::MissingRightParen));
+                    return Err(self.error(&token, LanguageErrorKind::MissingRightParen));
                 }
                 Ok(inner)
             }
@@ -503,7 +510,7 @@ impl Parser {
             TokenKind::As => self.parse_as(token),
             TokenKind::Trait => self.parse_trait(token),
 
-            _ => Err(self.error(&token, ErrorKind::InvalidPrefixToken)),
+            _ => Err(self.error(&token, LanguageErrorKind::InvalidPrefixToken)),
         }
     }
 
@@ -513,7 +520,7 @@ impl Parser {
         left: NodeId,
         token: Token,
         kind: NodeKind,
-    ) -> Result<NodeId, Error> {
+    ) -> Result<NodeId, LanguageError> {
         let precedence = Self::precedence(&token.kind)
             - (Self::associativity(&token.kind) == Associativity::Right) as i8;
         let right = self.parse_expression(precedence)?;
@@ -521,7 +528,7 @@ impl Parser {
     }
 
     /// Parses a function call.
-    fn function_call(&mut self, left: NodeId, left_paren: Token) -> Result<NodeId, Error> {
+    fn function_call(&mut self, left: NodeId, left_paren: Token) -> Result<NodeId, LanguageError> {
         let mut arguments = Vec::new();
         self.parse_comma_separated(&mut arguments, TokenKind::RightParen, |p| {
             p.parse_expression(0)
@@ -535,7 +542,7 @@ impl Parser {
     }
 
     /// Parses an `impl` block.
-    fn parse_impl(&mut self, left: NodeId, token: Token) -> Result<NodeId, Error> {
+    fn parse_impl(&mut self, left: NodeId, token: Token) -> Result<NodeId, LanguageError> {
         let mut items = Vec::new();
         // Note that we parse any type of item inside of the `impl` block.
         // The codegen phase is the thing that ensures the items declared are valid.
@@ -550,7 +557,7 @@ impl Parser {
     }
 
     /// Parses an infix token.
-    fn parse_infix(&mut self, left: NodeId, token: Token) -> Result<NodeId, Error> {
+    fn parse_infix(&mut self, left: NodeId, token: Token) -> Result<NodeId, LanguageError> {
         match &token.kind {
             TokenKind::Plus => self.binary_operator(left, token, NodeKind::Add),
             TokenKind::Minus => self.binary_operator(left, token, NodeKind::Subtract),
@@ -573,7 +580,7 @@ impl Parser {
 
             TokenKind::Impl => self.parse_impl(left, token),
 
-            _ => Err(self.error(&token, ErrorKind::InvalidInfixToken)),
+            _ => Err(self.error(&token, LanguageErrorKind::InvalidInfixToken)),
         }
     }
 
@@ -583,7 +590,7 @@ impl Parser {
     }
 
     /// Parses an expression.
-    fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, Error> {
+    fn parse_expression(&mut self, precedence: i8) -> Result<NodeId, LanguageError> {
         let mut token = self.lexer.next_token()?;
         let mut left = self.parse_prefix(token)?;
 
@@ -602,7 +609,7 @@ impl Parser {
     }
 
     /// Parses a single item.
-    fn parse_item(&mut self) -> Result<NodeId, Error> {
+    fn parse_item(&mut self) -> Result<NodeId, LanguageError> {
         let token = self.lexer.peek_token()?;
         match &token.kind {
             TokenKind::Func => {
@@ -614,7 +621,7 @@ impl Parser {
     }
 
     /// Parses a Mica program.
-    pub fn parse(mut self) -> Result<(Ast, NodeId), Error> {
+    pub fn parse(mut self) -> Result<(Ast, NodeId), LanguageError> {
         let first_token = self.lexer.peek_token()?;
         let mut main = Vec::new();
         loop {

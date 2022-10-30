@@ -10,7 +10,7 @@ use crate::{
             Chunk, Environment, Function, FunctionIndex, FunctionKind, MethodIndex,
             MethodSignature, Opcode, Opr24, TraitIndex,
         },
-        error::{Error, ErrorKind, Location, RenderedSignature},
+        error::{LanguageError, LanguageErrorKind, Location, RenderedSignature},
     },
     FunctionParameterCount, MethodParameterCount,
 };
@@ -28,7 +28,7 @@ impl<'b> TraitBuilder<'b> {
         env: &'b mut Environment,
         parent_chunk: Option<&'b Chunk>,
         name: Rc<str>,
-    ) -> Result<Self, ErrorKind> {
+    ) -> Result<Self, LanguageErrorKind> {
         let trait_id = env.create_trait(name)?;
         Ok(Self { env, parent_chunk, trait_id, required_methods: HashSet::new(), shims: vec![] })
     }
@@ -40,7 +40,7 @@ impl<'b> TraitBuilder<'b> {
         trait_name: &str,
         method_id: MethodIndex,
         method_signature: &MethodSignature,
-    ) -> Result<FunctionIndex, ErrorKind> {
+    ) -> Result<FunctionIndex, LanguageErrorKind> {
         let parameter_count = method_signature.parameter_count.to_count_with_self();
 
         let (module_name, codegen_location) = if let Some(parent_chunk) = self.parent_chunk {
@@ -75,7 +75,7 @@ impl<'b> TraitBuilder<'b> {
         &mut self,
         name: Rc<str>,
         parameter_count: MethodParameterCount,
-    ) -> Result<MethodIndex, ErrorKind> {
+    ) -> Result<MethodIndex, LanguageErrorKind> {
         let trait_name = Rc::clone(&self.env.get_trait(self.trait_id).unwrap().name);
         let signature = MethodSignature { name, parameter_count, trait_id: Some(self.trait_id) };
         let method_id = self.env.get_or_create_method_index(&signature)?;
@@ -84,7 +84,7 @@ impl<'b> TraitBuilder<'b> {
             parameter_count
                 .to_count_with_self()
                 .checked_add(1)
-                .ok_or(ErrorKind::TooManyParameters)?,
+                .ok_or(LanguageErrorKind::TooManyParameters)?,
         );
         let shim_signature = MethodSignature {
             parameter_count: parameter_count_with_receiving_trait,
@@ -96,7 +96,7 @@ impl<'b> TraitBuilder<'b> {
         self.shims.push((shim_method_id, shim_function_id));
 
         if !self.required_methods.insert(method_id) {
-            return Err(ErrorKind::TraitAlreadyHasMethod(RenderedSignature {
+            return Err(LanguageErrorKind::TraitAlreadyHasMethod(RenderedSignature {
                 name: signature.name,
                 parameter_count: signature.parameter_count.to_count_without_self(),
                 // Do not duplicate the trait name in the error message.
@@ -129,7 +129,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let (trait_name, _) = ast.node_pair(node);
         let trait_name = ast.string(trait_name).unwrap();
         let items = ast.children(node).unwrap();
@@ -143,24 +143,26 @@ impl<'e> CodeGenerator<'e> {
                     let (head, body) = ast.node_pair(item);
                     let (name, params) = ast.node_pair(head);
                     if body != NodeId::EMPTY {
-                        return Err(ast.error(body, ErrorKind::TraitMethodCannotHaveBody));
+                        return Err(ast.error(body, LanguageErrorKind::TraitMethodCannotHaveBody));
                     }
                     if name == NodeId::EMPTY {
-                        return Err(ast.error(head, ErrorKind::MissingMethodName));
+                        return Err(ast.error(head, LanguageErrorKind::MissingMethodName));
                     }
                     if ast.node_pair(params).0 != NodeId::EMPTY {
-                        return Err(ast.error(head, ErrorKind::FunctionKindInTrait));
+                        return Err(ast.error(head, LanguageErrorKind::FunctionKindInTrait));
                     }
 
                     let _method_id = builder
                         .add_method(
                             Rc::clone(ast.string(name).unwrap()),
                             MethodParameterCount::from_count_without_self(ast.len(params).unwrap())
-                                .map_err(|_| ast.error(params, ErrorKind::TooManyParameters))?,
+                                .map_err(|_| {
+                                    ast.error(params, LanguageErrorKind::TooManyParameters)
+                                })?,
                         )
                         .map_err(|e| ast.error(item, e))?;
                 }
-                _ => return Err(ast.error(item, ErrorKind::InvalidTraitItem)),
+                _ => return Err(ast.error(item, LanguageErrorKind::InvalidTraitItem)),
             }
         }
 

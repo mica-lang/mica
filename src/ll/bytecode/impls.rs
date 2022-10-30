@@ -7,7 +7,7 @@ use std::{
 
 use super::{Environment, FunctionIndex, MethodIndex, TraitIndex};
 use crate::{
-    ll::{codegen::TraitBuilder, error::ErrorKind},
+    ll::{codegen::TraitBuilder, error::LanguageErrorKind},
     MethodParameterCount,
 };
 
@@ -48,10 +48,14 @@ pub(crate) struct Prototype {
 }
 
 impl Prototype {
-    pub(crate) fn implement_next_trait(&mut self) -> Result<ImplementedTraitIndex, ErrorKind> {
+    pub(crate) fn implement_next_trait(
+        &mut self,
+    ) -> Result<ImplementedTraitIndex, LanguageErrorKind> {
         let trait_index = self.implemented_trait_count;
-        self.implemented_trait_count =
-            self.implemented_trait_count.checked_add(1).ok_or(ErrorKind::TooManyTraitsInImpl)?;
+        self.implemented_trait_count = self
+            .implemented_trait_count
+            .checked_add(1)
+            .ok_or(LanguageErrorKind::TooManyTraitsInImpl)?;
         Ok(ImplementedTraitIndex(trait_index))
     }
 }
@@ -76,7 +80,7 @@ pub struct BuiltinTraits {
 
 impl BuiltinTraits {
     /// Tries to register built-in traits in the given environment.
-    fn try_register_in(env: &mut Environment) -> Result<Self, ErrorKind> {
+    fn try_register_in(env: &mut Environment) -> Result<Self, LanguageErrorKind> {
         let mut builder = TraitBuilder::new(env, None, Rc::from("Iterator"))?;
         let iterator_has_next = builder
             .add_method(Rc::from("has_next"), MethodParameterCount::from_count_with_self(1))?;

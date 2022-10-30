@@ -4,7 +4,7 @@ use super::{CodeGenerator, Expression, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
     bytecode::{Opcode, Opr24},
-    error::{Error, ErrorKind},
+    error::{LanguageError, LanguageErrorKind},
 };
 
 impl<'e> CodeGenerator<'e> {
@@ -45,10 +45,10 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let children = ast.children(node).unwrap();
         let len = Opr24::try_from(children.len())
-            .map_err(|_| ast.error(node, ErrorKind::ListIsTooLong))?;
+            .map_err(|_| ast.error(node, LanguageErrorKind::ListIsTooLong))?;
         for &child in children {
             self.generate_node(ast, child, Expression::Used)?;
         }
@@ -61,10 +61,10 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
-    ) -> Result<ExpressionResult, Error> {
+    ) -> Result<ExpressionResult, LanguageError> {
         let children = ast.children(node).unwrap();
         let len = Opr24::try_from(children.len())
-            .map_err(|_| ast.error(node, ErrorKind::DictIsTooLarge))?;
+            .map_err(|_| ast.error(node, LanguageErrorKind::DictIsTooLarge))?;
         for &child in children {
             let (key, value) = ast.node_pair(child);
             self.generate_node(ast, key, Expression::Used)?;

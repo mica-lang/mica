@@ -20,8 +20,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(0);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let result = self();
 
             Ok(Value::from(result).to_raw(gc))
@@ -39,8 +39,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(0);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let result = self();
 
             wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
@@ -57,8 +57,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
 
             let result = self(arg_self);
@@ -78,8 +78,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
 
             let result = self(arg_self);
@@ -100,8 +100,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -124,8 +124,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -149,8 +149,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -174,8 +174,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -197,8 +197,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
 
             let result = self(arg_0);
@@ -219,8 +219,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
 
             let result = self(arg_0);
@@ -240,8 +240,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
 
@@ -263,8 +263,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
 
@@ -287,8 +287,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -314,8 +314,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -341,8 +341,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -368,8 +368,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -393,8 +393,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
 
@@ -417,8 +417,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
 
@@ -440,8 +440,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -465,8 +465,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -492,8 +492,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -521,8 +521,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -551,8 +551,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -581,8 +581,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -608,8 +608,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -634,8 +634,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -660,8 +660,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -688,8 +688,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -717,8 +717,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -748,8 +748,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -780,8 +780,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -812,8 +812,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -841,8 +841,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -869,8 +869,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -897,8 +897,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -927,8 +927,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -959,8 +959,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -993,8 +993,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1027,8 +1027,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1062,8 +1062,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1093,8 +1093,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1123,8 +1123,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1153,8 +1153,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -1185,8 +1185,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -1219,8 +1219,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1255,8 +1255,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1292,8 +1292,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1329,8 +1329,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1362,8 +1362,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1395,8 +1395,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1427,8 +1427,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -1461,8 +1461,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -1497,8 +1497,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1535,8 +1535,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1574,8 +1574,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1613,8 +1613,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1649,8 +1649,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1684,8 +1684,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1718,8 +1718,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -1754,8 +1754,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -1792,8 +1792,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1832,8 +1832,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1873,8 +1873,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -1914,8 +1914,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -1952,8 +1952,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -1989,8 +1989,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
             let arg_2 = wrap_in_language_error(arguments.get(2))?;
@@ -2025,8 +2025,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -2063,8 +2063,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let arg_self = RawSelf(arguments.raw_self());
             let arg_0 = wrap_in_language_error(arguments.get(0))?;
             let arg_1 = wrap_in_language_error(arguments.get(1))?;
@@ -2106,8 +2106,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -2151,8 +2151,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;
@@ -2194,8 +2194,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as SelfFromRawValue>::self_from_raw_value(arguments.raw_self())
             })?;
@@ -2240,8 +2240,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        Box::new(move |gc, args| {
-            let arguments = Arguments::new(args);
+        Box::new(move |env, gc, args| {
+            let arguments = Arguments::new(args, env);
             let (arg_self, _guard) = wrap_in_language_error(unsafe {
                 <Recv as MutSelfFromRawValue>::mut_self_from_raw_value(arguments.raw_self())
             })?;

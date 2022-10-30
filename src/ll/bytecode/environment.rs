@@ -1,15 +1,16 @@
 //! Static execution environment.
 
 use std::{
-    any::TypeId,
+    any::{Any, TypeId},
     collections::{HashMap, HashSet},
     rc::Rc,
 };
 
 use super::{BuiltinDispatchTables, DispatchTable, Function, Opr24, Prototype, TraitPrototype};
-use crate::{
-    ll::error::{LanguageErrorKind, RenderedSignature},
-    MethodParameterCount,
+use crate::ll::{
+    bytecode::MethodParameterCount,
+    error::{LanguageErrorKind, RenderedSignature},
+    gc::Gc,
 };
 
 /// The unique index of a function.
@@ -278,5 +279,22 @@ impl Environment {
     pub fn get_trait_mut(&mut self, id: TraitIndex) -> Option<&mut TraitPrototype> {
         let TraitIndex(id) = id;
         self.traits.get_mut(usize::from(id))
+    }
+
+    /// Adds a dispatch table for a user-defined type.
+    pub fn add_user_dtable<T>(&mut self, dtable: Gc<DispatchTable>)
+    where
+        T: Any,
+    {
+        let type_id = TypeId::of::<T>();
+        self.user_dtables.insert(type_id, dtable);
+    }
+
+    /// Returns the user-defined dispatch table, if available.
+    pub fn get_user_dtable<T>(&self) -> Option<&Gc<DispatchTable>>
+    where
+        T: Any,
+    {
+        self.user_dtables.get(&TypeId::of::<T>())
     }
 }

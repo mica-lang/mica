@@ -247,7 +247,8 @@ fn generate_variant(
             .map(|bound| format!("{bound} + 'static")),
     );
 
-    let mut into_raw_foreign_function = String::from(r#" let arguments = Arguments::new(args); "#);
+    let mut into_raw_foreign_function =
+        String::from(r#" let arguments = Arguments::new(args, env); "#);
 
     if let SelfMode::Enabled { setup_code } = &self_mode {
         into_raw_foreign_function.push_str(setup_code);
@@ -296,7 +297,7 @@ fn generate_variant(
                 {parameter_count_definition}
 
                 fn into_raw_foreign_function(self) -> RawForeignFunction {{
-                    Box::new(move |gc, args| {{
+                    Box::new(move |env, gc, args| {{
                         {into_raw_foreign_function}
                     }})
                 }}

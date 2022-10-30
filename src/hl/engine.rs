@@ -410,9 +410,9 @@ impl Engine {
         T: TryFromValue,
     {
         if let Some(id) = id.try_to_global_id(&self.env) {
-            T::try_from_value(&Value::from_raw(self.globals.get(id.0)))
+            T::try_from_value(&Value::from_raw(self.globals.get(id.0)), &self.env)
         } else {
-            T::try_from_value(&Value::from_raw(RawValue::from(())))
+            T::try_from_value(&Value::from_raw(RawValue::from(())), &self.env)
         }
     }
 
@@ -438,7 +438,7 @@ impl Engine {
     /// engine.add_raw_function(
     ///     "a_raw_understanding",
     ///     0,
-    ///     FunctionKind::Foreign(Box::new(|gc, arguments| {
+    ///     FunctionKind::Foreign(Box::new(|env, gc, arguments| {
     ///         Ok(RawValue::from(1.0))
     ///     })),
     /// );

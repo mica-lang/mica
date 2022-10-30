@@ -1,11 +1,16 @@
 mod raw;
 
-use std::{any::Any, borrow::Cow, fmt};
+use std::{
+    any::{type_name, Any},
+    borrow::Cow,
+    fmt,
+};
 
 pub use raw::*;
 
 use crate::{
     ll::{
+        bytecode::Environment,
         gc::Gc,
         value::{self, Closure, Dict, List, RawValue, Struct, Trait, UserData},
     },
@@ -215,13 +220,13 @@ where
     }
 }
 
-/// Implemented by types that can be constructed from [`Value`]s.
+/// Implemented by types that can be constructed as owned from [`Value`]s.
 pub trait TryFromValue
 where
     Self: Sized,
 {
     /// Tries to perform the conversion, returning an [`Error`] on failure.
-    fn try_from_value(value: &Value) -> Result<Self, Error>;
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error>;
 }
 
 fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
@@ -229,7 +234,7 @@ fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
 }
 
 impl TryFromValue for Value {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         Ok(value.clone())
     }
 }
@@ -239,13 +244,13 @@ impl TryFromValue for Value {
 /// and cause memory safety issues.
 #[doc(hidden)]
 impl TryFromValue for RawValue {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         Ok(value.to_raw_unmanaged())
     }
 }
 
 impl TryFromValue for () {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         if let Value::Nil = value {
             Ok(())
         } else {
@@ -255,7 +260,7 @@ impl TryFromValue for () {
 }
 
 impl TryFromValue for bool {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         match value {
             Value::True => Ok(true),
             Value::False => Ok(false),
@@ -267,7 +272,7 @@ impl TryFromValue for bool {
 macro_rules! try_from_value_numeric {
     ($T:ty) => {
         impl TryFromValue for $T {
-            fn try_from_value(value: &Value) -> Result<Self, Error> {
+            fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
                 if let Value::Number(number) = value {
                     Ok(*number as $T)
                 } else {
@@ -294,7 +299,7 @@ try_from_value_numeric!(f32);
 try_from_value_numeric!(f64);
 
 impl TryFromValue for Gc<String> {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         if let Value::String(s) = value {
             Ok(Gc::clone(s))
         } else {
@@ -304,8 +309,8 @@ impl TryFromValue for Gc<String> {
 }
 
 impl TryFromValue for String {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
-        <Gc<String>>::try_from_value(value).map(|s| s.to_string())
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+        <Gc<String>>::try_from_value(value, env).map(|s| s.to_string())
     }
 }
 
@@ -313,10 +318,10 @@ impl<T> TryFromValue for Option<T>
 where
     T: TryFromValue,
 {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         match value {
             Value::Nil => Ok(None),
-            _ => Ok(Some(T::try_from_value(value).map_err(|error| {
+            _ => Ok(Some(T::try_from_value(value, env).map_err(|error| {
                 if let Error::TypeMismatch { expected, got } = error {
                     Error::TypeMismatch { expected: format!("{} or Nil", expected).into(), got }
                 } else {
@@ -331,16 +336,42 @@ impl<T> TryFromValue for Vec<T>
 where
     T: TryFromValue,
 {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         if let Value::List(l) = value {
             let elements = unsafe { l.0.as_slice() };
             let mut result = vec![];
             for &element in elements {
-                result.push(T::try_from_value(&Value::from_raw(element))?);
+                result.push(T::try_from_value(&Value::from_raw(element), env)?);
             }
             Ok(result)
         } else {
             Err(type_mismatch("List", value))
         }
+    }
+}
+
+/// It is possible to accept arbitrary types implementing [`UserData`] as parameters to functions,
+/// however some limitations apply:
+/// - The [`UserData`] **must** implement [`Clone`].
+/// - The [`UserData`] **should** be registered inside the engine the value comes from.
+///   - If the user data is *ad hoc* (not registered in the engine,) type errors will be less clear
+///     as the full Rust type name will be used.
+impl<T> TryFromValue for T
+where
+    T: crate::UserData + Clone,
+{
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+        if let Value::UserData(u) = value {
+            if let Some(object) = u.as_any().downcast_ref::<Object<T>>() {
+                let (object, _guard) = unsafe { object.unsafe_borrow()? };
+                return Ok(object.clone());
+            }
+        }
+        let type_name = if let Some(dtable) = env.get_user_dtable::<T>() {
+            dtable.type_name.to_string()
+        } else {
+            type_name::<T>().to_string()
+        };
+        Err(type_mismatch(type_name, value))
     }
 }

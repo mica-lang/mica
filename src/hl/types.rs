@@ -444,6 +444,7 @@ where
             gc,
             builtin_traits,
         )?;
+
         let instance_dtable = self.instance_dtable.build_dtable(
             DispatchTable::new_for_instance(Rc::clone(&self.type_name)),
             env,
@@ -451,6 +452,7 @@ where
             builtin_traits,
         )?;
         let instance_dtable = Gc::new(instance_dtable);
+        env.add_user_dtable::<T>(Gc::clone(&instance_dtable));
 
         // The type dtable also contains constructors, so build those while we're at it.
         // We implement a helper here that fulfills the ObjectConstructor trait.
@@ -464,7 +466,7 @@ where
         }
 
         impl<T> ObjectConstructor<T> for Instancer<T> {
-            fn construct(&self, instance: T) -> crate::Object<T> {
+            fn construct(&self, instance: T) -> Object<T> {
                 Object::new(Gc::as_raw(&self.instance_dtable), instance)
             }
         }
@@ -483,7 +485,6 @@ where
             )?;
         }
 
-        // Build the instance dtable.
         type_dtable.instance = Some(Gc::as_raw(&instance_dtable));
 
         let type_dtable = Gc::new(type_dtable);

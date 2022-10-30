@@ -79,6 +79,10 @@ impl<T> Object<T> {
     }
 
     /// Borrows the object as immutably using an unsafe guard.
+    ///
+    /// # Safety
+    /// This function is unsafe because the guard can be dropped accidentally while keeping the
+    /// reference alive, which can lead to two mutable references to the data existing at once.
     #[doc(hidden)]
     pub unsafe fn unsafe_borrow(&self) -> Result<(&T, UnsafeRefGuard<T>), Error> {
         if self.borrowed_mutably.get() {
@@ -90,6 +94,10 @@ impl<T> Object<T> {
     }
 
     /// Borrows the object mutably using an unsafe guard.
+    ///
+    /// # Safety
+    /// This function is unsafe because the guard can be dropped accidentally while keeping the
+    /// reference alive, which can lead to two mutable references to the data existing at once.
     #[doc(hidden)]
     pub unsafe fn unsafe_borrow_mut(&self) -> Result<(&mut T, UnsafeMutGuard<T>), Error> {
         if self.shared_borrows.get() > 0 {

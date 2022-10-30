@@ -2,7 +2,7 @@
 
 use crate::{
     ll::{bytecode::Control, gc::AutoStrategy, value::RawValue},
-    Arguments, Engine, Error, RawFunctionKind, TypeBuilder, UserData,
+    Arguments, Engine, Error, MethodParameterCount, RawFunctionKind, TypeBuilder, UserData,
 };
 
 struct GcType;
@@ -14,7 +14,7 @@ pub(crate) fn load_gc(engine: &mut Engine) -> Result<(), Error> {
         TypeBuilder::<GcType>::new("Gc")
             .add_raw_static(
                 "disable",
-                1,
+                MethodParameterCount::from_count_with_self(1),
                 RawFunctionKind::Foreign(Box::new(|gc, _| {
                     gc.auto_strategy = AutoStrategy::Disabled;
                     Ok(RawValue::from(()))
@@ -22,7 +22,7 @@ pub(crate) fn load_gc(engine: &mut Engine) -> Result<(), Error> {
             )
             .add_raw_static(
                 "enable_always_run",
-                1,
+                MethodParameterCount::from_count_with_self(1),
                 RawFunctionKind::Foreign(Box::new(|gc, _| {
                     gc.auto_strategy = AutoStrategy::AlwaysRun;
                     Ok(RawValue::from(()))
@@ -30,7 +30,7 @@ pub(crate) fn load_gc(engine: &mut Engine) -> Result<(), Error> {
             )
             .add_raw_static(
                 "enable_with_ceiling",
-                3,
+                MethodParameterCount::from_count_with_self(3),
                 RawFunctionKind::Foreign(Box::new(|gc, args| {
                     let arguments = Arguments::new(args);
                     gc.auto_strategy = AutoStrategy::Ceiling {
@@ -40,10 +40,14 @@ pub(crate) fn load_gc(engine: &mut Engine) -> Result<(), Error> {
                     Ok(RawValue::from(()))
                 })),
             )
-            .add_raw_static("collect", 1, RawFunctionKind::Control(Control::GcCollect))
+            .add_raw_static(
+                "collect",
+                MethodParameterCount::from_count_with_self(1),
+                RawFunctionKind::Control(Control::GcCollect),
+            )
             .add_raw_static(
                 "allocated_bytes",
-                1,
+                MethodParameterCount::from_count_with_self(1),
                 RawFunctionKind::Foreign(Box::new(|gc, _| {
                     let bytes = gc.allocated_bytes() as f64;
                     Ok(RawValue::from(bytes))

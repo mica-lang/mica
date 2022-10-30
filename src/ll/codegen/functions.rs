@@ -3,10 +3,13 @@
 use std::{mem, rc::Rc};
 
 use super::{variables::VariableAllocation, CodeGenerator, Expression, ExpressionResult};
-use crate::ll::{
-    ast::{Ast, NodeId},
-    bytecode::{Function, FunctionIndex, FunctionKind, Opcode, Opr24},
-    error::{Error, ErrorKind},
+use crate::{
+    ll::{
+        ast::{Ast, NodeId},
+        bytecode::{Function, FunctionIndex, FunctionKind, Opcode, Opr24},
+        error::{Error, ErrorKind},
+    },
+    FunctionParameterCount,
 };
 
 /// The calling convention of a function.
@@ -50,6 +53,11 @@ pub(super) struct GenerateFunctionOptions {
 
 pub(super) struct GeneratedFunction {
     pub(crate) id: FunctionIndex,
+
+    /// The number of **explicit** parameters the function has.
+    ///
+    /// This means that if the function was generated with a non-bare calling convention, this
+    /// number **does not** include the `self` parameter.
     pub(crate) parameter_count: u16,
 }
 
@@ -154,7 +162,7 @@ impl<'e> CodeGenerator<'e> {
             .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
         let function = Function {
             name,
-            parameter_count: Some(parameter_count),
+            parameter_count: FunctionParameterCount::Fixed(parameter_count),
             kind: FunctionKind::Bytecode {
                 chunk: Rc::new(generator.chunk),
                 captured_locals: generator.locals.captures,

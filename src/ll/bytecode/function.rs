@@ -49,11 +49,115 @@ impl std::fmt::Debug for FunctionKind {
     }
 }
 
+/// The number of parameters in a bare function.
+///
+/// Bare functions may have fixed or variable numbers of parameters, with up to 65535 arguments
+/// supported per call.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FunctionParameterCount {
+    /// Accept only a specific number of arguments.
+    // Implementation note: Since this count always comes from the syntactic parameter list,
+    // this count never includes `self`, even in methods.
+    Fixed(u16),
+    /// Accept any amount of arguments.
+    Varargs,
+}
+
+impl FunctionParameterCount {
+    /// Attempts to get a fixed parameter count, returning `None` if the count is varargs.
+    pub fn to_fixed(self) -> Option<u16> {
+        if let Self::Fixed(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<u16> for FunctionParameterCount {
+    fn from(count: u16) -> Self {
+        Self::Fixed(count)
+    }
+}
+
+impl std::fmt::Debug for FunctionParameterCount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            match self {
+                Self::Fixed(num) => write!(f, "Fixed({num})"),
+                Self::Varargs => write!(f, "Varargs"),
+            }
+        } else {
+            match self {
+                Self::Fixed(num) => write!(f, "{num}"),
+                Self::Varargs => write!(f, "..."),
+            }
+        }
+    }
+}
+
+/// The number of parameters in a method.
+///
+/// Unlike [bare functions][FunctionParameterCount], methods can only have fixed parameter counts
+/// and can accept up to 255 arguments.
+///
+/// Internally, this parameter count includes the implicit `self` parameter.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MethodParameterCount(u8);
+
+/// Converting functions from various sources of parameter counts. This usually doesn't need to be
+/// used in application code, unless you're dealing with the `ll` API.
+impl MethodParameterCount {
+    pub fn from_count_without_self(count: impl TryInto<u8>) -> Result<Self, ErrorKind> {
+        count
+            .try_into()
+            .ok()
+            .and_then(|x| x.checked_add(1))
+            .map(Self)
+            .ok_or(ErrorKind::TooManyParameters)
+    }
+
+    pub const fn from_count_with_self(count: u8) -> Self {
+        Self(count)
+    }
+
+    pub fn from_fixed_function_parameter_count(count: u16) -> Result<Self, ErrorKind> {
+        Self::from_count_without_self(
+            u8::try_from(count).map_err(|_| ErrorKind::TooManyParameters)?,
+        )
+    }
+
+    pub const fn to_count_without_self(self) -> u8 {
+        self.0 - 1
+    }
+
+    /// Converts the type-safe [`MethodParameterCount`] into a raw [`u8`] that includes all
+    /// parameters.
+    ///
+    /// You usually want to use this when interfacing with the VM, which does not differentiate
+    /// `self` from other arguments.
+    pub const fn to_count_with_self(self) -> u8 {
+        self.0
+    }
+}
+
+impl From<u8> for MethodParameterCount {
+    fn from(count: u8) -> Self {
+        Self(count)
+    }
+}
+
+impl std::fmt::Debug for MethodParameterCount {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A function prototype.
 #[derive(Debug)]
 pub struct Function {
     pub name: Rc<str>,
-    pub parameter_count: Option<u16>,
+    pub parameter_count: FunctionParameterCount,
 
     pub kind: FunctionKind,
 

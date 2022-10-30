@@ -5,8 +5,10 @@
 #![allow(unused_variables)]
 
 use crate::{
-    ffvariants, wrap_in_language_error, Arguments, ForeignFunction, MutSelfFromRawValue,
-    RawForeignFunction, RawSelf, SelfFromRawValue, TryFromValue, Value,
+    ffvariants,
+    ll::bytecode::{FunctionParameterCount, MethodParameterCount},
+    wrap_in_language_error, Arguments, ForeignFunction, MutSelfFromRawValue, RawForeignFunction,
+    RawSelf, SelfFromRawValue, TryFromValue, Value,
 };
 
 impl<Fun, Ret> ForeignFunction<ffvariants::Infallible<()>> for Fun
@@ -14,9 +16,8 @@ where
     Fun: Fn() -> Ret + 'static,
     Value: From<Ret> + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(0)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(0);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -34,9 +35,8 @@ where
     Value: From<Ret> + 'static,
     Err: std::error::Error + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(0)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(0);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -53,9 +53,8 @@ where
     Fun: Fn(RawSelf<'_>) -> Ret + 'static,
     Value: From<Ret> + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -75,9 +74,8 @@ where
     Value: From<Ret> + 'static,
     Err: std::error::Error + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -98,9 +96,8 @@ where
     Value: From<Ret> + 'static,
     Recv: SelfFromRawValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -123,9 +120,8 @@ where
     Value: From<Ret> + 'static,
     Recv: MutSelfFromRawValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -149,9 +145,8 @@ where
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -175,9 +170,8 @@ where
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -199,9 +193,8 @@ where
     Value: From<Ret> + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -222,9 +215,8 @@ where
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(1)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(1);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -244,9 +236,8 @@ where
     Value: From<Ret> + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -268,9 +259,8 @@ where
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -293,9 +283,8 @@ where
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -321,9 +310,8 @@ where
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -349,9 +337,8 @@ where
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -377,9 +364,8 @@ where
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -403,9 +389,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -428,9 +413,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(2)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(2);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -452,9 +436,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -478,9 +461,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -506,9 +488,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -536,9 +517,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -567,9 +547,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -598,9 +577,8 @@ where
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -626,9 +604,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -653,9 +630,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(3)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(3);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -680,9 +656,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -709,9 +684,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -739,9 +713,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -771,9 +744,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -804,9 +776,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -837,9 +808,8 @@ where
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -867,9 +837,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -896,9 +865,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(4)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(4);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -925,9 +893,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -956,9 +923,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -989,9 +955,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1024,9 +989,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1059,9 +1023,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1095,9 +1058,8 @@ where
     C: TryFromValue + 'static,
     D: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1127,9 +1089,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1158,9 +1119,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(5)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(5);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1189,9 +1149,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1222,9 +1181,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1257,9 +1215,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1294,9 +1251,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1332,9 +1288,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1370,9 +1325,8 @@ where
     D: TryFromValue + 'static,
     E: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1404,9 +1358,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1438,9 +1391,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(6)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(6);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1471,9 +1423,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1506,9 +1457,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1543,9 +1493,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1582,9 +1531,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1622,9 +1570,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1662,9 +1609,8 @@ where
     E: TryFromValue + 'static,
     F: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1699,9 +1645,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1735,9 +1680,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(7)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(7);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1770,9 +1714,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1807,9 +1750,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1846,9 +1788,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1887,9 +1828,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1929,9 +1869,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -1971,9 +1910,8 @@ where
     F: TryFromValue + 'static,
     G: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2010,9 +1948,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2048,9 +1985,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(8)
-    }
+    type ParameterCount = FunctionParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(8);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2085,9 +2021,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(9)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2124,9 +2059,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(9)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2168,9 +2102,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(9)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2214,9 +2147,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(9)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2258,9 +2190,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(9)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {
@@ -2305,9 +2236,8 @@ where
     G: TryFromValue + 'static,
     H: TryFromValue + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        Some(9)
-    }
+    type ParameterCount = MethodParameterCount;
+    const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(9);
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |gc, args| {

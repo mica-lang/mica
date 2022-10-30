@@ -3,13 +3,16 @@
 use std::{collections::HashSet, fmt, rc::Rc};
 
 use super::{variables::VariableAllocation, CodeGenerator, ExpressionResult};
-use crate::ll::{
-    ast::{Ast, NodeId, NodeKind},
-    bytecode::{
-        Chunk, Environment, Function, FunctionIndex, FunctionKind, MethodIndex, MethodSignature,
-        Opcode, Opr24, TraitIndex,
+use crate::{
+    ll::{
+        ast::{Ast, NodeId, NodeKind},
+        bytecode::{
+            Chunk, Environment, Function, FunctionIndex, FunctionKind, MethodIndex,
+            MethodSignature, Opcode, Opr24, TraitIndex,
+        },
+        error::{Error, ErrorKind, Location, RenderedSignature},
     },
-    error::{Error, ErrorKind, Location, RenderedSignature},
+    FunctionParameterCount, MethodParameterCount,
 };
 
 pub struct TraitBuilder<'b> {
@@ -38,7 +41,7 @@ impl<'b> TraitBuilder<'b> {
         method_id: MethodIndex,
         method_signature: &MethodSignature,
     ) -> Result<FunctionIndex, ErrorKind> {
-        let arity = method_signature.arity.unwrap() as u8;
+        let parameter_count = method_signature.parameter_count.to_count_with_self();
 
         let (module_name, codegen_location) = if let Some(parent_chunk) = self.parent_chunk {
             (Rc::clone(&parent_chunk.module_name), parent_chunk.codegen_location)
@@ -48,14 +51,16 @@ impl<'b> TraitBuilder<'b> {
 
         let mut chunk = Chunk::new(module_name);
         chunk.codegen_location = codegen_location;
-        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), arity as u8))));
+        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), parameter_count as u8))));
         chunk.emit(Opcode::Return);
 
         let shim_name = Rc::from(format!("trait {trait_name}.{} <shim>", method_signature.name));
         let chunk = Rc::new(chunk);
         let function_id = self.env.create_function(Function {
             name: shim_name,
-            parameter_count: method_signature.arity,
+            parameter_count: FunctionParameterCount::Fixed(
+                method_signature.parameter_count.to_count_without_self() as u16,
+            ),
             kind: FunctionKind::Bytecode { chunk, captured_locals: vec![] },
             hidden_in_stack_traces: true,
         })?;
@@ -65,19 +70,24 @@ impl<'b> TraitBuilder<'b> {
 
     /// Adds a function into the trait and returns its method ID and function ID.
     ///
-    /// The arity does not include the `self` parameter.
-    pub fn add_method(&mut self, name: Rc<str>, arity: u16) -> Result<MethodIndex, ErrorKind> {
+    /// The parameter count does not include the `self` parameter.
+    pub fn add_method(
+        &mut self,
+        name: Rc<str>,
+        parameter_count: MethodParameterCount,
+    ) -> Result<MethodIndex, ErrorKind> {
         let trait_name = Rc::clone(&self.env.get_trait(self.trait_id).unwrap().name);
-        let signature = MethodSignature {
-            name,
-            arity: Some(arity.checked_add(1).ok_or(ErrorKind::TooManyParameters)?),
-            trait_id: Some(self.trait_id),
-        };
+        let signature = MethodSignature { name, parameter_count, trait_id: Some(self.trait_id) };
         let method_id = self.env.get_or_create_method_index(&signature)?;
 
+        let parameter_count_with_receiving_trait = MethodParameterCount::from_count_with_self(
+            parameter_count
+                .to_count_with_self()
+                .checked_add(1)
+                .ok_or(ErrorKind::TooManyParameters)?,
+        );
         let shim_signature = MethodSignature {
-            // Add 2 for the receiving trait and self.
-            arity: Some(arity.checked_add(2).ok_or(ErrorKind::TooManyParameters)?),
+            parameter_count: parameter_count_with_receiving_trait,
             trait_id: None,
             ..signature.clone()
         };
@@ -88,7 +98,7 @@ impl<'b> TraitBuilder<'b> {
         if !self.required_methods.insert(method_id) {
             return Err(ErrorKind::TraitAlreadyHasMethod(RenderedSignature {
                 name: signature.name,
-                arity: signature.arity,
+                parameter_count: signature.parameter_count.to_count_without_self(),
                 // Do not duplicate the trait name in the error message.
                 trait_name: None,
             }));
@@ -145,8 +155,8 @@ impl<'e> CodeGenerator<'e> {
                     let _method_id = builder
                         .add_method(
                             Rc::clone(ast.string(name).unwrap()),
-                            u16::try_from(ast.len(params).unwrap())
-                                .map_err(|_| ast.error(item, ErrorKind::TooManyParameters))?,
+                            MethodParameterCount::from_count_without_self(ast.len(params).unwrap())
+                                .map_err(|_| ast.error(params, ErrorKind::TooManyParameters))?,
                         )
                         .map_err(|e| ast.error(item, e))?;
                 }

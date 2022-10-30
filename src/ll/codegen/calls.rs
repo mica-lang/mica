@@ -3,10 +3,13 @@
 use std::rc::Rc;
 
 use super::{CodeGenerator, Expression, ExpressionResult};
-use crate::ll::{
-    ast::{Ast, NodeId, NodeKind},
-    bytecode::{MethodSignature, Opcode, Opr24},
-    error::{Error, ErrorKind},
+use crate::{
+    ll::{
+        ast::{Ast, NodeId, NodeKind},
+        bytecode::{MethodSignature, Opcode, Opr24},
+        error::{Error, ErrorKind},
+    },
+    MethodParameterCount,
 };
 
 impl<'e> CodeGenerator<'e> {
@@ -34,16 +37,18 @@ impl<'e> CodeGenerator<'e> {
                 }
 
                 // Construct the call.
-                let arity: u8 = (1 + arguments.len())
-                    // ↑ Add 1 for the receiver, which is also an argument.
-                    .try_into()
-                    .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
-                let signature = MethodSignature::new(Rc::clone(name), arity as u16);
+                let parameter_count =
+                    MethodParameterCount::from_count_without_self(arguments.len())
+                        .map_err(|_| ast.error(node, ErrorKind::TooManyArguments))?;
+                let signature = MethodSignature::new(Rc::clone(name), parameter_count);
                 let method_index = self
                     .env
                     .get_or_create_method_index(&signature)
                     .map_err(|kind| ast.error(node, kind))?;
-                self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), arity))));
+                self.chunk.emit((
+                    Opcode::CallMethod,
+                    Opr24::pack((method_index.to_u16(), parameter_count.to_count_with_self())),
+                ));
             }
             _ => {
                 self.generate_node(ast, function, Expression::Used)?;
@@ -73,7 +78,10 @@ impl<'e> CodeGenerator<'e> {
         if ast.kind(method) != NodeKind::Identifier {
             return Err(ast.error(method, ErrorKind::InvalidMethodName));
         }
-        let signature = MethodSignature::new(Rc::clone(ast.string(method).unwrap()), 1);
+        let signature = MethodSignature::new(
+            Rc::clone(ast.string(method).unwrap()),
+            MethodParameterCount::from_count_with_self(1),
+        );
         let method_index = self
             .env
             .get_or_create_method_index(&signature)

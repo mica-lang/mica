@@ -9,7 +9,7 @@ use super::{
 };
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
-    bytecode::{ImplementedTraitIndex, MethodSignature, Opcode, Prototype},
+    bytecode::{ImplementedTraitIndex, MethodParameterCount, MethodSignature, Opcode, Prototype},
     error::{Error, ErrorKind, RenderedSignature},
 };
 
@@ -90,15 +90,18 @@ impl<'e> CodeGenerator<'e> {
                     GenerateFunctionOptions { name: Rc::clone(&name), call_conv },
                 )?;
 
+                let parameter_count =
+                    MethodParameterCount::from_count_without_self(function.parameter_count)
+                        .map_err(|_| ast.error(parameters, ErrorKind::TooManyParameters))?;
                 if let Some(trait_index) = state.implemented_trait_index {
                     // For trait instance methods, method ID resolution is performed at runtime.
-                    let key = (Rc::clone(&name), 1 + function.parameter_count, trait_index);
+                    let key = (Rc::clone(&name), parameter_count, trait_index);
                     if state.proto.trait_instance.insert(key, function.id).is_some() {
                         return Err(ast.error(
                             name_node,
                             ErrorKind::MethodAlreadyImplemented(RenderedSignature {
                                 name,
-                                arity: Some(function.parameter_count),
+                                parameter_count: parameter_count.to_count_without_self(),
                                 // Note that we do not have a way of knowing the actual name of the
                                 // trait, so we simply don't display it.
                                 trait_name: None,
@@ -108,7 +111,7 @@ impl<'e> CodeGenerator<'e> {
                 } else {
                     // For regular instance methods, method ID resolution is performed during
                     // compilation.
-                    let signature = MethodSignature::new(name, 1 + function.parameter_count);
+                    let signature = MethodSignature::new(name, parameter_count);
                     let method_id = self
                         .env
                         .get_or_create_method_index(&signature)
@@ -124,7 +127,7 @@ impl<'e> CodeGenerator<'e> {
                             name_node,
                             ErrorKind::MethodAlreadyImplemented(RenderedSignature {
                                 name: signature.name,
-                                arity: Some(function.parameter_count),
+                                parameter_count: parameter_count.to_count_without_self(),
                                 trait_name: None,
                             }),
                         ));

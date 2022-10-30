@@ -41,7 +41,7 @@ impl std::fmt::Display for Location {
 pub struct RenderedSignature {
     pub name: Rc<str>,
     /// This arity number does not include the implicit `self` argument.
-    pub arity: Option<u16>,
+    pub parameter_count: u8,
     /// The index of the trait this signature belongs to.
     /// When `None`, the function is free and does not belong to any trait.
     pub trait_name: Option<Rc<str>>,
@@ -53,7 +53,7 @@ impl RenderedSignature {
     pub const INVALID_NAME: &'static str = "";
 
     pub fn invalid() -> Self {
-        Self { name: Rc::from(Self::INVALID_NAME), arity: None, trait_name: None }
+        Self { name: Rc::from(Self::INVALID_NAME), parameter_count: 0, trait_name: None }
     }
 
     pub fn is_invalid(&self) -> bool {
@@ -68,11 +68,7 @@ impl fmt::Display for RenderedSignature {
             return Ok(());
         }
 
-        if let Some(arity) = self.arity {
-            write!(f, "{}/{arity}", self.name)?;
-        } else {
-            write!(f, "{}/...", self.name)?;
-        }
+        write!(f, "{}/{}", self.name, self.parameter_count)?;
 
         if let Some(trait_name) = &self.trait_name {
             write!(f, " (as {trait_name})")?;

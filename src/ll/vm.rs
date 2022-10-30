@@ -5,8 +5,8 @@ use std::{collections::HashSet, fmt, pin::Pin, ptr, rc::Rc};
 use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, MethodIndex};
 use crate::ll::{
     bytecode::{
-        CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind, MethodSignature,
-        Opcode, PrototypeIndex, TraitIndex,
+        CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind,
+        MethodParameterCount, MethodSignature, Opcode, PrototypeIndex, TraitIndex,
     },
     error::{Error, ErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
@@ -409,19 +409,21 @@ impl Fiber {
 
     fn initialize_dtable_with_trait_methods(
         &mut self,
-        methods: impl Iterator<Item = (Rc<str>, u16, ImplementedTraitIndex, FunctionIndex)>,
+        methods: impl Iterator<
+            Item = (Rc<str>, MethodParameterCount, ImplementedTraitIndex, FunctionIndex),
+        >,
         traits: &[GcRaw<Trait>],
         env: &Environment,
         gc: &mut Memory,
         dtable: &mut DispatchTable,
         unimplemented_methods: &mut HashSet<MethodIndex>,
     ) -> Result<(), ErrorKind> {
-        for (name, arity, trait_index, function_id) in methods {
+        for (name, parameter_count, trait_index, function_id) in methods {
             let trait_handle = unsafe { traits[trait_index.to_usize()].get() };
             let trait_id = trait_handle.id;
             let method_signature = MethodSignature {
                 name: Rc::clone(&name),
-                arity: Some(arity),
+                parameter_count,
                 trait_id: Some(trait_id),
             };
             // NOTE: This should never panic because trait method indices are created during the
@@ -452,7 +454,11 @@ impl Fiber {
             methods.sort_unstable_by_key(|signature| {
                 // Maybe doing the Rc clones here isn't ideal, but this is the sad path which
                 // doesn't have to be The Fastest.
-                (signature.trait_name.clone(), Rc::clone(&signature.name), signature.arity)
+                (
+                    signature.trait_name.clone(),
+                    Rc::clone(&signature.name),
+                    signature.parameter_count,
+                )
             });
             return Err(ErrorKind::MethodsUnimplemented {
                 type_name: Rc::clone(&dtable.pretty_name),
@@ -729,15 +735,11 @@ impl Fiber {
                     } else {
                         let signature = env
                             .get_method_signature(method_index)
-                            .cloned()
-                            .unwrap_or_else(|| MethodSignature {
-                                name: Rc::from("(invalid method index)"),
-                                arity: None,
-                                trait_id: None,
-                            });
+                            .map(|signature| signature.render(env))
+                            .unwrap_or_else(RenderedSignature::invalid);
                         let error_kind = ErrorKind::MethodDoesNotExist {
                             type_name: Rc::clone(&dtable.pretty_name),
-                            signature: signature.render(env),
+                            signature,
                         };
                         return Err(self.error_outside_function_call(None, env, error_kind));
                     }

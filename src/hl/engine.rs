@@ -20,8 +20,8 @@ use crate::{
         value::{Closure, RawValue},
         vm::{self, Globals},
     },
-    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, MicaResultExt, TraitBuilder,
-    TryFromValue, TypeBuilder, UserData, Value,
+    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, FunctionParameterCount,
+    MethodParameterCount, MicaResultExt, TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
 };
 
 /// Options for debugging the language implementation.
@@ -317,17 +317,20 @@ impl Engine {
         let signature = self.env.get_method_signature(method_id.0).unwrap();
         let stack: Vec<_> =
             Some(receiver).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
-        let argument_count = u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?;
-        if Some(argument_count as u16) != signature.arity {
+        let argument_count = MethodParameterCount::from_count_with_self(
+            u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?,
+        );
+        if argument_count != signature.parameter_count {
             return Err(Error::ArgumentCount {
-                // Unwrapping here is fine because signatures of methods created by `to_method_id`
-                // always have a static arity.
-                expected: signature.arity.unwrap() as usize - 1,
-                got: argument_count as usize - 1,
+                expected: usize::from(signature.parameter_count.to_count_without_self()),
+                got: usize::from(argument_count.to_count_without_self()),
             });
         }
         let mut chunk = Chunk::new(Rc::from("(call)"));
-        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.0.to_u16(), argument_count))));
+        chunk.emit((
+            Opcode::CallMethod,
+            Opr24::pack((method_id.0.to_u16(), argument_count.to_count_with_self())),
+        ));
         chunk.emit(Opcode::Halt);
         let chunk = Rc::new(chunk);
         let fiber = Fiber { engine: self, inner: vm::Fiber::new(chunk, stack) };
@@ -434,7 +437,7 @@ impl Engine {
     /// let mut engine = Engine::new();
     /// engine.add_raw_function(
     ///     "a_raw_understanding",
-    ///     Some(0),
+    ///     0,
     ///     FunctionKind::Foreign(Box::new(|gc, arguments| {
     ///         Ok(RawValue::from(1.0))
     ///     })),
@@ -448,7 +451,7 @@ impl Engine {
     pub fn add_raw_function(
         &mut self,
         name: &str,
-        parameter_count: impl Into<Option<u16>>,
+        parameter_count: impl Into<FunctionParameterCount>,
         f: FunctionKind,
     ) -> Result<(), Error> {
         let global_id = name.to_global_id(&mut self.env)?;
@@ -457,7 +460,7 @@ impl Engine {
             .env
             .create_function(Function {
                 name: Rc::clone(&name),
-                parameter_count: parameter_count.into(), // doesn't matter for non-methods
+                parameter_count: parameter_count.into(),
                 kind: f,
                 hidden_in_stack_traces: false,
             })
@@ -487,11 +490,11 @@ impl Engine {
     pub fn add_function<F, V>(&mut self, name: &str, f: F) -> Result<(), Error>
     where
         V: ffvariants::BareMaybeVarargs,
-        F: ForeignFunction<V>,
+        F: ForeignFunction<V, ParameterCount = FunctionParameterCount>,
     {
         self.add_raw_function(
             name,
-            F::parameter_count(),
+            F::PARAMETER_COUNT,
             FunctionKind::Foreign(f.into_raw_foreign_function()),
         )
     }
@@ -656,7 +659,8 @@ impl MethodSignature for (&str, u8) {
     fn to_method_id(&self, env: &mut Environment) -> Result<MethodId, Error> {
         env.get_or_create_method_index(&bytecode::MethodSignature {
             name: Rc::from(self.0),
-            arity: Some(self.1 as u16 + 1),
+            parameter_count: MethodParameterCount::from_count_without_self(self.1)
+                .map_err(|_| Error::TooManyArguments)?,
             trait_id: None,
         })
         .map(MethodId)

@@ -6,7 +6,10 @@ use std::{
 };
 
 use super::{Environment, FunctionIndex, MethodIndex, TraitIndex};
-use crate::ll::{codegen::TraitBuilder, error::ErrorKind};
+use crate::{
+    ll::{codegen::TraitBuilder, error::ErrorKind},
+    MethodParameterCount,
+};
 
 /// The index of a trait in an `impl` block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,7 +33,8 @@ pub(crate) struct Prototype {
     /// List of implemented trait methods. Because an implemented trait in `as` can be any
     /// expression, we have no way of knowing what the method ID is going to be, so we have to map
     /// trait methods by `(name, arity, trait_index)` pairs rather than method ID.
-    pub(crate) trait_instance: HashMap<(Rc<str>, u16, ImplementedTraitIndex), FunctionIndex>,
+    pub(crate) trait_instance:
+        HashMap<(Rc<str>, MethodParameterCount, ImplementedTraitIndex), FunctionIndex>,
 
     /// Same as `instance`, but lists methods that are added to the type dtable rather than the
     /// instance dtable.
@@ -74,8 +78,10 @@ impl BuiltinTraits {
     /// Tries to register built-in traits in the given environment.
     fn try_register_in(env: &mut Environment) -> Result<Self, ErrorKind> {
         let mut builder = TraitBuilder::new(env, None, Rc::from("Iterator"))?;
-        let iterator_has_next = builder.add_method(Rc::from("has_next"), 0)?;
-        let iterator_next = builder.add_method(Rc::from("next"), 0)?;
+        let iterator_has_next = builder
+            .add_method(Rc::from("has_next"), MethodParameterCount::from_count_with_self(1))?;
+        let iterator_next =
+            builder.add_method(Rc::from("next"), MethodParameterCount::from_count_with_self(1))?;
         let (iterator, _) = builder.build();
 
         Ok(Self { iterator, iterator_has_next, iterator_next })

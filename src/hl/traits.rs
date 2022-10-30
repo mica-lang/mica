@@ -7,7 +7,7 @@ use crate::{
         gc::{Gc, Memory},
         value::create_trait,
     },
-    Error, Hidden, LanguageErrorKind, MethodId, Value,
+    Error, Hidden, LanguageErrorKind, MethodId, MethodParameterCount, Value,
 };
 
 /// Allows you to build traits programatically from Rust code.
@@ -73,7 +73,9 @@ pub struct TraitBuilder<'e> {
 impl<'e> TraitBuilder<'e> {
     /// Adds a new function requirement into the trait and returns its method ID, which can be used
     /// to call the function on values implementing the trait.
-    pub fn add_function(&mut self, name: &str, arity: u16) -> Result<MethodId, Error> {
+    pub fn add_function(&mut self, name: &str, arity: u8) -> Result<MethodId, Error> {
+        let arity = MethodParameterCount::from_count_without_self(arity)
+            .map_err(|_| Error::TooManyParametersInTraitMethod)?;
         self.inner.add_method(Rc::from(name), arity).map(MethodId).map_err(|e| match e {
             LanguageErrorKind::TooManyTraits => Error::TooManyTraits,
             LanguageErrorKind::TooManyFunctions => Error::TooManyFunctions,

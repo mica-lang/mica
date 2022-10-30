@@ -1,4 +1,4 @@
-use crate::{ll::value::RawValue, Arguments, RawFunctionKind, TypeBuilder};
+use crate::{ll::value::RawValue, Arguments, MethodParameterCount, RawFunctionKind, TypeBuilder};
 
 pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
     builder
@@ -8,7 +8,7 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
         // conversion to and from a safe Value, which is not zero-cost as of now.
         .add_raw_function(
             "get",
-            2,
+            MethodParameterCount::from_count_with_self(2),
             RawFunctionKind::Foreign(Box::new(|_, args| {
                 let arguments = Arguments::new(args);
                 let v =

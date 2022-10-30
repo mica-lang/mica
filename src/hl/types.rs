@@ -11,22 +11,23 @@ use crate::{
         gc::{Gc, Memory},
         value::{self, Closure},
     },
-    Error, ForeignFunction, Object, ObjectConstructor, RawForeignFunction, Value,
+    Error, ForeignFunction, FunctionParameterCount, MethodParameterCount, Object,
+    ObjectConstructor, RawForeignFunction, Value,
 };
 
 type Constructor<T> = Box<dyn FnOnce(Rc<dyn ObjectConstructor<T>>) -> RawForeignFunction>;
 
-struct UnresolvedFunctionSignature {
+struct UnresolvedMethodSignature {
     name: Rc<str>,
-    arity: Option<u16>,
+    parameter_count: MethodParameterCount,
     builtin_trait: BuiltinTrait,
 }
 
-impl UnresolvedFunctionSignature {
+impl UnresolvedMethodSignature {
     fn resolve(self, builtin_traits: &BuiltinTraits) -> MethodSignature {
         MethodSignature {
             name: self.name,
-            arity: self.arity,
+            parameter_count: self.parameter_count,
             trait_id: match self.builtin_trait {
                 BuiltinTrait::None => None,
                 BuiltinTrait::Iterator => Some(builtin_traits.iterator),
@@ -39,7 +40,7 @@ impl UnresolvedFunctionSignature {
 /// as their implementations.
 #[derive(Default)]
 pub(crate) struct DispatchTableDescriptor {
-    methods: Vec<(UnresolvedFunctionSignature, FunctionKind)>,
+    methods: Vec<(UnresolvedMethodSignature, FunctionKind)>,
 }
 
 impl DispatchTableDescriptor {
@@ -48,14 +49,16 @@ impl DispatchTableDescriptor {
         gc: &mut Memory,
         dtable: &mut DispatchTable,
         builtin_traits: &BuiltinTraits,
-        signature: UnresolvedFunctionSignature,
+        signature: UnresolvedMethodSignature,
         f: FunctionKind,
     ) -> Result<(), Error> {
         let name = Rc::from(format!("{}.{}", &dtable.pretty_name, signature.name));
         let function_id = env
             .create_function(Function {
                 name: Rc::clone(&name),
-                parameter_count: signature.arity,
+                parameter_count: FunctionParameterCount::Fixed(u16::from(
+                    signature.parameter_count.to_count_without_self(),
+                )),
                 kind: f,
                 hidden_in_stack_traces: false,
             })
@@ -108,7 +111,7 @@ where
     type_name: Rc<str>,
     type_dtable: DispatchTableDescriptor,
     instance_dtable: DispatchTableDescriptor,
-    constructors: Vec<(UnresolvedFunctionSignature, Constructor<T>)>,
+    constructors: Vec<(UnresolvedMethodSignature, Constructor<T>)>,
     _data: PhantomData<T>,
 }
 
@@ -152,6 +155,14 @@ where
         }
     }
 
+    /// Internal converter for use with `BareExactArgs` parameter counts.
+    fn function_to_method_parameter_count(count: FunctionParameterCount) -> MethodParameterCount {
+        MethodParameterCount::from_count_without_self(
+            count.to_fixed().expect("BareExactArgs functions are never varargs"),
+        )
+        .expect("generated ForeignFunction variants only support up to 8 arguments") // Thus, overflow is impossible.
+    }
+
     /// Adds a static function to the struct.
     ///
     /// The function must follow the "bare" calling convention, in that it doesn't accept a
@@ -181,11 +192,11 @@ where
     pub fn add_static<F, V>(self, name: &str, f: F) -> Self
     where
         V: ffvariants::BareExactArgs,
-        F: ForeignFunction<V>,
+        F: ForeignFunction<V, ParameterCount = FunctionParameterCount>,
     {
         self.add_raw_static(
             name,
-            F::parameter_count().expect("BareExactArgs functions must not be varargs") + 1,
+            Self::function_to_method_parameter_count(F::PARAMETER_COUNT),
             FunctionKind::Foreign(f.into_raw_foreign_function()),
         )
     }
@@ -203,11 +214,11 @@ where
         V: ffvariants::BareExactArgs,
         C: FnOnce(Rc<dyn ObjectConstructor<T>>) -> F,
         C: 'static,
-        F: ForeignFunction<V>,
+        F: ForeignFunction<V, ParameterCount = FunctionParameterCount>,
     {
         self.add_raw_constructor(
             name,
-            F::parameter_count().expect("BareExactArgs functions must not be varargs") + 1,
+            Self::function_to_method_parameter_count(F::PARAMETER_COUNT),
             Box::new(|ctor| f(ctor).into_raw_foreign_function()),
         )
     }
@@ -264,11 +275,11 @@ where
     pub fn add_function<F, V>(self, name: &str, f: F) -> Self
     where
         V: ffvariants::Method<T>,
-        F: ForeignFunction<V>,
+        F: ForeignFunction<V, ParameterCount = MethodParameterCount>,
     {
         self.add_raw_function(
             name,
-            F::parameter_count().expect("Method functions must not be varargs"),
+            F::PARAMETER_COUNT,
             FunctionKind::Foreign(f.into_raw_foreign_function()),
         )
     }
@@ -329,12 +340,12 @@ where
     pub fn add_builtin_trait_function<S, B, F>(mut self, which: B, f: F) -> Self
     where
         B: BuiltinTraitFunction<S>,
-        F: ForeignFunction<S>,
+        F: ForeignFunction<S, ParameterCount = MethodParameterCount>,
     {
         self.instance_dtable.methods.push((
-            UnresolvedFunctionSignature {
+            UnresolvedMethodSignature {
                 name: Rc::from(B::NAME),
-                arity: F::parameter_count(),
+                parameter_count: F::PARAMETER_COUNT,
                 builtin_trait: which.owning_trait(),
             },
             FunctionKind::Foreign(f.into_raw_foreign_function()),
@@ -350,11 +361,16 @@ where
     /// differently from function calls, because they match the parameter count exactly - it is
     /// impossible to call the method `my_method/2` with three parameters. Thus, you can expect
     /// the `arguments` array inside of foreign functions to always have `parameter_count` elements.
-    pub fn add_raw_function(mut self, name: &str, parameter_count: u16, f: FunctionKind) -> Self {
+    pub fn add_raw_function(
+        mut self,
+        name: &str,
+        parameter_count: MethodParameterCount,
+        f: FunctionKind,
+    ) -> Self {
         self.instance_dtable.methods.push((
-            UnresolvedFunctionSignature {
+            UnresolvedMethodSignature {
                 name: Rc::from(name),
-                arity: Some(parameter_count),
+                parameter_count,
                 builtin_trait: BuiltinTrait::None,
             },
             f,
@@ -370,11 +386,16 @@ where
     /// differently from function calls, because they match the parameter count exactly - it is
     /// impossible to call the method `my_method/2` with three parameters. Thus, you can expect
     /// the `arguments` array inside of foreign functions to always have `parameter_count` elements.
-    pub fn add_raw_static(mut self, name: &str, parameter_count: u16, f: FunctionKind) -> Self {
+    pub fn add_raw_static(
+        mut self,
+        name: &str,
+        parameter_count: MethodParameterCount,
+        f: FunctionKind,
+    ) -> Self {
         self.type_dtable.methods.push((
-            UnresolvedFunctionSignature {
+            UnresolvedMethodSignature {
                 name: Rc::from(name),
-                arity: Some(parameter_count),
+                parameter_count,
                 builtin_trait: BuiltinTrait::None,
             },
             f,
@@ -393,13 +414,13 @@ where
     pub fn add_raw_constructor(
         mut self,
         name: &str,
-        parameter_count: u16,
+        parameter_count: MethodParameterCount,
         f: Constructor<T>,
     ) -> Self {
         self.constructors.push((
-            UnresolvedFunctionSignature {
+            UnresolvedMethodSignature {
                 name: Rc::from(name),
-                arity: Some(parameter_count),
+                parameter_count,
                 builtin_trait: BuiltinTrait::None,
             },
             f,

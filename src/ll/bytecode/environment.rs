@@ -6,7 +6,10 @@ use std::{
 };
 
 use super::{BuiltinDispatchTables, Function, Opr24, Prototype, TraitPrototype};
-use crate::ll::error::{ErrorKind, RenderedSignature};
+use crate::{
+    ll::error::{ErrorKind, RenderedSignature},
+    MethodParameterCount,
+};
 
 /// The unique index of a function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,8 +49,8 @@ impl MethodIndex {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodSignature {
     pub name: Rc<str>,
-    /// This arity number does not include the implicit `self` argument.
-    pub arity: Option<u16>,
+    /// This arity number includes the implicit `self` parameter.
+    pub parameter_count: MethodParameterCount,
     /// The index of the trait this signature belongs to.
     /// When `None`, the function is free and does not belong to any trait.
     pub trait_id: Option<TraitIndex>,
@@ -55,8 +58,8 @@ pub struct MethodSignature {
 
 impl MethodSignature {
     /// Creates a new method signature for a method that does not belong to a trait.
-    pub fn new(name: impl Into<Rc<str>>, arity: impl Into<Option<u16>>) -> Self {
-        Self { name: name.into(), arity: arity.into(), trait_id: None }
+    pub fn new(name: Rc<str>, parameter_count: MethodParameterCount) -> Self {
+        Self { name, parameter_count, trait_id: None }
     }
 
     /// Renders this signature into one that can be formatted.
@@ -64,7 +67,7 @@ impl MethodSignature {
         RenderedSignature {
             name: Rc::clone(&self.name),
             // Subtract 1 to omit `self`.
-            arity: self.arity.map(|x| x - 1),
+            parameter_count: self.parameter_count.to_count_without_self(),
             trait_name: self
                 .trait_id
                 .and_then(|index| env.get_trait(index))

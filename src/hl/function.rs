@@ -1,3 +1,4 @@
+pub use crate::ll::bytecode::{FunctionParameterCount, MethodParameterCount};
 use crate::{
     ll::{gc::Memory, value::RawValue},
     Error, LanguageErrorKind, RawForeignFunction, TryFromValue, Value,
@@ -129,11 +130,17 @@ impl std::ops::Deref for RawSelf<'_> {
 /// multiple overlapping implementations of a trait for the same type. See [`ffvariants`] for more
 /// information.
 pub trait ForeignFunction<V> {
-    /// Returns the number of parameters this function has, or `None` if the function accepts a
-    /// variable number of arguments.
+    /// The type used for parameter counts in this kind of foreign functions.
+    ///
+    /// This is either [`FunctionParameterCount`] or [`MethodParameterCount`], depending on whether
+    /// a function is usable as a bare function or a method.
+    type ParameterCount;
+
+    /// The number of parameters this function has, or `None` if the function accepts a variable
+    /// number of arguments.
     ///
     /// The default implementation returns `None`.
-    fn parameter_count() -> Option<u16>;
+    const PARAMETER_COUNT: Self::ParameterCount;
 
     /// Converts the function to a `RawForeignFunction`.
     fn into_raw_foreign_function(self) -> RawForeignFunction;
@@ -259,9 +266,9 @@ where
     Err: std::error::Error + 'static,
     F: Fn(Arguments) -> Result<Ret, Err> + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        None
-    }
+    type ParameterCount = FunctionParameterCount;
+
+    const PARAMETER_COUNT: Self::ParameterCount = FunctionParameterCount::Varargs;
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |gc, args| {
@@ -277,9 +284,9 @@ where
     Ret: Into<Value> + 'static,
     F: Fn(Arguments) -> Ret + 'static,
 {
-    fn parameter_count() -> Option<u16> {
-        None
-    }
+    type ParameterCount = FunctionParameterCount;
+
+    const PARAMETER_COUNT: Self::ParameterCount = FunctionParameterCount::Varargs;
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |gc, args| Ok(self(Arguments::new(args)).into().to_raw(gc)))

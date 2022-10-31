@@ -274,7 +274,7 @@ where
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |env, gc, args| {
             self(Arguments::new(args, env))
-                .map(|value| value.into_value(Some(env)).to_raw(gc))
+                .map(|value| value.into_value_with_environment(env).to_raw(gc))
                 .map_err(|error| LanguageErrorKind::User(Box::new(error)))
         })
     }
@@ -291,7 +291,7 @@ where
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |env, gc, args| {
-            Ok(self(Arguments::new(args, env)).into_value(Some(env)).to_raw(gc))
+            Ok(self(Arguments::new(args, env)).into_value_with_environment(env).to_raw(gc))
         })
     }
 }

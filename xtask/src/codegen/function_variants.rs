@@ -76,7 +76,7 @@ fn generate_for_params(
         user_generic_params: &[("Ret")],
         user_generic_bounds: &[BOUND_RET],
         map_result_action: r#"
-            Ok(result.into_value(Some(env)).to_raw(gc))
+            Ok(result.into_value_with_environment(env).to_raw(gc))
         "#,
         self_mode: SelfMode::Disabled,
     };
@@ -90,7 +90,7 @@ fn generate_for_params(
         user_generic_params: &["Ret", "Err"],
         user_generic_bounds: &[BOUND_RET, BOUND_ERR],
         map_result_action: r#"
-            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value_with_environment(env).to_raw(gc)))
         "#,
         self_mode: SelfMode::Disabled,
     };

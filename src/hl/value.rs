@@ -4,6 +4,7 @@ use std::{any::type_name, borrow::Cow, fmt};
 
 pub use raw::*;
 
+use self::into_value::{DoesNotUseEngine, EngineUse, UsesEngine};
 use crate::{
     ll::{
         bytecode::{DispatchTable, Environment},
@@ -62,12 +63,28 @@ pub enum Value {
 impl Value {
     /// Creates a new value from any compatible type.
     ///
-    /// Note that this should only ever be used with types that can be created without the help of
+    /// Note that this can only ever be used with types that can be created without the help of
     /// an [`Engine`][crate::Engine]; in particular, this function is incapable of creating
-    /// **opaque** user data. See [`Engine::create_value`] for more information and a less limited
-    /// version.
-    pub fn new(from: impl IntoValue) -> Self {
-        from.into_value(None)
+    /// user data. See [`Engine::create_value`][crate::Engine::create_value] for more information
+    /// and a less limited version.
+    ///
+    /// # Examples
+    /// ```
+    /// use mica::Value;
+    ///
+    /// let value = Value::new(1.0);
+    /// ```
+    /// As mentioned before, [`Value::new`] cannot be used to create user data values:
+    /// ```compile_fail
+    /// use mica::Value;
+    ///
+    /// struct Example;
+    /// impl UserData for Example {}
+    ///
+    /// let value = Value::new(Example);
+    /// ```
+    pub fn new(from: impl IntoValue<EngineUse = DoesNotUseEngine>) -> Self {
+        from.into_value(&())
     }
 
     /// Returns the name of this value's type.
@@ -111,17 +128,72 @@ impl fmt::Display for Value {
     }
 }
 
+/// Helper types for [`IntoValue`].
+#[allow(missing_debug_implementations)]
+pub mod into_value {
+    use crate::ll::bytecode::Environment;
+
+    /// Marker for whether an implementation of [`IntoValue`][crate::IntoValue] requires an engine.
+    pub trait EngineUse {
+        #[doc(hidden)]
+        type Environment;
+
+        #[doc(hidden)]
+        fn change_type(env: &Environment) -> &Self::Environment;
+    }
+
+    /// Marker for implementations of [`IntoValue`][crate::IntoValue] that do require an engine.
+    pub enum UsesEngine {}
+
+    impl EngineUse for UsesEngine {
+        type Environment = Environment;
+
+        fn change_type(env: &Environment) -> &Self::Environment {
+            env
+        }
+    }
+
+    /// Marker for implementations of [`IntoValue`][crate::IntoValue] that can be called without an
+    /// engine.
+    pub enum DoesNotUseEngine {}
+
+    impl EngineUse for DoesNotUseEngine {
+        type Environment = ();
+
+        fn change_type(_: &Environment) -> &Self::Environment {
+            &()
+        }
+    }
+}
+
 /// Trait implemented by all types that can be converted into [`Value`]s and may require an engine
 /// to do so.
+///
+/// For performing the conversion, see [`Value::new`] and
+/// [`Engine::create_value`][crate::Engine::create_value].
 pub trait IntoValue {
+    /// Specifies whether this implementation of [`IntoValue`] uses an engine or not.
+    type EngineUse: into_value::EngineUse;
+
     /// Performs the conversion.
-    ///
-    /// This must succeed regardless of whether an environment was provided or not.
-    fn into_value(self, env: Option<&Environment>) -> Value;
+    #[doc(hidden)]
+    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Environment) -> Value;
+
+    /// Performs the conversion providing an environment, regardless of whether the conversion
+    /// requires one or not.
+    #[doc(hidden)]
+    fn into_value_with_environment(self, env: &Environment) -> Value
+    where
+        Self: Sized,
+    {
+        self.into_value(<Self::EngineUse as EngineUse>::change_type(env))
+    }
 }
 
 impl IntoValue for Value {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         self
     }
 }
@@ -129,20 +201,26 @@ impl IntoValue for Value {
 /// **NOTE:** You should generally avoid dealing with raw values.
 #[doc(hidden)]
 impl IntoValue for RawValue {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::from_raw(self)
     }
 }
 
 /// The unit type translates to `Value::Nil`.
 impl IntoValue for () {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::Nil
     }
 }
 
 impl IntoValue for bool {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         match self {
             true => Value::True,
             false => Value::False,
@@ -154,7 +232,9 @@ macro_rules! value_from_number {
     ($T:ty $(, $doc:literal)?) => {
         $(#[doc = $doc])?
         impl IntoValue for $T {
-            fn into_value(self, _: Option<&Environment>) -> Value {
+            type EngineUse = DoesNotUseEngine;
+
+            fn into_value(self, _: &()) -> Value {
                 Value::Number(self as f64)
             }
         }
@@ -177,25 +257,33 @@ value_from_number!(f32);
 value_from_number!(f64);
 
 impl IntoValue for char {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::String(Gc::new(self.to_string()))
     }
 }
 
 impl IntoValue for &str {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::String(Gc::new(self.to_string()))
     }
 }
 
 impl IntoValue for String {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::String(Gc::new(self))
     }
 }
 
 impl IntoValue for Gc<String> {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::String(self)
     }
 }
@@ -204,7 +292,9 @@ impl<T> IntoValue for Option<T>
 where
     T: IntoValue,
 {
-    fn into_value(self, env: Option<&Environment>) -> Value {
+    type EngineUse = T::EngineUse;
+
+    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Environment) -> Value {
         match self {
             Some(value) => value.into_value(env),
             None => Value::Nil,
@@ -217,7 +307,9 @@ where
 /// vector.
 #[doc(hidden)]
 impl IntoValue for Vec<RawValue> {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::List(Hidden(Gc::new(List::new(self))))
     }
 }
@@ -226,30 +318,24 @@ impl IntoValue for Vec<RawValue> {
 /// (for `From<Vec<RawValue>>`).
 #[doc(hidden)]
 impl IntoValue for Dict {
-    fn into_value(self, _: Option<&Environment>) -> Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
         Value::Dict(Hidden(Gc::new(self)))
     }
 }
 
-/// # User data
-///
-/// Creating values from types implementing user data is only done _properly_ if an environment is
-/// provided and the type was registered in the engine the environment belongs to.
-///
-/// If both those conditions are not met, the user data returned will be an opaque *ad hoc* object,
-/// which means that basically nothing can be done with it within Mica (hence the name *opaque*).
-/// Rust functions will still be able to receive the object as arguments but the type will have an
-/// unfriendly name in error messages (as returned by [`std::any::type_name`].)
 impl<T> IntoValue for T
 where
     T: crate::UserData,
 {
-    fn into_value(self, env: Option<&Environment>) -> Value {
-        let dtable =
-            env.and_then(|env| env.get_user_dtable::<T>()).map(Gc::clone).unwrap_or_else(|| {
-                let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
-                Gc::new(ad_hoc_dtable)
-            });
+    type EngineUse = UsesEngine;
+
+    fn into_value(self, env: &Environment) -> Value {
+        let dtable = env.get_user_dtable::<T>().map(Gc::clone).unwrap_or_else(|| {
+            let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
+            Gc::new(ad_hoc_dtable)
+        });
         let object = Object::new(Gc::as_raw(&dtable), self);
         Value::UserData(Gc::new(Box::new(object)))
     }

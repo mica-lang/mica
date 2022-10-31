@@ -88,9 +88,14 @@ impl DispatchTableDescriptor {
 /// in conjunction with [`Engine::add_type`][crate::Engine::add_type], serves as an extension point
 /// to let Mica programs interact with Rust data.
 ///
+/// # Opaque user data
+///
 /// Rust values passed into Mica VMs by default are **opaque**, which means they possess no Mica
-/// type information - only what is already known inside of Rust. Opaque values do not have any
-/// methods and have unfriendly type names (as returned by [`std::any::type_name`]).
+/// type information. Opaque values do not have any methods and have unfriendly type names (as
+/// returned by [`std::any::type_name`]).
+///
+/// Opaque user data do possess Rust's runtime type information however, so it's possible to pass
+/// them back into arguments of Rust functions available in Mica.
 pub struct TypeBuilder<T>
 where
     T: ?Sized,

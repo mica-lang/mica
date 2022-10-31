@@ -337,11 +337,15 @@ impl Engine {
         fiber.trampoline()
     }
 
-    /// Creates a new value using extra information known to the engine.
+    /// Creates a new value that is potentially user data.
     ///
-    /// This is important to use when creating instances of user data. If [`Value::new`] is used
-    /// instead, an opaque instance will be created - that is, one without access to any methods,
-    /// because only the engine has access to dispatch tables that provide types with methods.
+    /// User data values need to retrieve type information from the engine upon their creation,
+    /// which prevents them from being created by [`Value::new`] which does not possess the same
+    /// information.
+    ///
+    /// Also of note is that because the type information is retrieved _during creation_, so the
+    /// type must be [registered][Self::add_type] inside the engine by then; otherwise you'll get
+    /// an opaque user data value.
     ///
     /// # Examples
     /// ```
@@ -361,25 +365,23 @@ impl Engine {
     ///         .add_function("value", |cell: &Cell| cell.value.clone()),
     /// )?;
     ///
+    /// // The following will not work, because `Value::new` does not have access to
+    /// // Mica type information:
+    /// // let cell = Value::new(Cell { value: Value::new(1.0) });
+    ///
+    /// // The following though, will:
     /// let cell = engine.create_value(Cell { value: Value::new(1.0) });
-    /// let opaque_cell = Value::new(Cell { value: Value::new(1.0) });
-    /// engine.set("visible", cell)?;
-    /// engine.set("opaque", opaque_cell)?;
+    /// engine.set("one", cell)?;
     ///
     /// let okay: Result<Value, _> = engine
-    ///     .start("okay.mi", "assert(visible.value == 1)")?
+    ///     .start("okay.mi", "assert(one.value == 1)")?
     ///     .trampoline();
     /// assert!(okay.is_ok());
-    ///
-    /// let bad: Result<Value, _> = engine
-    ///     .start("bad.mi", "opaque.value")? // Will fail because opaque does not implement value/0
-    ///     .trampoline();
-    /// assert!(bad.is_err());
     /// # Ok(())
     /// # }
     /// ```
     pub fn create_value(&self, from: impl IntoValue) -> Value {
-        from.into_value(Some(&self.env))
+        from.into_value_with_environment(&self.env)
     }
 
     /// Returns the unique global ID for the global with the given name, or an error if there
@@ -428,7 +430,7 @@ impl Engine {
     /// ```
     pub fn set(&mut self, id: impl GlobalName, value: impl IntoValue) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into_value(Some(&self.env)).to_raw(&mut self.gc));
+        self.globals.set(id.0, value.into_value_with_environment(&self.env).to_raw(&mut self.gc));
         Ok(())
     }
 

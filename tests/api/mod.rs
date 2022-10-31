@@ -1,5 +1,6 @@
 use std::fmt::Display;
 
+mod functions;
 mod stress;
 mod traits;
 

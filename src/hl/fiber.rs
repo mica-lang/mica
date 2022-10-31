@@ -19,7 +19,7 @@ impl<'e> Fiber<'e> {
         } else {
             let Engine { env, globals, gc, .. } = &mut self.engine;
             let result = self.inner.interpret(env, globals, gc)?;
-            Ok(Some(T::try_from_value(&Value::from_raw(result))?))
+            Ok(Some(T::try_from_value(&Value::from_raw(result), &self.engine.env)?))
         }
     }
 
@@ -31,11 +31,11 @@ impl<'e> Fiber<'e> {
     where
         T: TryFromValue,
     {
-        let mut result = Value::from(());
+        let mut result = Value::Nil;
         while let Some(v) = self.resume()? {
             result = v;
         }
-        T::try_from_value(&result)
+        T::try_from_value(&result, &self.engine.env)
     }
 }
 

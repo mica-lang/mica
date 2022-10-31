@@ -1,15 +1,17 @@
 mod raw;
 
-use std::{any::Any, borrow::Cow, fmt};
+use std::{any::type_name, borrow::Cow, fmt};
 
 pub use raw::*;
 
+use self::into_value::{DoesNotUseEngine, EngineUse, UsesEngine};
 use crate::{
     ll::{
+        bytecode::{DispatchTable, Environment},
         gc::Gc,
-        value::{self, Closure, Dict, List, RawValue, Struct, Trait, UserData},
+        value::{self, Closure, Dict, List, RawValue, Struct, Trait},
     },
-    Error, Object,
+    Error, Object, UserData,
 };
 
 /// A GC'd type whose content cannot be safely accessed.
@@ -55,10 +57,36 @@ pub enum Value {
     /// Dicts are opaque to the Rust API, no conversion function currently exists for them.
     Dict(Hidden<Dict>),
     /// Arbitrarily typed user data.
-    UserData(Gc<Box<dyn UserData>>),
+    UserData(Gc<Box<dyn value::UserData>>),
 }
 
 impl Value {
+    /// Creates a new value from any compatible type.
+    ///
+    /// Note that this can only ever be used with types that can be created without the help of
+    /// an [`Engine`][crate::Engine]; in particular, this function is incapable of creating
+    /// user data. See [`Engine::create_value`][crate::Engine::create_value] for more information
+    /// and a less limited version.
+    ///
+    /// # Examples
+    /// ```
+    /// use mica::Value;
+    ///
+    /// let value = Value::new(1.0);
+    /// ```
+    /// As mentioned before, [`Value::new`] cannot be used to create user data values:
+    /// ```compile_fail
+    /// use mica::Value;
+    ///
+    /// struct Example;
+    /// impl UserData for Example {}
+    ///
+    /// let value = Value::new(Example);
+    /// ```
+    pub fn new(from: impl IntoValue<EngineUse = DoesNotUseEngine>) -> Self {
+        from.into_value(&())
+    }
+
     /// Returns the name of this value's type.
     pub fn type_name(&self) -> &str {
         match self {
@@ -100,26 +128,102 @@ impl fmt::Display for Value {
     }
 }
 
+/// Helper types for [`IntoValue`].
+#[allow(missing_debug_implementations)]
+pub mod into_value {
+    use crate::ll::bytecode::Environment;
+
+    /// Marker for whether an implementation of [`IntoValue`][crate::IntoValue] requires an engine.
+    pub trait EngineUse {
+        #[doc(hidden)]
+        type Environment;
+
+        #[doc(hidden)]
+        fn change_type(env: &Environment) -> &Self::Environment;
+    }
+
+    /// Marker for implementations of [`IntoValue`][crate::IntoValue] that do require an engine.
+    pub enum UsesEngine {}
+
+    impl EngineUse for UsesEngine {
+        type Environment = Environment;
+
+        fn change_type(env: &Environment) -> &Self::Environment {
+            env
+        }
+    }
+
+    /// Marker for implementations of [`IntoValue`][crate::IntoValue] that can be called without an
+    /// engine.
+    pub enum DoesNotUseEngine {}
+
+    impl EngineUse for DoesNotUseEngine {
+        type Environment = ();
+
+        fn change_type(_: &Environment) -> &Self::Environment {
+            &()
+        }
+    }
+}
+
+/// Trait implemented by all types that can be converted into [`Value`]s and may require an engine
+/// to do so.
+///
+/// For performing the conversion, see [`Value::new`] and
+/// [`Engine::create_value`][crate::Engine::create_value].
+pub trait IntoValue {
+    /// Specifies whether this implementation of [`IntoValue`] uses an engine or not.
+    type EngineUse: into_value::EngineUse;
+
+    /// Performs the conversion.
+    #[doc(hidden)]
+    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Environment) -> Value;
+
+    /// Performs the conversion providing an environment, regardless of whether the conversion
+    /// requires one or not.
+    #[doc(hidden)]
+    fn into_value_with_environment(self, env: &Environment) -> Value
+    where
+        Self: Sized,
+    {
+        self.into_value(<Self::EngineUse as EngineUse>::change_type(env))
+    }
+}
+
+impl IntoValue for Value {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        self
+    }
+}
+
 /// **NOTE:** You should generally avoid dealing with raw values.
 #[doc(hidden)]
-impl From<RawValue> for Value {
-    fn from(raw: RawValue) -> Self {
-        Self::from_raw(raw)
+impl IntoValue for RawValue {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::from_raw(self)
     }
 }
 
 /// The unit type translates to `Value::Nil`.
-impl From<()> for Value {
-    fn from(_: ()) -> Self {
-        Self::Nil
+impl IntoValue for () {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::Nil
     }
 }
 
-impl From<bool> for Value {
-    fn from(b: bool) -> Self {
-        match b {
-            true => Self::True,
-            false => Self::False,
+impl IntoValue for bool {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        match self {
+            true => Value::True,
+            false => Value::False,
         }
     }
 }
@@ -127,9 +231,11 @@ impl From<bool> for Value {
 macro_rules! value_from_number {
     ($T:ty $(, $doc:literal)?) => {
         $(#[doc = $doc])?
-        impl From<$T> for Value {
-            fn from(x: $T) -> Self {
-                Value::Number(x as f64)
+        impl IntoValue for $T {
+            type EngineUse = DoesNotUseEngine;
+
+            fn into_value(self, _: &()) -> Value {
+                Value::Number(self as f64)
             }
         }
     };
@@ -150,37 +256,47 @@ value_from_number!(usize, "**NOTE:** This is a lossy conversion, as an `f64` can
 value_from_number!(f32);
 value_from_number!(f64);
 
-impl From<char> for Value {
-    fn from(c: char) -> Self {
-        Self::from(c.to_string())
+impl IntoValue for char {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::String(Gc::new(self.to_string()))
     }
 }
 
-impl From<&str> for Value {
-    fn from(s: &str) -> Self {
-        Self::String(Gc::new(s.to_string()))
+impl IntoValue for &str {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::String(Gc::new(self.to_string()))
     }
 }
 
-impl From<String> for Value {
-    fn from(s: String) -> Self {
-        Self::String(Gc::new(s))
+impl IntoValue for String {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::String(Gc::new(self))
     }
 }
 
-impl From<Gc<String>> for Value {
-    fn from(s: Gc<String>) -> Self {
-        Self::String(s)
+impl IntoValue for Gc<String> {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::String(self)
     }
 }
 
-impl<T> From<Option<T>> for Value
+impl<T> IntoValue for Option<T>
 where
-    T: Into<Value>,
+    T: IntoValue,
 {
-    fn from(opt: Option<T>) -> Self {
-        match opt {
-            Some(value) => value.into(),
+    type EngineUse = T::EngineUse;
+
+    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Environment) -> Value {
+        match self {
+            Some(value) => value.into_value(env),
             None => Value::Nil,
         }
     }
@@ -190,38 +306,48 @@ where
 /// cause you a bad time if you feed temporary `Value`s converted into `RawValue`s into the
 /// vector.
 #[doc(hidden)]
-impl From<Vec<RawValue>> for Value {
-    fn from(v: Vec<RawValue>) -> Self {
-        Value::List(Hidden(Gc::new(List::new(v))))
+impl IntoValue for Vec<RawValue> {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::List(Hidden(Gc::new(List::new(self))))
     }
 }
 
 /// **NOTE:** Again, you should avoid dealing with raw values. See comment above
 /// (for `From<Vec<RawValue>>`).
 #[doc(hidden)]
-impl From<Dict> for Value {
-    fn from(d: Dict) -> Self {
-        Value::Dict(Hidden(Gc::new(d)))
+impl IntoValue for Dict {
+    type EngineUse = DoesNotUseEngine;
+
+    fn into_value(self, _: &()) -> Value {
+        Value::Dict(Hidden(Gc::new(self)))
     }
 }
 
-impl<T> From<Object<T>> for Value
+impl<T> IntoValue for T
 where
-    T: Any,
+    T: UserData,
 {
-    fn from(o: Object<T>) -> Self {
-        let user_data: Box<dyn value::UserData> = Box::new(o);
-        Self::UserData(Gc::new(user_data))
+    type EngineUse = UsesEngine;
+
+    fn into_value(self, env: &Environment) -> Value {
+        let dtable = env.get_user_dtable::<T>().map(Gc::clone).unwrap_or_else(|| {
+            let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
+            Gc::new(ad_hoc_dtable)
+        });
+        let object = Object::new(Gc::as_raw(&dtable), self);
+        Value::UserData(Gc::new(Box::new(object)))
     }
 }
 
-/// Implemented by types that can be constructed from [`Value`]s.
+/// Implemented by types that can be constructed as owned from [`Value`]s.
 pub trait TryFromValue
 where
     Self: Sized,
 {
     /// Tries to perform the conversion, returning an [`Error`] on failure.
-    fn try_from_value(value: &Value) -> Result<Self, Error>;
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error>;
 }
 
 fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
@@ -229,7 +355,7 @@ fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
 }
 
 impl TryFromValue for Value {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         Ok(value.clone())
     }
 }
@@ -239,13 +365,13 @@ impl TryFromValue for Value {
 /// and cause memory safety issues.
 #[doc(hidden)]
 impl TryFromValue for RawValue {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         Ok(value.to_raw_unmanaged())
     }
 }
 
 impl TryFromValue for () {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         if let Value::Nil = value {
             Ok(())
         } else {
@@ -255,7 +381,7 @@ impl TryFromValue for () {
 }
 
 impl TryFromValue for bool {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         match value {
             Value::True => Ok(true),
             Value::False => Ok(false),
@@ -267,7 +393,7 @@ impl TryFromValue for bool {
 macro_rules! try_from_value_numeric {
     ($T:ty) => {
         impl TryFromValue for $T {
-            fn try_from_value(value: &Value) -> Result<Self, Error> {
+            fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
                 if let Value::Number(number) = value {
                     Ok(*number as $T)
                 } else {
@@ -294,7 +420,7 @@ try_from_value_numeric!(f32);
 try_from_value_numeric!(f64);
 
 impl TryFromValue for Gc<String> {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
         if let Value::String(s) = value {
             Ok(Gc::clone(s))
         } else {
@@ -304,8 +430,8 @@ impl TryFromValue for Gc<String> {
 }
 
 impl TryFromValue for String {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
-        <Gc<String>>::try_from_value(value).map(|s| s.to_string())
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+        <Gc<String>>::try_from_value(value, env).map(|s| s.to_string())
     }
 }
 
@@ -313,10 +439,10 @@ impl<T> TryFromValue for Option<T>
 where
     T: TryFromValue,
 {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         match value {
             Value::Nil => Ok(None),
-            _ => Ok(Some(T::try_from_value(value).map_err(|error| {
+            _ => Ok(Some(T::try_from_value(value, env).map_err(|error| {
                 if let Error::TypeMismatch { expected, got } = error {
                     Error::TypeMismatch { expected: format!("{} or Nil", expected).into(), got }
                 } else {
@@ -331,16 +457,42 @@ impl<T> TryFromValue for Vec<T>
 where
     T: TryFromValue,
 {
-    fn try_from_value(value: &Value) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         if let Value::List(l) = value {
             let elements = unsafe { l.0.as_slice() };
             let mut result = vec![];
             for &element in elements {
-                result.push(T::try_from_value(&Value::from_raw(element))?);
+                result.push(T::try_from_value(&Value::from_raw(element), env)?);
             }
             Ok(result)
         } else {
             Err(type_mismatch("List", value))
         }
+    }
+}
+
+/// It is possible to accept arbitrary types implementing [`UserData`] as parameters to functions,
+/// however some limitations apply:
+/// - The [`UserData`] **must** implement [`Clone`].
+/// - The [`UserData`] **should** be registered inside the engine the value comes from.
+///   - If the user data is *ad hoc* (not registered in the engine,) type errors will be less clear
+///     as the full Rust type name will be used.
+impl<T> TryFromValue for T
+where
+    T: UserData + Clone,
+{
+    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+        if let Value::UserData(u) = value {
+            if let Some(object) = u.as_any().downcast_ref::<Object<T>>() {
+                let (object, _guard) = unsafe { object.unsafe_borrow()? };
+                return Ok(object.clone());
+            }
+        }
+        let type_name = if let Some(dtable) = env.get_user_dtable::<T>() {
+            dtable.type_name.to_string()
+        } else {
+            type_name::<T>().to_string()
+        };
+        Err(type_mismatch(type_name, value))
     }
 }

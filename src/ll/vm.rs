@@ -277,7 +277,7 @@ impl Fiber {
             FunctionKind::Foreign(f) => {
                 let arguments =
                     unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
-                let result = match f(gc, arguments) {
+                let result = match f(env, gc, arguments) {
                     Ok(value) => value,
                     Err(kind) => {
                         return Err(self.error_outside_function_call(Some(closure), env, kind));

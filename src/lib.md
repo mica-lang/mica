@@ -261,9 +261,7 @@ engine.add_type(
     // The argument passed to TypeBuilder::new is the name of the global that we want to bind the
     // type under.
     TypeBuilder::<Counter>::new("Counter")
-        .add_constructor("new", |ctor| move |value: usize, increment: usize| {
-            ctor.construct(Counter { value, increment })
-        })
+        .add_static("new", |value, increment| Counter { value, increment })
         .add_function("value", Counter::value)
         .add_function("increment", Counter::increment)
 );
@@ -309,7 +307,7 @@ let get_greeting =
             "#
         )?
         .trampoline()?;
-let greeting: String = engine.call(get_greeting, [Value::from("world")])?;
+let greeting: String = engine.call(get_greeting, [Value::new("world")])?;
 assert_eq!(greeting, "Hello, world!");
 # Ok(())
 # }
@@ -336,8 +334,8 @@ let greeter_type =
             "#
         )?
         .trampoline()?;
-let greeter = engine.call_method(greeter_type, ("new", 1), [Value::from("Hello, {target}!")])?;
-let greeting: String = engine.call_method(greeter, ("greetings", 1), [Value::from("world")])?;
+let greeter = engine.call_method(greeter_type, ("new", 1), [Value::new("Hello, {target}!")])?;
+let greeting: String = engine.call_method(greeter, ("greetings", 1), [Value::new("world")])?;
 assert_eq!(greeting, "Hello, world!");
 # Ok(())
 # }

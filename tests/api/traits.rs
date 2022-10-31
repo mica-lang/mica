@@ -18,7 +18,7 @@ fn exposing_traits_from_rust() {
         .trampoline()
         .reveal();
 
-    let _: Value = engine.call_method(game.clone(), m_draw, [Value::from(0.1666)]).reveal();
+    let _: Value = engine.call_method(game.clone(), m_draw, [Value::new(0.1666)]).reveal();
     let _: Value = engine.call_method(game.clone(), m_update, []).reveal();
 
     let did_draw: bool = engine.call_method(game.clone(), ("did_draw", 0), []).reveal();
@@ -58,9 +58,7 @@ fn binding_type_that_implements_builtin_traits() {
     engine
         .add_type(
             TypeBuilder::<CountUp>::new("CountUp")
-                .add_constructor("new", |ctor| {
-                    move |from, to| ctor.construct(CountUp::new(from, to))
-                })
+                .add_static("new", CountUp::new)
                 .add_builtin_trait_function(iterator::HasNext, CountUp::has_next)
                 .add_builtin_trait_function(iterator::Next, CountUp::next),
         )

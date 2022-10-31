@@ -20,7 +20,7 @@ use crate::{
         value::{Closure, RawValue},
         vm::{self, Globals},
     },
-    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, FunctionParameterCount,
+    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, FunctionParameterCount, IntoValue,
     MethodParameterCount, MicaResultExt, TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
 };
 
@@ -219,7 +219,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     /// let f: Value = engine.start("example.mi", r#" (func (x) = x + 2) "#)?.trampoline()?;
-    /// let result: f64 = engine.call(f, [Value::from(1.0)])?;
+    /// let result: f64 = engine.call(f, [Value::new(1.0)])?;
     /// assert_eq!(result, 3.0);
     /// # Ok(())
     /// # }
@@ -337,6 +337,57 @@ impl Engine {
         fiber.trampoline()
     }
 
+    /// Creates a new value that is potentially user data.
+    ///
+    /// User data values need to retrieve type information from the engine upon their creation,
+    /// which prevents them from being created by [`Value::new`] which does not possess the same
+    /// information.
+    ///
+    /// Also of note is that because the type information is retrieved _during creation_, so the
+    /// type must be [registered][Self::add_type] inside the engine by then; otherwise you'll get
+    /// an opaque user data value.
+    ///
+    /// This needn't be used for user data returned from functions added into the VM, because the
+    /// engine automatically does the full conversion under the hood.
+    /// <!-- Of course it has to, otherwise the code wouldn't compile. Ha. -->
+    ///
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, TypeBuilder, UserData, Value};
+    ///
+    /// struct Cell {
+    ///     value: Value,
+    /// }
+    ///
+    /// impl UserData for Cell {}
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.add_type(
+    ///     TypeBuilder::<Cell>::new("Cell")
+    ///         .add_static("new", |value| Cell { value })
+    ///         .add_function("value", |cell: &Cell| cell.value.clone()),
+    /// )?;
+    ///
+    /// // The following will not work, because `Value::new` does not have access to
+    /// // Mica type information:
+    /// // let cell = Value::new(Cell { value: Value::new(1.0) });
+    ///
+    /// // The following though, will:
+    /// let cell = engine.create_value(Cell { value: Value::new(1.0) });
+    /// engine.set("one", cell)?;
+    ///
+    /// let okay: Result<Value, _> = engine
+    ///     .start("okay.mi", "assert(one.value == 1)")?
+    ///     .trampoline();
+    /// assert!(okay.is_ok());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn create_value(&self, from: impl IntoValue) -> Value {
+        from.into_value_with_environment(&self.env)
+    }
+
     /// Returns the unique global ID for the global with the given name, or an error if there
     /// are too many globals in scope.
     ///
@@ -381,9 +432,9 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set(&mut self, id: impl GlobalName, value: impl Into<Value>) -> Result<(), Error> {
+    pub fn set(&mut self, id: impl GlobalName, value: impl IntoValue) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into().to_raw(&mut self.gc));
+        self.globals.set(id.0, value.into_value_with_environment(&self.env).to_raw(&mut self.gc));
         Ok(())
     }
 
@@ -410,9 +461,9 @@ impl Engine {
         T: TryFromValue,
     {
         if let Some(id) = id.try_to_global_id(&self.env) {
-            T::try_from_value(&Value::from_raw(self.globals.get(id.0)))
+            T::try_from_value(&Value::from_raw(self.globals.get(id.0)), &self.env)
         } else {
-            T::try_from_value(&Value::from_raw(RawValue::from(())))
+            T::try_from_value(&Value::from_raw(RawValue::from(())), &self.env)
         }
     }
 
@@ -438,7 +489,7 @@ impl Engine {
     /// engine.add_raw_function(
     ///     "a_raw_understanding",
     ///     0,
-    ///     FunctionKind::Foreign(Box::new(|gc, arguments| {
+    ///     FunctionKind::Foreign(Box::new(|env, gc, arguments| {
     ///         Ok(RawValue::from(1.0))
     ///     })),
     /// );

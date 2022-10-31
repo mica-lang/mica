@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use super::Chunk;
+use super::{Chunk, Environment};
 use crate::ll::{
     codegen::variables::{LocalIndex, UpvalueIndex},
     error::LanguageErrorKind,
@@ -21,7 +21,7 @@ pub enum CaptureKind {
 
 /// The signature of a raw foreign function.
 pub type ForeignFunction =
-    Box<dyn Fn(&mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind>>;
+    Box<dyn Fn(&Environment, &mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind>>;
 
 /// The kind of a controlling function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

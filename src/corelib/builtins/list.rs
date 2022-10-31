@@ -9,8 +9,8 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
         .add_raw_function(
             "get",
             MethodParameterCount::from_count_with_self(2),
-            RawFunctionKind::Foreign(Box::new(|_, args| {
-                let arguments = Arguments::new(args);
+            RawFunctionKind::Foreign(Box::new(|env, _, args| {
+                let arguments = Arguments::new(args, env);
                 let v =
                     unsafe { &mut *arguments.raw_self().get_raw_list_unchecked().get().get_mut() };
                 let index = arguments.nth(0).unwrap().ensure_number()? as usize;

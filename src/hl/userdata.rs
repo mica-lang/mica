@@ -20,7 +20,7 @@ pub trait UserData: Any {}
 
 /// A type. This is used to represent user-defined Rust types in the VM (but not their instances).
 #[derive(Debug)]
-pub struct Type<T> {
+pub(crate) struct Type<T> {
     dtable: Gc<DispatchTable>,
     _data: PhantomData<T>,
 }
@@ -44,22 +44,13 @@ where
     }
 }
 
-/// A constructor of objects of type `T`.
-///
-/// See [`TypeBuilder::add_constructor`][`crate::TypeBuilder::add_constructor`] for how this is
-/// used.
-pub trait ObjectConstructor<T> {
-    /// Constructs an object.
-    fn construct(&self, instance: T) -> Object<T>;
-}
-
 /// Represents a custom-typed value stored inside a VM.
 ///
 /// Built-in types such as [`f64`] shouldn't be used as the `T` of an `Object`, because they are
 /// can be represented by values inherently. `Object` however may be used for binding types that are
 /// not directly supported by the VM, like [`std::fs::File`].
 #[derive(Debug)]
-pub struct Object<T> {
+pub(crate) struct Object<T> {
     pub(crate) dtable: Gc<DispatchTable>,
     // The functionality of the RefCell unfortunately has to be replicated because we need unsafe
     // guards that the standard RefCell doesn't provide.
@@ -79,8 +70,12 @@ impl<T> Object<T> {
     }
 
     /// Borrows the object as immutably using an unsafe guard.
+    ///
+    /// # Safety
+    /// This function is unsafe because the guard can be dropped accidentally while keeping the
+    /// reference alive, which can lead to two mutable references to the data existing at once.
     #[doc(hidden)]
-    pub unsafe fn unsafe_borrow(&self) -> Result<(&T, UnsafeRefGuard<T>), Error> {
+    pub(crate) unsafe fn unsafe_borrow(&self) -> Result<(&T, UnsafeRefGuard<T>), Error> {
         if self.borrowed_mutably.get() {
             return Err(Error::ReentrantMutableBorrow);
         }
@@ -90,8 +85,12 @@ impl<T> Object<T> {
     }
 
     /// Borrows the object mutably using an unsafe guard.
+    ///
+    /// # Safety
+    /// This function is unsafe because the guard can be dropped accidentally while keeping the
+    /// reference alive, which can lead to two mutable references to the data existing at once.
     #[doc(hidden)]
-    pub unsafe fn unsafe_borrow_mut(&self) -> Result<(&mut T, UnsafeMutGuard<T>), Error> {
+    pub(crate) unsafe fn unsafe_borrow_mut(&self) -> Result<(&mut T, UnsafeMutGuard<T>), Error> {
         if self.shared_borrows.get() > 0 {
             return Err(Error::ReentrantMutableBorrow);
         }

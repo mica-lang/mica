@@ -11,11 +11,8 @@ use crate::{
         gc::{Gc, Memory},
         value::{self, Closure},
     },
-    Error, ForeignFunction, FunctionParameterCount, MethodParameterCount, Object,
-    ObjectConstructor, RawForeignFunction, Value,
+    Error, ForeignFunction, FunctionParameterCount, MethodParameterCount, Value,
 };
-
-type Constructor<T> = Box<dyn FnOnce(Rc<dyn ObjectConstructor<T>>) -> RawForeignFunction>;
 
 struct UnresolvedMethodSignature {
     name: Rc<str>,
@@ -91,19 +88,9 @@ impl DispatchTableDescriptor {
 /// in conjunction with [`Engine::add_type`][crate::Engine::add_type], serves as an extension point
 /// to let Mica programs interact with Rust data.
 ///
-/// # Limitations
-///
-/// Currently the ability to use custom types in Mica is quite limited. Here's a list of all the
-/// limitations:
-/// - Your type can only be the `self` parameter of a function, even if it's [`Clone`].
-/// - By extension, you cannot take custom types as function arguments by reference.
-/// - Your type must be constructed from a special constructor function that's only available as
-///   part of [`add_constructor`][TypeBuilder::add_constructor]'s callback.
-///
-/// Eventually, most of these limitations will be lifted because they greatly limit the potential of
-/// what can be done with Mica, and all are solvable in a reasonable manner. But the current version
-/// unfortunately has its limits and you will have to work around them (or use a more mature
-/// language. Not that there are many choices.)
+/// Rust values passed into Mica VMs by default are **opaque**, which means they possess no Mica
+/// type information - only what is already known inside of Rust. Opaque values do not have any
+/// methods and have unfriendly type names (as returned by [`std::any::type_name`]).
 pub struct TypeBuilder<T>
 where
     T: ?Sized,
@@ -111,7 +98,6 @@ where
     type_name: Rc<str>,
     type_dtable: DispatchTableDescriptor,
     instance_dtable: DispatchTableDescriptor,
-    constructors: Vec<(UnresolvedMethodSignature, Constructor<T>)>,
     _data: PhantomData<T>,
 }
 
@@ -149,7 +135,6 @@ where
         Self {
             type_dtable: Default::default(),
             instance_dtable: Default::default(),
-            constructors: Vec::new(),
             type_name,
             _data: PhantomData,
         }
@@ -201,28 +186,6 @@ where
         )
     }
 
-    /// Adds a constructor function to the struct.
-    ///
-    /// A constructor is a static function responsible for creating instances of a type. The
-    /// function passed to this one must return another function that actually constructs the
-    /// object.
-    ///
-    /// # Examples
-    /// See [`TypeBuilder::add_function`].
-    pub fn add_constructor<C, F, V>(self, name: &str, f: C) -> Self
-    where
-        V: ffvariants::BareExactArgs,
-        C: FnOnce(Rc<dyn ObjectConstructor<T>>) -> F,
-        C: 'static,
-        F: ForeignFunction<V, ParameterCount = FunctionParameterCount>,
-    {
-        self.add_raw_constructor(
-            name,
-            Self::function_to_method_parameter_count(F::PARAMETER_COUNT),
-            Box::new(|ctor| f(ctor).into_raw_foreign_function()),
-        )
-    }
-
     /// Adds an instance function to the struct.
     ///
     /// The function must follow the "method" calling convention, in that it accepts `&T` or
@@ -252,9 +215,7 @@ where
     /// let mut engine = Engine::new();
     /// engine.add_type(
     ///     TypeBuilder::<Counter>::new("Counter")
-    ///         .add_constructor("new", |ctor| move || {
-    ///             ctor.construct(Counter { value: 0 })
-    ///         })
+    ///         .add_static("new", || Counter { value: 0 })
     ///         .add_function("increment", Counter::increment)
     ///         .add_function("value", Counter::value),
     /// )?;
@@ -314,9 +275,7 @@ where
     /// let mut engine = Engine::new();
     /// engine.add_type(
     ///     TypeBuilder::<Count10>::new("Count10")
-    ///         .add_constructor("new", |ctor| move || {
-    ///             ctor.construct(Count10 { i: 1 })
-    ///         })
+    ///         .add_static("new", || Count10 { i: 1 })
     ///         .add_builtin_trait_function(iterator::HasNext, Count10::has_next)
     ///         .add_builtin_trait_function(iterator::Next, Count10::next),
     /// )?;
@@ -403,31 +362,6 @@ where
         self
     }
 
-    /// Adds a _raw_ constructor to the type.
-    ///
-    /// You should generally prefer [`add_constructor`][`Self::add_constructor`] instead of this.
-    ///
-    /// `parameter_count` should reflect the parameter count of the function. Method calls resolve
-    /// differently from function calls, because they match the parameter count exactly - it is
-    /// impossible to call the method `my_method/2` with three parameters. Thus, you can expect
-    /// the `arguments` array inside of foreign functions to always have `parameter_count` elements.
-    pub fn add_raw_constructor(
-        mut self,
-        name: &str,
-        parameter_count: MethodParameterCount,
-        f: Constructor<T>,
-    ) -> Self {
-        self.constructors.push((
-            UnresolvedMethodSignature {
-                name: Rc::from(name),
-                parameter_count,
-                builtin_trait: BuiltinTrait::None,
-            },
-            f,
-        ));
-        self
-    }
-
     /// Builds the struct builder into its type dtable and instance dtable, respectively.
     pub(crate) fn build(
         self,
@@ -452,39 +386,8 @@ where
             builtin_traits,
         )?;
         let instance_dtable = Gc::new(instance_dtable);
+
         env.add_user_dtable::<T>(Gc::clone(&instance_dtable));
-
-        // The type dtable also contains constructors, so build those while we're at it.
-        // We implement a helper here that fulfills the ObjectConstructor trait.
-
-        struct Instancer<T>
-        where
-            T: Sized,
-        {
-            instance_dtable: Gc<DispatchTable>,
-            _data: PhantomData<T>,
-        }
-
-        impl<T> ObjectConstructor<T> for Instancer<T> {
-            fn construct(&self, instance: T) -> Object<T> {
-                Object::new(Gc::as_raw(&self.instance_dtable), instance)
-            }
-        }
-
-        let instancer: Rc<dyn ObjectConstructor<T>> =
-            Rc::new(Instancer { instance_dtable: Gc::clone(&instance_dtable), _data: PhantomData });
-        for (signature, constructor) in self.constructors {
-            let f = constructor(Rc::clone(&instancer));
-            DispatchTableDescriptor::add_function_to_dtable(
-                env,
-                gc,
-                &mut type_dtable,
-                builtin_traits,
-                signature,
-                FunctionKind::Foreign(f),
-            )?;
-        }
-
         type_dtable.instance = Some(Gc::as_raw(&instance_dtable));
 
         let type_dtable = Gc::new(type_dtable);

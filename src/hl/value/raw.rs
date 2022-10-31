@@ -47,10 +47,10 @@ impl Value {
     pub(crate) fn from_raw(raw: RawValue) -> Self {
         unsafe {
             match raw.kind() {
-                ValueKind::Nil => Self::from(()),
-                ValueKind::Boolean => Self::from(raw.get_boolean_unchecked()),
-                ValueKind::Number => Self::from(*raw.get_number_unchecked()),
-                ValueKind::String => Self::from(Gc::from_raw(raw.get_raw_string_unchecked())),
+                ValueKind::Nil => Self::new(()),
+                ValueKind::Boolean => Self::new(raw.get_boolean_unchecked()),
+                ValueKind::Number => Self::new(*raw.get_number_unchecked()),
+                ValueKind::String => Self::new(Gc::from_raw(raw.get_raw_string_unchecked())),
                 ValueKind::Function => {
                     Self::Function(Hidden(Gc::from_raw(raw.get_raw_function_unchecked())))
                 }

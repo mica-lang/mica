@@ -31,7 +31,7 @@ impl<'e> Fiber<'e> {
     where
         T: TryFromValue,
     {
-        let mut result = Value::from(());
+        let mut result = Value::Nil;
         while let Some(v) = self.resume()? {
             result = v;
         }

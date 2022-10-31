@@ -1,18 +1,14 @@
 mod raw;
 
-use std::{
-    any::{type_name, Any},
-    borrow::Cow,
-    fmt,
-};
+use std::{any::type_name, borrow::Cow, fmt};
 
 pub use raw::*;
 
 use crate::{
     ll::{
-        bytecode::Environment,
+        bytecode::{DispatchTable, Environment},
         gc::Gc,
-        value::{self, Closure, Dict, List, RawValue, Struct, Trait, UserData},
+        value::{self, Closure, Dict, List, RawValue, Struct, Trait},
     },
     Error, Object,
 };
@@ -60,10 +56,20 @@ pub enum Value {
     /// Dicts are opaque to the Rust API, no conversion function currently exists for them.
     Dict(Hidden<Dict>),
     /// Arbitrarily typed user data.
-    UserData(Gc<Box<dyn UserData>>),
+    UserData(Gc<Box<dyn value::UserData>>),
 }
 
 impl Value {
+    /// Creates a new value from any compatible type.
+    ///
+    /// Note that this should only ever be used with types that can be created without the help of
+    /// an [`Engine`][crate::Engine]; in particular, this function is incapable of creating
+    /// **opaque** user data. See [`Engine::create_value`] for more information and a less limited
+    /// version.
+    pub fn new(from: impl IntoValue) -> Self {
+        from.into_value(None)
+    }
+
     /// Returns the name of this value's type.
     pub fn type_name(&self) -> &str {
         match self {
@@ -105,26 +111,41 @@ impl fmt::Display for Value {
     }
 }
 
+/// Trait implemented by all types that can be converted into [`Value`]s and may require an engine
+/// to do so.
+pub trait IntoValue {
+    /// Performs the conversion.
+    ///
+    /// This must succeed regardless of whether an environment was provided or not.
+    fn into_value(self, env: Option<&Environment>) -> Value;
+}
+
+impl IntoValue for Value {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        self
+    }
+}
+
 /// **NOTE:** You should generally avoid dealing with raw values.
 #[doc(hidden)]
-impl From<RawValue> for Value {
-    fn from(raw: RawValue) -> Self {
-        Self::from_raw(raw)
+impl IntoValue for RawValue {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::from_raw(self)
     }
 }
 
 /// The unit type translates to `Value::Nil`.
-impl From<()> for Value {
-    fn from(_: ()) -> Self {
-        Self::Nil
+impl IntoValue for () {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::Nil
     }
 }
 
-impl From<bool> for Value {
-    fn from(b: bool) -> Self {
-        match b {
-            true => Self::True,
-            false => Self::False,
+impl IntoValue for bool {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        match self {
+            true => Value::True,
+            false => Value::False,
         }
     }
 }
@@ -132,9 +153,9 @@ impl From<bool> for Value {
 macro_rules! value_from_number {
     ($T:ty $(, $doc:literal)?) => {
         $(#[doc = $doc])?
-        impl From<$T> for Value {
-            fn from(x: $T) -> Self {
-                Value::Number(x as f64)
+        impl IntoValue for $T {
+            fn into_value(self, _: Option<&Environment>) -> Value {
+                Value::Number(self as f64)
             }
         }
     };
@@ -155,37 +176,37 @@ value_from_number!(usize, "**NOTE:** This is a lossy conversion, as an `f64` can
 value_from_number!(f32);
 value_from_number!(f64);
 
-impl From<char> for Value {
-    fn from(c: char) -> Self {
-        Self::from(c.to_string())
+impl IntoValue for char {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::String(Gc::new(self.to_string()))
     }
 }
 
-impl From<&str> for Value {
-    fn from(s: &str) -> Self {
-        Self::String(Gc::new(s.to_string()))
+impl IntoValue for &str {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::String(Gc::new(self.to_string()))
     }
 }
 
-impl From<String> for Value {
-    fn from(s: String) -> Self {
-        Self::String(Gc::new(s))
+impl IntoValue for String {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::String(Gc::new(self))
     }
 }
 
-impl From<Gc<String>> for Value {
-    fn from(s: Gc<String>) -> Self {
-        Self::String(s)
+impl IntoValue for Gc<String> {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::String(self)
     }
 }
 
-impl<T> From<Option<T>> for Value
+impl<T> IntoValue for Option<T>
 where
-    T: Into<Value>,
+    T: IntoValue,
 {
-    fn from(opt: Option<T>) -> Self {
-        match opt {
-            Some(value) => value.into(),
+    fn into_value(self, env: Option<&Environment>) -> Value {
+        match self {
+            Some(value) => value.into_value(env),
             None => Value::Nil,
         }
     }
@@ -195,28 +216,42 @@ where
 /// cause you a bad time if you feed temporary `Value`s converted into `RawValue`s into the
 /// vector.
 #[doc(hidden)]
-impl From<Vec<RawValue>> for Value {
-    fn from(v: Vec<RawValue>) -> Self {
-        Value::List(Hidden(Gc::new(List::new(v))))
+impl IntoValue for Vec<RawValue> {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::List(Hidden(Gc::new(List::new(self))))
     }
 }
 
 /// **NOTE:** Again, you should avoid dealing with raw values. See comment above
 /// (for `From<Vec<RawValue>>`).
 #[doc(hidden)]
-impl From<Dict> for Value {
-    fn from(d: Dict) -> Self {
-        Value::Dict(Hidden(Gc::new(d)))
+impl IntoValue for Dict {
+    fn into_value(self, _: Option<&Environment>) -> Value {
+        Value::Dict(Hidden(Gc::new(self)))
     }
 }
 
-impl<T> From<Object<T>> for Value
+/// # User data
+///
+/// Creating values from types implementing user data is only done _properly_ if an environment is
+/// provided and the type was registered in the engine the environment belongs to.
+///
+/// If both those conditions are not met, the user data returned will be an opaque *ad hoc* object,
+/// which means that basically nothing can be done with it within Mica (hence the name *opaque*).
+/// Rust functions will still be able to receive the object as arguments but the type will have an
+/// unfriendly name in error messages (as returned by [`std::any::type_name`].)
+impl<T> IntoValue for T
 where
-    T: Any,
+    T: crate::UserData,
 {
-    fn from(o: Object<T>) -> Self {
-        let user_data: Box<dyn value::UserData> = Box::new(o);
-        Self::UserData(Gc::new(user_data))
+    fn into_value(self, env: Option<&Environment>) -> Value {
+        let dtable =
+            env.and_then(|env| env.get_user_dtable::<T>()).map(Gc::clone).unwrap_or_else(|| {
+                let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
+                Gc::new(ad_hoc_dtable)
+            });
+        let object = Object::new(Gc::as_raw(&dtable), self);
+        Value::UserData(Gc::new(Box::new(object)))
     }
 }
 

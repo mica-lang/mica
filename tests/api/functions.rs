@@ -26,10 +26,7 @@ fn user_data_parameters_can_be_passed_into_functions() {
     let mut engine = Engine::new();
 
     engine
-        .add_type(
-            TypeBuilder::<Vec2>::new("Vec2")
-                .add_constructor("new", |ctor| move |x, y| ctor.construct(Vec2 { x, y })),
-        )
+        .add_type(TypeBuilder::<Vec2>::new("Vec2").add_static("new", |x, y| Vec2 { x, y }))
         .reveal();
     engine
         .add_function("same_vec2", |v: Vec2, x: f32, y: f32| assert_eq!(v, Vec2 { x, y }))
@@ -67,7 +64,7 @@ fn mutable_aliasing_of_user_data_is_not_allowed() {
     engine
         .add_type(
             TypeBuilder::<Vec2>::new("Vec2")
-                .add_constructor("new", |ctor| move |x, y| ctor.construct(Vec2 { x, y }))
+                .add_static("new", |x, y| Vec2 { x, y })
                 .add_function("mutably_alias", |_: &mut Vec2, _: Vec2| ()),
         )
         .reveal();

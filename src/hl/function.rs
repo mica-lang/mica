@@ -1,7 +1,7 @@
 pub use crate::ll::bytecode::{FunctionParameterCount, MethodParameterCount};
 use crate::{
     ll::{bytecode::Environment, gc::Memory, value::RawValue},
-    Error, LanguageErrorKind, RawForeignFunction, TryFromValue, Value,
+    Error, IntoValue, LanguageErrorKind, RawForeignFunction, TryFromValue, Value,
 };
 
 fn create_rawff(
@@ -263,7 +263,7 @@ pub mod ffvariants {
 
 impl<Ret, Err, F> ForeignFunction<ffvariants::VarargsFallible> for F
 where
-    Ret: Into<Value> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     F: Fn(Arguments) -> Result<Ret, Err> + 'static,
 {
@@ -274,7 +274,7 @@ where
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         create_rawff(move |env, gc, args| {
             self(Arguments::new(args, env))
-                .map(|value| value.into().to_raw(gc))
+                .map(|value| value.into_value(Some(env)).to_raw(gc))
                 .map_err(|error| LanguageErrorKind::User(Box::new(error)))
         })
     }
@@ -282,7 +282,7 @@ where
 
 impl<Ret, F> ForeignFunction<ffvariants::VarargsInfallible> for F
 where
-    Ret: Into<Value> + 'static,
+    Ret: IntoValue + 'static,
     F: Fn(Arguments) -> Ret + 'static,
 {
     type ParameterCount = FunctionParameterCount;
@@ -290,6 +290,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = FunctionParameterCount::Varargs;
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        create_rawff(move |env, gc, args| Ok(self(Arguments::new(args, env)).into().to_raw(gc)))
+        create_rawff(move |env, gc, args| {
+            Ok(self(Arguments::new(args, env)).into_value(Some(env)).to_raw(gc))
+        })
     }
 }

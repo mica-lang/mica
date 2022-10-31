@@ -7,14 +7,14 @@
 use crate::{
     ffvariants,
     ll::bytecode::{FunctionParameterCount, MethodParameterCount},
-    wrap_in_language_error, Arguments, ForeignFunction, MutSelfFromRawValue, RawForeignFunction,
-    RawSelf, SelfFromRawValue, TryFromValue, Value,
+    wrap_in_language_error, Arguments, ForeignFunction, IntoValue, MutSelfFromRawValue,
+    RawForeignFunction, RawSelf, SelfFromRawValue, TryFromValue,
 };
 
 impl<Fun, Ret> ForeignFunction<ffvariants::Infallible<()>> for Fun
 where
     Fun: Fn() -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
 {
     type ParameterCount = FunctionParameterCount;
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::Fixed(0);
@@ -24,7 +24,7 @@ where
             let arguments = Arguments::new(args, env);
             let result = self();
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -32,7 +32,7 @@ where
 impl<Fun, Ret, Err> ForeignFunction<ffvariants::Fallible<()>> for Fun
 where
     Fun: Fn() -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
 {
     type ParameterCount = FunctionParameterCount;
@@ -43,7 +43,7 @@ where
             let arguments = Arguments::new(args, env);
             let result = self();
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -51,7 +51,7 @@ where
 impl<Fun, Ret> ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>,)>> for Fun
 where
     Fun: Fn(RawSelf<'_>) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
 {
     type ParameterCount = MethodParameterCount;
     const PARAMETER_COUNT: Self::ParameterCount = Self::ParameterCount::from_count_with_self(1);
@@ -63,7 +63,7 @@ where
 
             let result = self(arg_self);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -71,7 +71,7 @@ where
 impl<Fun, Ret, Err> ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>,)>> for Fun
 where
     Fun: Fn(RawSelf<'_>) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
 {
     type ParameterCount = MethodParameterCount;
@@ -84,7 +84,7 @@ where
 
             let result = self(arg_self);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -93,7 +93,7 @@ impl<Fun, Ret, Recv>
     ForeignFunction<ffvariants::InfallibleSelf<ffvariants::ImmutableSelf<Recv>, (&Recv,)>> for Fun
 where
     Fun: Fn(&Recv) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
 {
     type ParameterCount = MethodParameterCount;
@@ -108,7 +108,7 @@ where
 
             let result = self(arg_self);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -117,7 +117,7 @@ impl<Fun, Ret, Recv>
     ForeignFunction<ffvariants::InfallibleSelf<ffvariants::MutableSelf<Recv>, (&mut Recv,)>> for Fun
 where
     Fun: Fn(&mut Recv) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
 {
     type ParameterCount = MethodParameterCount;
@@ -132,7 +132,7 @@ where
 
             let result = self(arg_self);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -141,7 +141,7 @@ impl<Fun, Ret, Err, Recv>
     ForeignFunction<ffvariants::FallibleSelf<ffvariants::ImmutableSelf<Recv>, (&Recv,)>> for Fun
 where
     Fun: Fn(&Recv) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
 {
@@ -157,7 +157,7 @@ where
 
             let result = self(arg_self);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -166,7 +166,7 @@ impl<Fun, Ret, Err, Recv>
     ForeignFunction<ffvariants::FallibleSelf<ffvariants::MutableSelf<Recv>, (&mut Recv,)>> for Fun
 where
     Fun: Fn(&mut Recv) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
 {
@@ -182,7 +182,7 @@ where
 
             let result = self(arg_self);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -190,7 +190,7 @@ where
 impl<Fun, Ret, A> ForeignFunction<ffvariants::Infallible<(A,)>> for Fun
 where
     Fun: Fn(A) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
 {
     type ParameterCount = FunctionParameterCount;
@@ -203,7 +203,7 @@ where
 
             let result = self(arg_0);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -211,7 +211,7 @@ where
 impl<Fun, Ret, Err, A> ForeignFunction<ffvariants::Fallible<(A,)>> for Fun
 where
     Fun: Fn(A) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
 {
@@ -225,7 +225,7 @@ where
 
             let result = self(arg_0);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -233,7 +233,7 @@ where
 impl<Fun, Ret, A> ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>, A)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
 {
     type ParameterCount = MethodParameterCount;
@@ -247,7 +247,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -255,7 +255,7 @@ where
 impl<Fun, Ret, Err, A> ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
 {
@@ -270,7 +270,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -279,7 +279,7 @@ impl<Fun, Ret, Recv, A>
     ForeignFunction<ffvariants::InfallibleSelf<ffvariants::ImmutableSelf<Recv>, (&Recv, A)>> for Fun
 where
     Fun: Fn(&Recv, A) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
 {
@@ -296,7 +296,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -306,7 +306,7 @@ impl<Fun, Ret, Recv, A>
     for Fun
 where
     Fun: Fn(&mut Recv, A) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
 {
@@ -323,7 +323,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -332,7 +332,7 @@ impl<Fun, Ret, Err, Recv, A>
     ForeignFunction<ffvariants::FallibleSelf<ffvariants::ImmutableSelf<Recv>, (&Recv, A)>> for Fun
 where
     Fun: Fn(&Recv, A) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -350,7 +350,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -359,7 +359,7 @@ impl<Fun, Ret, Err, Recv, A>
     ForeignFunction<ffvariants::FallibleSelf<ffvariants::MutableSelf<Recv>, (&mut Recv, A)>> for Fun
 where
     Fun: Fn(&mut Recv, A) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -377,7 +377,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -385,7 +385,7 @@ where
 impl<Fun, Ret, A, B> ForeignFunction<ffvariants::Infallible<(A, B)>> for Fun
 where
     Fun: Fn(A, B) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
@@ -400,7 +400,7 @@ where
 
             let result = self(arg_0, arg_1);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -408,7 +408,7 @@ where
 impl<Fun, Ret, Err, A, B> ForeignFunction<ffvariants::Fallible<(A, B)>> for Fun
 where
     Fun: Fn(A, B) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -424,7 +424,7 @@ where
 
             let result = self(arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -432,7 +432,7 @@ where
 impl<Fun, Ret, A, B> ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>, A, B)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
 {
@@ -448,7 +448,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -456,7 +456,7 @@ where
 impl<Fun, Ret, Err, A, B> ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A, B)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -473,7 +473,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -483,7 +483,7 @@ impl<Fun, Ret, Recv, A, B>
     for Fun
 where
     Fun: Fn(&Recv, A, B) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -502,7 +502,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -512,7 +512,7 @@ impl<Fun, Ret, Recv, A, B>
     for Fun
 where
     Fun: Fn(&mut Recv, A, B) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -531,7 +531,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -541,7 +541,7 @@ impl<Fun, Ret, Err, Recv, A, B>
     for Fun
 where
     Fun: Fn(&Recv, A, B) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -561,7 +561,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -571,7 +571,7 @@ impl<Fun, Ret, Err, Recv, A, B>
     for Fun
 where
     Fun: Fn(&mut Recv, A, B) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -591,7 +591,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -599,7 +599,7 @@ where
 impl<Fun, Ret, A, B, C> ForeignFunction<ffvariants::Infallible<(A, B, C)>> for Fun
 where
     Fun: Fn(A, B, C) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -616,7 +616,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -624,7 +624,7 @@ where
 impl<Fun, Ret, Err, A, B, C> ForeignFunction<ffvariants::Fallible<(A, B, C)>> for Fun
 where
     Fun: Fn(A, B, C) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -642,7 +642,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -651,7 +651,7 @@ impl<Fun, Ret, A, B, C> ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'
     for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -669,7 +669,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -678,7 +678,7 @@ impl<Fun, Ret, Err, A, B, C> ForeignFunction<ffvariants::FallibleRawSelf<(RawSel
     for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -697,7 +697,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -707,7 +707,7 @@ impl<Fun, Ret, Recv, A, B, C>
     for Fun
 where
     Fun: Fn(&Recv, A, B, C) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -728,7 +728,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -738,7 +738,7 @@ impl<Fun, Ret, Recv, A, B, C>
     for Fun
 where
     Fun: Fn(&mut Recv, A, B, C) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -759,7 +759,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -769,7 +769,7 @@ impl<Fun, Ret, Err, Recv, A, B, C>
     for Fun
 where
     Fun: Fn(&Recv, A, B, C) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -791,7 +791,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -801,7 +801,7 @@ impl<Fun, Ret, Err, Recv, A, B, C>
     for Fun
 where
     Fun: Fn(&mut Recv, A, B, C) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -823,7 +823,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -831,7 +831,7 @@ where
 impl<Fun, Ret, A, B, C, D> ForeignFunction<ffvariants::Infallible<(A, B, C, D)>> for Fun
 where
     Fun: Fn(A, B, C, D) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -850,7 +850,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -858,7 +858,7 @@ where
 impl<Fun, Ret, Err, A, B, C, D> ForeignFunction<ffvariants::Fallible<(A, B, C, D)>> for Fun
 where
     Fun: Fn(A, B, C, D) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -878,7 +878,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -887,7 +887,7 @@ impl<Fun, Ret, A, B, C, D> ForeignFunction<ffvariants::InfallibleRawSelf<(RawSel
     for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -907,7 +907,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -916,7 +916,7 @@ impl<Fun, Ret, Err, A, B, C, D>
     ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A, B, C, D)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -937,7 +937,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -948,7 +948,7 @@ impl<Fun, Ret, Recv, A, B, C, D>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -971,7 +971,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -982,7 +982,7 @@ impl<Fun, Ret, Recv, A, B, C, D>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1005,7 +1005,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1015,7 +1015,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D>
     for Fun
 where
     Fun: Fn(&Recv, A, B, C, D) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1039,7 +1039,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1050,7 +1050,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1074,7 +1074,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1082,7 +1082,7 @@ where
 impl<Fun, Ret, A, B, C, D, E> ForeignFunction<ffvariants::Infallible<(A, B, C, D, E)>> for Fun
 where
     Fun: Fn(A, B, C, D, E) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1103,7 +1103,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1111,7 +1111,7 @@ where
 impl<Fun, Ret, Err, A, B, C, D, E> ForeignFunction<ffvariants::Fallible<(A, B, C, D, E)>> for Fun
 where
     Fun: Fn(A, B, C, D, E) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1133,7 +1133,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1142,7 +1142,7 @@ impl<Fun, Ret, A, B, C, D, E>
     ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>, A, B, C, D, E)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1164,7 +1164,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1173,7 +1173,7 @@ impl<Fun, Ret, Err, A, B, C, D, E>
     ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A, B, C, D, E)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1196,7 +1196,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1207,7 +1207,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1232,7 +1232,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1243,7 +1243,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1268,7 +1268,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1279,7 +1279,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1305,7 +1305,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1316,7 +1316,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1342,7 +1342,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1350,7 +1350,7 @@ where
 impl<Fun, Ret, A, B, C, D, E, F> ForeignFunction<ffvariants::Infallible<(A, B, C, D, E, F)>> for Fun
 where
     Fun: Fn(A, B, C, D, E, F) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1373,7 +1373,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1382,7 +1382,7 @@ impl<Fun, Ret, Err, A, B, C, D, E, F> ForeignFunction<ffvariants::Fallible<(A, B
     for Fun
 where
     Fun: Fn(A, B, C, D, E, F) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1406,7 +1406,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1415,7 +1415,7 @@ impl<Fun, Ret, A, B, C, D, E, F>
     ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>, A, B, C, D, E, F)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E, F) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1439,7 +1439,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1448,7 +1448,7 @@ impl<Fun, Ret, Err, A, B, C, D, E, F>
     ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A, B, C, D, E, F)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E, F) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1473,7 +1473,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1484,7 +1484,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E, F>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E, F) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1511,7 +1511,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1522,7 +1522,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E, F>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E, F) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1549,7 +1549,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1560,7 +1560,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E, F>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E, F) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1588,7 +1588,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1599,7 +1599,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E, F>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E, F) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1627,7 +1627,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1636,7 +1636,7 @@ impl<Fun, Ret, A, B, C, D, E, F, G> ForeignFunction<ffvariants::Infallible<(A, B
     for Fun
 where
     Fun: Fn(A, B, C, D, E, F, G) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1661,7 +1661,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1670,7 +1670,7 @@ impl<Fun, Ret, Err, A, B, C, D, E, F, G>
     ForeignFunction<ffvariants::Fallible<(A, B, C, D, E, F, G)>> for Fun
 where
     Fun: Fn(A, B, C, D, E, F, G) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1696,7 +1696,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1705,7 +1705,7 @@ impl<Fun, Ret, A, B, C, D, E, F, G>
     ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>, A, B, C, D, E, F, G)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E, F, G) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1731,7 +1731,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1740,7 +1740,7 @@ impl<Fun, Ret, Err, A, B, C, D, E, F, G>
     ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A, B, C, D, E, F, G)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E, F, G) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1767,7 +1767,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1778,7 +1778,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E, F, G>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E, F, G) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1807,7 +1807,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1818,7 +1818,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E, F, G>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E, F, G) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -1847,7 +1847,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1858,7 +1858,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E, F, G>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E, F, G) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1888,7 +1888,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1899,7 +1899,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E, F, G>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E, F, G) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -1929,7 +1929,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -1938,7 +1938,7 @@ impl<Fun, Ret, A, B, C, D, E, F, G, H>
     ForeignFunction<ffvariants::Infallible<(A, B, C, D, E, F, G, H)>> for Fun
 where
     Fun: Fn(A, B, C, D, E, F, G, H) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -1965,7 +1965,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -1974,7 +1974,7 @@ impl<Fun, Ret, Err, A, B, C, D, E, F, G, H>
     ForeignFunction<ffvariants::Fallible<(A, B, C, D, E, F, G, H)>> for Fun
 where
     Fun: Fn(A, B, C, D, E, F, G, H) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -2002,7 +2002,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -2011,7 +2011,7 @@ impl<Fun, Ret, A, B, C, D, E, F, G, H>
     ForeignFunction<ffvariants::InfallibleRawSelf<(RawSelf<'_>, A, B, C, D, E, F, G, H)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E, F, G, H) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
     C: TryFromValue + 'static,
@@ -2039,7 +2039,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -2048,7 +2048,7 @@ impl<Fun, Ret, Err, A, B, C, D, E, F, G, H>
     ForeignFunction<ffvariants::FallibleRawSelf<(RawSelf<'_>, A, B, C, D, E, F, G, H)>> for Fun
 where
     Fun: Fn(RawSelf<'_>, A, B, C, D, E, F, G, H) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -2077,7 +2077,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -2091,7 +2091,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E, F, G, H>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E, F, G, H) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -2122,7 +2122,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -2136,7 +2136,7 @@ impl<Fun, Ret, Recv, A, B, C, D, E, F, G, H>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E, F, G, H) -> Ret + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
     B: TryFromValue + 'static,
@@ -2167,7 +2167,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(Value::from(result).to_raw(gc))
+            Ok(result.into_value(Some(env)).to_raw(gc))
         })
     }
 }
@@ -2178,7 +2178,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E, F, G, H>
     > for Fun
 where
     Fun: Fn(&Recv, A, B, C, D, E, F, G, H) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: SelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -2210,7 +2210,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }
@@ -2224,7 +2224,7 @@ impl<Fun, Ret, Err, Recv, A, B, C, D, E, F, G, H>
     > for Fun
 where
     Fun: Fn(&mut Recv, A, B, C, D, E, F, G, H) -> Result<Ret, Err> + 'static,
-    Value: From<Ret> + 'static,
+    Ret: IntoValue + 'static,
     Err: std::error::Error + 'static,
     Recv: MutSelfFromRawValue + 'static,
     A: TryFromValue + 'static,
@@ -2256,7 +2256,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| Value::from(v).to_raw(gc)))
+            wrap_in_language_error(result.map(|v| v.into_value(Some(env)).to_raw(gc)))
         })
     }
 }

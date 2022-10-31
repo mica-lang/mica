@@ -20,7 +20,7 @@ use crate::{
         value::{Closure, RawValue},
         vm::{self, Globals},
     },
-    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, FunctionParameterCount,
+    BuiltType, CoreLibrary, Error, Fiber, ForeignFunction, FunctionParameterCount, IntoValue,
     MethodParameterCount, MicaResultExt, TraitBuilder, TryFromValue, TypeBuilder, UserData, Value,
 };
 
@@ -219,7 +219,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     /// let f: Value = engine.start("example.mi", r#" (func (x) = x + 2) "#)?.trampoline()?;
-    /// let result: f64 = engine.call(f, [Value::from(1.0)])?;
+    /// let result: f64 = engine.call(f, [Value::new(1.0)])?;
     /// assert_eq!(result, 3.0);
     /// # Ok(())
     /// # }
@@ -337,6 +337,51 @@ impl Engine {
         fiber.trampoline()
     }
 
+    /// Creates a new value using extra information known to the engine.
+    ///
+    /// This is important to use when creating instances of user data. If [`Value::new`] is used
+    /// instead, an opaque instance will be created - that is, one without access to any methods,
+    /// because only the engine has access to dispatch tables that provide types with methods.
+    ///
+    /// # Examples
+    /// ```
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use mica::{Engine, TypeBuilder, UserData, Value};
+    ///
+    /// struct Cell {
+    ///     value: Value,
+    /// }
+    ///
+    /// impl UserData for Cell {}
+    ///
+    /// let mut engine = Engine::new();
+    /// engine.add_type(
+    ///     TypeBuilder::<Cell>::new("Cell")
+    ///         .add_static("new", |value| Cell { value })
+    ///         .add_function("value", |cell: &Cell| cell.value.clone()),
+    /// )?;
+    ///
+    /// let cell = engine.create_value(Cell { value: Value::new(1.0) });
+    /// let opaque_cell = Value::new(Cell { value: Value::new(1.0) });
+    /// engine.set("visible", cell)?;
+    /// engine.set("opaque", opaque_cell)?;
+    ///
+    /// let okay: Result<Value, _> = engine
+    ///     .start("okay.mi", "assert(visible.value == 1)")?
+    ///     .trampoline();
+    /// assert!(okay.is_ok());
+    ///
+    /// let bad: Result<Value, _> = engine
+    ///     .start("bad.mi", "opaque.value")? // Will fail because opaque does not implement value/0
+    ///     .trampoline();
+    /// assert!(bad.is_err());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn create_value(&self, from: impl IntoValue) -> Value {
+        from.into_value(Some(&self.env))
+    }
+
     /// Returns the unique global ID for the global with the given name, or an error if there
     /// are too many globals in scope.
     ///
@@ -381,9 +426,9 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set(&mut self, id: impl GlobalName, value: impl Into<Value>) -> Result<(), Error> {
+    pub fn set(&mut self, id: impl GlobalName, value: impl IntoValue) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into().to_raw(&mut self.gc));
+        self.globals.set(id.0, value.into_value(Some(&self.env)).to_raw(&mut self.gc));
         Ok(())
     }
 

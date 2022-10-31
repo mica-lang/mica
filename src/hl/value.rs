@@ -11,7 +11,7 @@ use crate::{
         gc::Gc,
         value::{self, Closure, Dict, List, RawValue, Struct, Trait},
     },
-    Error, Object,
+    Error, Object, UserData,
 };
 
 /// A GC'd type whose content cannot be safely accessed.
@@ -327,7 +327,7 @@ impl IntoValue for Dict {
 
 impl<T> IntoValue for T
 where
-    T: crate::UserData,
+    T: UserData,
 {
     type EngineUse = UsesEngine;
 
@@ -479,7 +479,7 @@ where
 ///     as the full Rust type name will be used.
 impl<T> TryFromValue for T
 where
-    T: crate::UserData + Clone,
+    T: UserData + Clone,
 {
     fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         if let Value::UserData(u) = value {

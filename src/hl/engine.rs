@@ -347,6 +347,10 @@ impl Engine {
     /// type must be [registered][Self::add_type] inside the engine by then; otherwise you'll get
     /// an opaque user data value.
     ///
+    /// This needn't be used for user data returned from functions added into the VM, because the
+    /// engine automatically does the full conversion under the hood.
+    /// <!-- Of course it has to, otherwise the code wouldn't compile. Ha. -->
+    ///
     /// # Examples
     /// ```
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {

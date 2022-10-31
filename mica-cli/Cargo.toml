@@ -14,7 +14,7 @@ path = "src/main.rs"
 rustyline = "9.1.2"
 clap = { version = "3.2.22", features = ["derive"] }
 
-mica = { version = "0.6.0", path = ".." }
+mica = { version = "0.7.0", path = ".." }
 
 [package.metadata.release]
 tag = false

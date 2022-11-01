@@ -483,6 +483,7 @@ where
 {
     fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         if let Value::UserData(u) = value {
+            let u: &dyn value::UserData = (**u).as_ref();
             if let Some(object) = u.as_any().downcast_ref::<Object<T>>() {
                 let (object, _guard) = unsafe { object.unsafe_borrow()? };
                 return Ok(object.clone());

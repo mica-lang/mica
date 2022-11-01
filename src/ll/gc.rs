@@ -209,7 +209,6 @@ impl Memory {
                         self.mark_dtable_reachable_rec(raw.get().dtable);
                     }
                 }
-                // TODO: Allow user data to specify its own references.
                 ValueKind::UserData => {
                     let raw = value.get_raw_user_data_unchecked();
                     if !raw.get_mem().reachable.get() {
@@ -217,6 +216,9 @@ impl Memory {
                     }
                     let dtable = raw.get().dtable_gcraw();
                     self.mark_dtable_reachable_rec(dtable);
+                    raw.get().visit_references(&mut |value| {
+                        self.gray_stack.push(value);
+                    });
                 }
             }
         }

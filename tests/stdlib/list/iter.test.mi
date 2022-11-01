@@ -1,0 +1,7 @@
+# Tests that lists can be iterated with iterators.
+
+new = []
+for x in [1, 2, 3].iter do
+    new.push(x)
+end
+assert(new == [1, 2, 3])

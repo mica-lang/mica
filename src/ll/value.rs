@@ -460,6 +460,7 @@ pub trait UserData: Any {
         self.dtable_gcraw().get()
     }
 
-    /// Converts a reference to `UserData` to `Any`.
+    fn visit_references(&self, _visit: &mut dyn FnMut(RawValue)) {}
+
     fn as_any(&self) -> &dyn Any;
 }

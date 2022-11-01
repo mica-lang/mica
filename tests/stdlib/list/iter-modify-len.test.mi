@@ -1,0 +1,10 @@
+# Tests that list length cannot be modified while iterating.
+# @error error: list length changed during iteration (was 3, became 4)
+# @error stack traceback (most recent call first):
+# @error     <FFI>                        ListIter.next
+# @error     {file}:{:LINE}:1  <main>
+
+li = [1, 2, 3]
+for _ in li.iter do  # @line LINE
+    li.push(1)
+end

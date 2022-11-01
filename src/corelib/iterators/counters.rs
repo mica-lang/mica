@@ -61,21 +61,21 @@ impl UserData for CountDown {}
 pub(crate) fn load_counters(engine: &mut Engine) -> Result<(), Error> {
     engine.add_type(
         TypeBuilder::<CountUp>::new("CountUp")
-            .add_static("new", CountUp::with_step)
+            .add_static("with_step", CountUp::with_step)
             .add_static("new", CountUp::new)
             .add_builtin_trait_function(iterator::HasNext, CountUp::has_next)
             .add_builtin_trait_function(iterator::Next, CountUp::next),
     )?;
+    engine.add_function("countup", CountUp::new)?;
 
     engine.add_type(
         TypeBuilder::<CountDown>::new("CountDown")
-            .add_static("new", CountDown::with_step)
+            .add_static("with_step", CountDown::with_step)
             .add_static("new", CountDown::new)
             .add_builtin_trait_function(iterator::HasNext, CountDown::has_next)
             .add_builtin_trait_function(iterator::Next, CountDown::next),
     )?;
-
-    engine.start("mstd-counters.mi", include_str!("counters.mi"))?.trampoline()?;
+    engine.add_function("countdown", CountDown::new)?;
 
     Ok(())
 }

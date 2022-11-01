@@ -8,7 +8,7 @@ use crate::{
     ll::{
         bytecode::DispatchTable,
         gc::{Gc, GcRaw},
-        value,
+        value::{self, RawValue},
     },
     Error,
 };
@@ -16,7 +16,39 @@ use crate::{
 /// Marker trait for all user data types.
 ///
 /// Due to limitations in Rust's type system each user-defined type must implement this.
-pub trait UserData: Any {}
+pub trait UserData: Any {
+    /// Used to let the GC know of any [`RawValue`]s referenced by the data.
+    ///
+    /// Normally, referencing [`RawValue`]s inside of user data is unsafe, because they may be
+    /// garbage collected at any time. There is no way for you to know whether a [`RawValue`]
+    /// has been collected or not.
+    ///
+    /// So to allow the GC to see any [`RawValue`] references inside user data, this must be
+    /// overridden. `visit` should be called for each [`RawValue`] stored inside the user data, so
+    /// that the GC can mark the references as reachable.
+    ///
+    /// It's usually better/easier to deal with strong [`Value`][crate::Value]s which use
+    /// reference counting to manage allocations.
+    ///
+    /// # Examples
+    /// ```
+    /// use mica::{UserData, ll::value::RawValue};
+    ///
+    /// struct MyVec {
+    ///     elements: Vec<RawValue>,
+    /// }
+    ///
+    /// impl UserData for MyVec {
+    ///     fn visit_references(&self, visit: &mut dyn FnMut(RawValue)) {
+    ///         for &element in &self.elements {
+    ///             visit(element);
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    #[allow(unused_variables)]
+    fn visit_references(&self, visit: &mut dyn FnMut(RawValue)) {}
+}
 
 /// A type. This is used to represent user-defined Rust types in the VM (but not their instances).
 #[derive(Debug)]

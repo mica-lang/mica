@@ -1,4 +1,7 @@
-use crate::{ll::value::RawValue, Arguments, MethodParameterCount, RawFunctionKind, TypeBuilder};
+use crate::{
+    corelib::iterators::list::ListIter, ll::value::RawValue, Arguments, IntoValue,
+    MethodParameterCount, RawFunctionKind, TypeBuilder,
+};
 
 pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
     builder
@@ -43,6 +46,16 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
         .add_function("rotate_right", |v: &mut Vec<RawValue>, n: usize| v.rotate_right(n))
         .add_function("swap", |v: &mut Vec<RawValue>, a: usize, b: usize| v.swap(a, b))
         .add_function("clone", |v: &Vec<RawValue>| v.clone())
+        // TODO: It should be possible to implement this without raw functions in the future.
+        .add_raw_function(
+            "iter",
+            MethodParameterCount::from_count_with_self(1),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let iter = unsafe { ListIter::new(*arguments.raw_self()) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
 }
 
 #[derive(Debug)]

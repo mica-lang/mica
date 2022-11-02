@@ -97,6 +97,15 @@ impl Dict {
         let iterator = inner.table.iter();
         iterator.map(|bucket| bucket.read())
     }
+
+    /// Returns a raw iterator over pairs stored in the dict.
+    ///
+    /// # Safety
+    /// The iterator must not outlive the dict.
+    pub(crate) unsafe fn raw_iter(&self) -> hashbrown::raw::RawIter<(RawValue, RawValue)> {
+        let inner = &*self.inner.get();
+        inner.table.iter()
+    }
 }
 
 impl Clone for Dict {

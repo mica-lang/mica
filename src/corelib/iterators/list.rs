@@ -16,16 +16,19 @@ impl ListIter {
         self.i < self.len
     }
 
-    fn next(&mut self) -> Result<RawValue, LenChangedDuringIteration> {
+    fn next(&mut self) -> Result<Option<RawValue>, LenChangedDuringIteration> {
         unsafe {
             let list = self.list.get_raw_list_unchecked().get();
             let slice = list.as_slice();
             if slice.len() != self.len {
                 return Err(LenChangedDuringIteration { was: self.len, became: slice.len() });
             }
-            let i = self.i;
-            self.i += 1;
-            Ok(slice[i])
+            if let Some(v) = slice.get(self.i) {
+                self.i += 1;
+                Ok(Some(*v))
+            } else {
+                Ok(None)
+            }
         }
     }
 }

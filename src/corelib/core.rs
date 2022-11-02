@@ -2,6 +2,7 @@
 
 use std::{fmt, fmt::Write};
 
+use super::pair::load_pair;
 use crate::{
     corelib::{gc::load_gc, iterators::load_iterators},
     Arguments, Engine, Error, MicaResultExt, Value,
@@ -61,6 +62,7 @@ pub(crate) fn load_core(engine: &mut Engine) -> Result<(), Error> {
     engine.add_function("assert", assert)?;
 
     load_gc(engine)?;
+    load_pair(engine)?;
     load_iterators(engine)?;
 
     Ok(())

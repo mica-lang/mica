@@ -1,4 +1,7 @@
-use crate::{ll::value::Dict, TypeBuilder};
+use crate::{
+    corelib::iterators::dict::DictIter, ll::value::Dict, Arguments, IntoValue,
+    MethodParameterCount, RawFunctionKind, TypeBuilder,
+};
 
 pub(crate) fn define(builder: TypeBuilder<Dict>) -> TypeBuilder<Dict> {
     builder
@@ -9,4 +12,14 @@ pub(crate) fn define(builder: TypeBuilder<Dict>) -> TypeBuilder<Dict> {
         .add_function("get", Dict::get)
         .add_function("contains_key", Dict::contains_key)
         .add_function("clone", Dict::clone)
+        // TODO: It should be possible to implement this without raw functions in the future.
+        .add_raw_function(
+            "iter",
+            MethodParameterCount::from_count_with_self(1),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let iter = unsafe { DictIter::new(*arguments.raw_self()) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
 }

@@ -10,6 +10,9 @@ mod builtins;
 mod core;
 mod gc;
 mod iterators;
+mod pair;
+
+pub use pair::*;
 
 /// Unit struct representing the core library.
 #[derive(Debug, Clone, Copy)]

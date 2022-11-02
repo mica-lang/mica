@@ -1,0 +1,8 @@
+# Tests iteration over dicts.
+
+source = ["a": 1, "b": 2, "c": 3]
+dest = [:]
+for pair in source.iter do
+    dest.insert(pair.key, pair.value)
+end
+assert(source == dest)

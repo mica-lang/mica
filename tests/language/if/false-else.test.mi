@@ -1,6 +1,7 @@
 # The if expression should not execute the first branch.
-x = 123
-u =
+
+let x = 123
+let u =
     if x != 123 do
         error("Branch accidentally evaluated")
         "Bad"

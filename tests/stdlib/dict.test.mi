@@ -3,7 +3,7 @@
 assert(["a": "b"] == ["a": "b"])
 assert(["b": "b"] != ["a": "b", "x": "y"])
 
-d = ["x": 1, "y": 2]
+let d = ["x": 1, "y": 2]
 
 assert(d.clone == d)
 
@@ -18,13 +18,13 @@ assert(d.contains_key("x") and d.contains_key("y"))
 assert(!d.contains_key("z"))
 
 do
-    di = d.clone
+    let di = d.clone
     assert(di.insert("x", 2) == 1)
     assert(di == ["x": 2, "y": 2])
 end
 
 do
-    di = d.clone
+    let di = d.clone
     assert(di.remove("x") == 1)
     assert(di == ["y": 2])
 end

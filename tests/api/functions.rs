@@ -73,7 +73,7 @@ fn mutable_aliasing_of_user_data_is_not_allowed() {
         .start(
             "test.mi",
             r#"
-                v = Vec2.new(0, 0)
+                let v = Vec2.new(0, 0)
                 v.mutably_alias(v)
             "#,
         )

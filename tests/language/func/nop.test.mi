@@ -1,2 +1,3 @@
 # Functions can be declared, in this case to not do anything.
+
 func nop() = nil

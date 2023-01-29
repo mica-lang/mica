@@ -1,4 +1,6 @@
-elements = []
+# Tests that CountUp counts up from its lower bound to its upper bound.
+
+let elements = []
 for i in CountUp.new(1, 5) do
     elements.push(i)
 end

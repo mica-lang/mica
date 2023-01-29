@@ -1,4 +1,4 @@
-i = 1
+let i = 1
 for _ in CountUp.new(1, 10) do
     i = i * 2
 end

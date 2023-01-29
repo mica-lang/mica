@@ -1,8 +1,9 @@
 # Two closures may refer to and modify the same variable.
-get = nil
-inc = nil
+
+let get = nil
+let inc = nil
 do
-    count = 1
+    let count = 1
     get = func () = count
     inc = func () = count = count + 1
 end

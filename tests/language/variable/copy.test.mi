@@ -1,6 +1,7 @@
 # Declare a variable and copy it to another variable.
-x = 30
-y = x
+
+let x = 30
+let y = x
 assert(x == y)
 # y does not contain a reference to the original variable, rather its value.
 x = 40

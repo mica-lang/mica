@@ -1,6 +1,6 @@
 # Tests the string chars iterator.
 
-chars = []
+let chars = []
 for c in "cześć".chars do
     chars.push(c)
 end

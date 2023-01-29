@@ -272,6 +272,8 @@ pub enum NodeKind {
 
     /// Top-level code in a module.
     Main,
+    /// `let` expression.
+    Let,
     /// `do` expression.
     Do,
     /// `if..do..elif..else..end` expression.

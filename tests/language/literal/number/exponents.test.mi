@@ -1,4 +1,5 @@
 # Numbers can have exponents.
+
 assert(1e10 == 10000000000)
 assert(1e10 == 1e+10)
 assert(1e-1 == 0.1)

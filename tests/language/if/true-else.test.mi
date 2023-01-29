@@ -1,6 +1,7 @@
 # The if expression should not execute the else branch.
-x = 123
-t =
+
+let x = 123
+let t =
     if x == 123 do
         "Good"
     else

@@ -4,7 +4,7 @@
 func print() = nil
 func another_global() = nil
 
-print = 1
-another_global = 2
+let print = 1
+let another_global = 2
 
 assert(print != another_global)

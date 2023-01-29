@@ -1,6 +1,7 @@
 # Test a `while` loop with two conditions.
-x = 1
-y = 2
+
+let x = 1
+let y = 2
 while x < 100 and y >= -1000 do
     x = x + 1
     y = y - y * 2

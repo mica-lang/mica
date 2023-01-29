@@ -28,7 +28,7 @@ struct Counter impl
     end
 end
 
-c = Counter.new(1, 1)
+let c = Counter.new(1, 1)
 while c.value < 100 do
     print(c.value)
     if c.value.mod(2) == 0 do

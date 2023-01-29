@@ -1,4 +1,5 @@
 # Two defined struct types are never equal to each other.
+
 struct Test
 struct Other
 assert(Test == Test)

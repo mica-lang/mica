@@ -1,2 +1,3 @@
 # A trait declaration returns the trait defined.
+
 assert(trait Ergonomics end == Ergonomics)

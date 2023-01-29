@@ -1,6 +1,7 @@
 # Attempting to reference a variable outside of its scope results in an error.
 # @error {file}:{:LINE}:1: error: variable 'i' does not exist
+
 do
-    i = 1
+    let i = 1
 end
 i  # @line LINE

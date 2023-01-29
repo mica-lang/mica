@@ -258,6 +258,11 @@ impl Parser {
             .done())
     }
 
+    fn parse_let_expression(&mut self, token: Token) -> Result<NodeId, LanguageError> {
+        let right = self.parse_expression(0)?;
+        Ok(self.ast.build_node(NodeKind::Let, right).with_location(token.location).done())
+    }
+
     /// Parses a `do` block.
     fn parse_do_block(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let mut children = Vec::new();
@@ -497,6 +502,7 @@ impl Parser {
             }
             TokenKind::LeftBracket => self.parse_list_or_dict(token),
 
+            TokenKind::Let => self.parse_let_expression(token),
             TokenKind::Do => self.parse_do_block(token),
             TokenKind::If => self.parse_if_expression(token),
             TokenKind::While => self.parse_while_expression(token),

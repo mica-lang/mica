@@ -157,6 +157,7 @@ pub enum LanguageErrorKind {
     AsCannotNest,
     FunctionKindInTrait,
     InvalidPattern,
+    LetRhsMustBeAssignment,
 
     // Runtime
     TypeError { expected: Cow<'static, str>, got: Cow<'static, str> },
@@ -283,6 +284,7 @@ impl std::fmt::Display for LanguageErrorKind {
                 }
                 Ok(())
             }
+            Self::LetRhsMustBeAssignment => write!(f, "the right hand side of 'let' must be an assignment, like 'let x = y'"),
 
             Self::User(error) => write!(f, "{error}"),
         }

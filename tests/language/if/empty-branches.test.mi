@@ -1,17 +1,18 @@
 # Check that branches can be empty.
-j = 1
-z =
+
+let j = 1
+let z =
     if j == 1 do end
 assert(z == nil)
-z =
+let z =
     if j == 2 do else end
 assert(z == nil)
-z =
+let z =
     if j == 2 do
     elif j == 1 do
     end
 assert(z == nil)
-z =
+let z =
     if j == 2 do
     elif j == 3 do
     else

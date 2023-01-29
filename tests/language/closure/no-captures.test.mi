@@ -1,3 +1,4 @@
 # Closures without captures act like normal functions.
-f = func (x) = x + 1
+
+let f = func (x) = x + 1
 assert(f(1) == 2)

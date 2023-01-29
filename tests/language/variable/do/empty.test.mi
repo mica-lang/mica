@@ -1,3 +1,4 @@
 # An empty do..end block evaluates to nil.
-empty = do end
+
+let empty = do end
 assert(empty == nil)

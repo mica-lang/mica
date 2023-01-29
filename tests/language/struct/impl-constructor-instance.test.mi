@@ -1,5 +1,6 @@
 # A struct can have a constructor that sets its fields up.
 # It can also have instance methods.
+
 struct Vector impl
     func new(x, y) constructor = do
         @x = x
@@ -26,7 +27,7 @@ struct Vector impl
         self.len_sq.sqrt
 end
 
-v = Vector.new(1, 2)
+let v = Vector.new(1, 2)
 assert(v.x == 1)
 assert(v.y == 2)
 v.set_x(4)
@@ -34,6 +35,6 @@ v.set_y(5)
 assert(v.x == 4)
 assert(v.y == 5)
 assert(Vector.new(3, 4).len == 5)
-z = Vector.zero
+let z = Vector.zero
 assert(z.x == 0)
 assert(z.y == 0)

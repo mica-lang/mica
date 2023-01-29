@@ -1,4 +1,6 @@
-elements = []
+# Tests that CountDown counts down from its upper bound to its lower bound.
+
+let elements = []
 for i in CountDown.new(5, 1) do
     elements.push(i)
 end

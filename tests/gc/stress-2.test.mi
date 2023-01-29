@@ -9,8 +9,8 @@ struct LinkedList impl
 end
 
 func make_long_list() = do
-    i = 0
-    list = nil
+    let i = 0
+    let list = nil
     while i < 1000 do
         list = LinkedList.new(i, list)
         i = i + 1
@@ -18,8 +18,8 @@ func make_long_list() = do
     list
 end
 
-n = 0
-list = nil
+let n = 0
+let list = nil
 while n < 10 do
     list = make_long_list()
     n = n + 1

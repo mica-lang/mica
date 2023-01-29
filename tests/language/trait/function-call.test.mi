@@ -1,6 +1,6 @@
 # Trait methods can be called on a value via redirector methods defined on the trait itself.
 
-spoken = false
+let spoken = false
 
 trait Animal
     func speak()
@@ -26,7 +26,7 @@ struct Dog impl
     end
 end
 
-doggo = Dog.new("Floofer")
+let doggo = Dog.new("Floofer")
 Animal.speak(doggo)
 Animal.eat(doggo, 10)
 

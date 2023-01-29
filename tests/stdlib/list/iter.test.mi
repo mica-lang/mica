@@ -1,6 +1,6 @@
 # Tests that lists can be iterated with iterators.
 
-new = []
+let new = []
 for x in [1, 2, 3].iter do
     new.push(x)
 end

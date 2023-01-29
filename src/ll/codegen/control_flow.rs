@@ -254,7 +254,7 @@ impl<'e> CodeGenerator<'e> {
                     Opcode::CallMethod,
                     Opr24::pack((generator.builtin_traits.iterator_next.to_u16(), 1)),
                 ));
-                generator.generate_pattern_destructuring(ast, binding)?;
+                generator.generate_pattern_destructuring(ast, binding, Expression::Discarded)?;
                 generator.generate_node_list(ast, body)?;
                 Ok(())
             },

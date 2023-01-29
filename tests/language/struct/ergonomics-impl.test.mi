@@ -1,2 +1,3 @@
 # `impl` blocks return the implemented struct.
+
 assert(struct ErgonomicImpl impl end == ErgonomicImpl)

@@ -1,6 +1,7 @@
 # Only the first branch should be evaluated.
-i = 1
-w =
+
+let i = 1
+let w =
     if i == 1 do
         "Good"
     elif i == 1 do

@@ -449,7 +449,7 @@ impl Engine {
     ///
     /// let mut engine = Engine::new();
     /// let _: Value = engine
-    ///     .start("assertion.mi", "x = 1")?
+    ///     .start("assertion.mi", "let x = 1")?
     ///     .trampoline()?;
     /// let x: f64 = engine.get("x")?;
     /// assert_eq!(x, 1.0);

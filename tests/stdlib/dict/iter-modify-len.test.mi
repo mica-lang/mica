@@ -4,7 +4,7 @@
 # @error     <FFI>                        DictIter.has_next
 # @error     {file}:{:LINE}:1  <main>
 
-dict = ["a": 1, "b": 2, "c": 3]
+let dict = ["a": 1, "b": 2, "c": 3]
 for pair in dict.iter do  # @line LINE
     dict.remove(pair.key)
 end

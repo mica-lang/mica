@@ -1,6 +1,6 @@
 # Tests the string code_points iterator.
 
-chars = []
+let chars = []
 for c in "cześć".code_points do
     chars.push(c)
 end

@@ -1,19 +1,19 @@
 # Tests methods of the Gc type.
 
 func make_a_bunch_of_trash() = do
-    i = 0
+    let i = 0
     while i < 100 do
         i = i + 1
-        n = i.to_string
+        let n = i.to_string
     end
 end
 
 # Manual collection
 assert(Gc.disable() == nil)
 make_a_bunch_of_trash()
-before_collection = Gc.allocated_bytes
+let before_collection = Gc.allocated_bytes
 assert(Gc.collect() == nil)
-after_collection = Gc.allocated_bytes
+let after_collection = Gc.allocated_bytes
 assert(after_collection < before_collection)
 
 # AlwaysRun strategy

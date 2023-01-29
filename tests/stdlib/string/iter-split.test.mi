@@ -1,6 +1,6 @@
 # Tests the string split iterator.
 
-fragments = []
+let fragments = []
 for fragment in "example,hello,world".split(",") do
     fragments.push(fragment)
 end

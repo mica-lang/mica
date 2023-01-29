@@ -1,6 +1,7 @@
 # Only the second branch should be evaluated.
-i = 1
-v =
+
+let i = 1
+let v =
     if i == 2 do
         error("Branch accidentally evaluated")
         "Bad 1"

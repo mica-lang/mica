@@ -1,4 +1,5 @@
 # `nil` and `false` are the only falsy values.
+
 assert(!!nil == false)
 assert(!!false == false)
 assert(!!1 == true)

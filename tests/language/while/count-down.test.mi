@@ -1,5 +1,6 @@
 # Test a `while` loop that counts downwards.
-i = 10
+
+let i = 10
 while i > 0 do
     i = i - 1
 end

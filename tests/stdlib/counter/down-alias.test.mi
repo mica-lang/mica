@@ -1,4 +1,6 @@
-elements = []
+# Tests that countdown is an alias for CountDown.new.
+
+let elements = []
 for i in countdown(5, 1) do
     elements.push(i)
 end

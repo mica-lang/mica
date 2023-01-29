@@ -1,6 +1,7 @@
 # An if expression evaluates to the last expression evaluated in a branch.
-x = 123
-r =
+
+let x = 123
+let r =
     if x == 123 do
         "Good"
     end

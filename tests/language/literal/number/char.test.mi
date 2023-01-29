@@ -1,3 +1,4 @@
 # Character literals are a special type of number literal.
+
 assert(\u'ć' == \x107)
 assert(\u'🗿' == \x1F5FF)

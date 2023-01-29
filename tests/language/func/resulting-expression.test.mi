@@ -1,4 +1,6 @@
 # A function returns the value after `=`.
+
 func add_one(x) =
     x + 1
+
 assert(add_one(1) == 2)

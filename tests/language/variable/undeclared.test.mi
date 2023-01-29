@@ -1,3 +1,4 @@
 # Attempting to reference an undeclared variable results in an error.
 # @error {file}:{:LINE}:1: error: variable 'a' does not exist
+
 a  # @line LINE

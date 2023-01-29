@@ -1,6 +1,8 @@
 # Functions can be called recursively.
+
 func fib(n) =
     if n == 0 or n == 1 do n
     else fib(n - 1) + fib(n - 2)
     end
+
 assert(fib(20) == 6765)

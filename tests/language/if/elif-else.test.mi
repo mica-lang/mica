@@ -1,6 +1,7 @@
 # Check that elif branches fall through to the else branch.
-i = 1
-y =
+
+let i = 1
+let y =
     if i == 2 do
         error("Branch accidentally evaluated")
         "Bad 1"

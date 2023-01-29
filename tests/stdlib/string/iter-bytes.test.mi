@@ -1,6 +1,6 @@
 # Tests the string bytes iterator.
 
-bytes = []
+let bytes = []
 for b in "cześć".bytes do
     bytes.push(b)
 end

@@ -4,8 +4,8 @@ struct Example impl
     func new() constructor = nil
 end
 
-a = Example.new()
-b = Example.new()
+let a = Example.new()
+let b = Example.new()
 assert(a == a)
 assert(b == b)
 assert(a != b)

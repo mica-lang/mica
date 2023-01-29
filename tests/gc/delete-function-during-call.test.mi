@@ -8,8 +8,8 @@ struct LinkedList impl
 end
 
 func make_long_list() = do
-    i = 0
-    list = nil
+    let i = 0
+    let list = nil
     # Allocate enough objects to cause a collection to happen.
     while i < 1600 do
         list = LinkedList.new(i, list)

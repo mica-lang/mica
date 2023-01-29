@@ -1,13 +1,15 @@
 # Closures may modify captured variables.
+
 func counter(start, increment) = do
-    i = start
+    let i = start
     (func () = do
-        value = i
+        let value = i
         i = i + increment
         value
     end)
 end
-c = counter(10, 1)
+
+let c = counter(10, 1)
 assert(c() == 10)
 assert(c() == 11)
 assert(c() == 12)

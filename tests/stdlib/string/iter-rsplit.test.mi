@@ -1,6 +1,6 @@
 # Tests the string rsplit iterator.
 
-fragments = []
+let fragments = []
 for fragment in "example,hello,world".rsplit(",") do
     fragments.push(fragment)
 end

@@ -11,14 +11,14 @@ struct CountUp impl
             @min <= @max
 
         func next() = do
-            i = @min
+            let i = @min
             @min = @min + 1
             i
         end
     end
 end
 
-elements = []
+let elements = []
 for i in CountUp.new(1, 10) do
     elements.push(i)
 end

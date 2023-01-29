@@ -7,8 +7,8 @@ struct Garbage impl
     end
 end
 
-n = 0
-g = nil
+let n = 0
+let g = nil
 while n < 10000 do
     g = Garbage.new()
     n = n + 1

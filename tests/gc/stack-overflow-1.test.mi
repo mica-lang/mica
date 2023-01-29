@@ -8,8 +8,8 @@ struct LinkedList impl
     end
 end
 
-i = 0
-list = nil
+let i = 0
+let list = nil
 # 5 million objects deep oughtta be enough to overflow the stack in a naïve collector.
 # Increasing the limit further would slow down the test runtime too much.
 while i < 5000000 do

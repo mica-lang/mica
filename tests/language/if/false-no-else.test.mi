@@ -1,6 +1,7 @@
 # If all branches fall through to the end, it evaluates to nil.
-x = 123
-s =
+
+let x = 123
+let s =
     if x != 123 do
         "Bad"
     end

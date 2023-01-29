@@ -1,5 +1,6 @@
 # Test a `while` loop with `break` with implicit nil.
-z = 1
+
+let z = 1
 while true do
     z = z + 1
     if z > 100 do

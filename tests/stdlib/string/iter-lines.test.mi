@@ -1,12 +1,12 @@
 # Tests the string lines iterator.
 
-text =
+let text =
     \\Hello
     \\world!
     \\
     \\That was a blank.
 
-lines = []
+let lines = []
 for line in text.lines do
     lines.push(line)
 end

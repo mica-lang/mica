@@ -1,7 +1,9 @@
 # New locals can be declared in functions.
+
 func declare_some_locals(x) = do
-    y = x + 1
+    let y = x + 1
     assert(y == x + 1)
     x + y
 end
+
 assert(declare_some_locals(2) == 5)

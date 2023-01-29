@@ -1,4 +1,6 @@
-elements = []
+# Tests that countup is an alias for CountUp.new.
+
+let elements = []
 for i in countup(1, 5) do
     elements.push(i)
 end

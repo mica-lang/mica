@@ -1,0 +1,7 @@
+# Tests the string split iterator.
+
+fragments = []
+for fragment in "example,hello,world".split(",") do
+    fragments.push(fragment)
+end
+assert(fragments == ["example", "hello", "world"])

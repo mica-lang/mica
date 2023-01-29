@@ -1,16 +1,16 @@
 //! Portable implementation of values. Uses a regular `enum`, which isn't very cache efficient,
 //! but is supported on most platforms.
 
-use std::{hint::unreachable_unchecked, mem};
+use std::{hint::unreachable_unchecked, mem, ops::Deref};
 
-use crate::{
+use crate::ll::{
     gc::GcRaw,
-    value::{Closure, Dict, List, Struct, Trait, UserData, ValueCommon, ValueKind},
+    value::{Closure, Struct, Trait, UserData, ValueCommon, ValueKind},
 };
 
 /// A portable implementation of values.
 #[derive(Clone, Copy)]
-pub enum ValueImpl {
+pub(crate) enum ValueImpl {
     /// Nil denotes the lack of a value.
     Nil,
     /// The false boolean.
@@ -27,10 +27,6 @@ pub enum ValueImpl {
     Struct(GcRaw<Struct>),
     /// A trait.
     Trait(GcRaw<Trait>),
-    /// A list.
-    List(GcRaw<List>),
-    /// A dict.
-    Dict(GcRaw<Dict>),
     /// Dynamically-typed user data.
     UserData(GcRaw<Box<dyn UserData>>),
 }
@@ -67,14 +63,6 @@ impl ValueCommon for ValueImpl {
         Self::Trait(t)
     }
 
-    fn new_list(l: GcRaw<List>) -> Self {
-        Self::List(l)
-    }
-
-    fn new_dict(d: GcRaw<Dict>) -> Self {
-        Self::Dict(d)
-    }
-
     fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self {
         Self::UserData(u)
     }
@@ -88,8 +76,6 @@ impl ValueCommon for ValueImpl {
             ValueImpl::Function(_) => ValueKind::Function,
             ValueImpl::Struct(_) => ValueKind::Struct,
             ValueImpl::Trait(_) => ValueKind::Trait,
-            ValueImpl::List(_) => ValueKind::List,
-            ValueImpl::Dict(_) => ValueKind::Dict,
             ValueImpl::UserData(_) => ValueKind::UserData,
         }
     }
@@ -142,22 +128,6 @@ impl ValueCommon for ValueImpl {
         }
     }
 
-    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
-        if let Self::List(l) = self {
-            *l
-        } else {
-            unreachable_unchecked()
-        }
-    }
-
-    unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict> {
-        if let Self::Dict(d) = self {
-            *d
-        } else {
-            unreachable_unchecked()
-        }
-    }
-
     unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>> {
         if let Self::UserData(u) = self {
             *u
@@ -173,9 +143,11 @@ impl PartialEq for ValueImpl {
             (Self::Number(l), Self::Number(r)) => l == r,
             (Self::String(l), Self::String(r)) => unsafe { l.get() == r.get() },
             (Self::Function(l), Self::Function(r)) => l == r,
-            (Self::List(l), Self::List(r)) => unsafe { l.get() == r.get() },
-            (Self::Dict(l), Self::Dict(r)) => unsafe { l.get() == r.get() },
             (Self::Struct(l), Self::Struct(r)) => l == r,
+            (Self::Trait(l), Self::Trait(r)) => l == r,
+            (Self::UserData(l), Self::UserData(r)) => unsafe {
+                l.get().partial_eq(r.get().deref())
+            },
             _ => mem::discriminant(self) == mem::discriminant(other),
         }
     }

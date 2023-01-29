@@ -1,8 +1,10 @@
 use hashbrown::raw::Bucket;
 
 use crate::{
-    builtin_traits::iterator, corelib::pair::Pair, ll::value::RawValue, Engine, Error, TypeBuilder,
-    UserData,
+    builtin_traits::iterator,
+    corelib::pair::Pair,
+    ll::value::{Dict, RawValue},
+    Engine, Error, TypeBuilder, UserData,
 };
 
 type InnerIter = hashbrown::raw::RawIter<(RawValue, RawValue)>;
@@ -15,7 +17,7 @@ pub(crate) struct DictIter {
 
 impl DictIter {
     pub(crate) unsafe fn new(value: RawValue) -> Self {
-        let dict = value.get_raw_dict_unchecked().get();
+        let dict = value.downcast_user_data_unchecked::<Dict>();
         Self { dict: value, iter: dict.raw_iter(), len: dict.len() }
     }
 
@@ -26,7 +28,7 @@ impl DictIter {
     ) -> Result<Option<Bucket<(RawValue, RawValue)>>, LenChangedDuringIteration> {
         // This length-must-not-change limitation exists because the dict must not reallocate,
         // otherwise the iterator becomes invalid.
-        let current_len = unsafe { dict.get_raw_dict_unchecked().get().len() };
+        let current_len = unsafe { dict.downcast_user_data_unchecked::<Dict>().len() };
         if len != current_len {
             return Err(LenChangedDuringIteration { was: len, became: current_len });
         }

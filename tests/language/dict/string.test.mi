@@ -1,0 +1,5 @@
+# Tests that the string representation of dicts makes sense.
+
+assert(string([:]) == "[:]")
+assert(string([1: 2]) == "[1: 2]")
+assert(string([1: 2, 3: 4]) == "[1: 2, 3: 4]")

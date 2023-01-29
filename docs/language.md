@@ -131,7 +131,7 @@ represent multiline content.
 To construct a long string literal, prefix each line of the string with `\\`.
 ```mica
 # Spaces after \\ are not stripped.
-s =
+let s =
     \\Hello,
     \\ world!
 assert(s == "Hello,\n world!")
@@ -142,13 +142,13 @@ assert(s == "Hello,\n world!")
 Lists are a data type for storing values in a sequence. Their literals open and close with square
 brackets `[]`, and contain comma-separated values.
 ```mica
-cool_languages = ["Rust", "Mica", "Lua"]
+let cool_languages = ["Rust", "Mica", "Lua"]
 ```
 The list stored in the variable `cool_languages` holds three strings, but Mica lists can store any
 data type. They are heterogenous, which means that multiple data types can be stored in the same
 list - including other lists.
 ```mica
-identity_mat4 = [
+let identity_mat4 = [
     [1, 0, 0, 0],
     [0, 1, 0, 0],
     [0, 0, 1, 0],
@@ -157,7 +157,7 @@ identity_mat4 = [
 ```
 Elements can be retrieved using the `get/1` function, and modified using the `set/2` function.
 ```mica
-numbers = [1, 2, 3]
+let numbers = [1, 2, 3]
 assert(numbers.get(0) == 1)  # elements are indexed starting from 0
 numbers.set(0, 2)
 assert(numbers == [2, 2, 3])
@@ -169,8 +169,8 @@ Lists are passed by reference, but compared by value. This means that a list cop
 separate variables refers to the same data store, but comparing independent lists always compares
 them by individual elements.
 ```mica
-a = []
-b = a
+let a = []
+let b = a
 assert(a == b)
 assert(a.is_empty)
 a.push(1)
@@ -188,7 +188,7 @@ instead of bare elements they use pairs of values separated by a colon `:`. The 
 written as `[:]`.
 
 ```mica
-dependencies = [
+let dependencies = [
     "rust": "1.61",
     "mica": "0.3.0",
 ]
@@ -209,7 +209,7 @@ assert(dependencies.remove("lua") == "5.4")
 Just like lists, dicts are heterogenous. Any value can be used as a key or a value - even a dict
 itself.
 ```mica
-weird = [
+let weird = [
     "#ffffff": "white",
     [1, 2]: 0,
     [3, 4]: 1,
@@ -221,8 +221,8 @@ assert(weird.get(["x": 3]) == 5)
 
 Just like lists, dicts are passed by reference and compared by value.
 ```
-a = [1: 1]
-b = a
+let a = [1: 1]
+let b = a
 a.insert(1, 2)
 assert(a == b)
 assert(a == [1: 2])
@@ -352,7 +352,7 @@ operand, the right operand will not be evaluated and instead the left one will b
 `and` and `or` introduce a new [scope](#scope), which means that although you can declare variables
 inside them, you will not be able to refer to them outside:
 ```mica
-> (a = 1) and (b = 2)
+> (let a = 1) and (let b = 2)
 < 2
 
 > a
@@ -392,15 +392,17 @@ See [implementations](#implementations) for information on how to declare functi
 
 ### Variables
 
-Variables are assigned using the `=` operator:
+Mica separates defining a variable from assigning to it. A variable can be introduced into scope
+by using the `let` expression:
 ```mica
-> x = 1
+> let x = 1
 < 1
 ```
-The `=` operator returns the value of the variable. Combined with the fact that it's right- rather
-than left-associative, this can be used for assigning the same value to multiple variables at once:
+As shown above, `let` returns the value. This can be useful when used in conjunction with `if` to
+check for `nil` values, forming a construct akin to Rust's `if let`. It can also be used to create
+multiple variables with the same value:
 ```mica
-> x = y = 1
+> let x = let y = 1
 < 1
 
 > x
@@ -409,27 +411,27 @@ than left-associative, this can be used for assigning the same value to multiple
 > y
 < 1
 ```
-The REPL log above also shows that assigned variables can be referred to using bare identifiers.
+
+Variables can be shadowed, even in the same scope. Do keep in mind that shadowing a variable very
+far from its declaration can get quite unreadable; therefore try to limit its usage to sequences
+of transformations.
+```mica
+let s = obtain_string()
+let s = do_something_with_string(s)
+let s = finalize(s)
+print(s)
+```
+
+Variables are assigned using the `=` operator:
+```mica
+> x = 1
+< 1
+```
 
 Reading from an undefined variable is an error:
 ```mica
 > swoosh
 (repl):1:1: error: variable 'swoosh' does not exist
-```
-
-Variables can be reassigned:
-```mica
-> a = 1
-< 1
-
-> a
-< 1
-
-> a = 123
-< 123
-
-> a
-< 123
 ```
 
 #### Scope
@@ -439,7 +441,7 @@ Variables are subject to _scoping_. Mica has two kinds of scopes: global, and lo
 The global scope is the default scope. A local scope can be introduced by using `do..end`.
 ```mica
 do
-    my_variable = 1
+    let my_variable = 1
     print(my_variable)  #> 1
 end
 ```
@@ -452,7 +454,7 @@ Local variables on the other hand, are temporary, and are deleted as soon as the
 declared in `end`s.
 ```mica
 > do
-    my_variable = 1
+    let my_variable = 1
 end
 < 1
 
@@ -479,7 +481,7 @@ evaluated, the return value is `nil`.
 More branches can be specified by using the `elif` keyword:
 ```mica
 # readline function provided by host program
-x = Number.parse(readline())
+let x = Number.parse(readline())
 if x == 1 do
     "one!"
 elif x == 2 do
@@ -501,7 +503,7 @@ Each `if` expression branch introduces a new scope that begins on the keyword th
 branch. This means that variables can be declared inside the branch, which allows for easy `nil`
 checks.
 ```
-if value = do_some_stuff() do
+if let value = do_some_stuff() do
     # value is guaranteed to be non-nil
     value.do_something(123)
 end
@@ -523,7 +525,7 @@ By default, the result value of a `while` loop is `nil`.
 
 A basic loop that counts up from 1 to 10:
 ```mica
-i = 1
+let i = 1
 while i <= 10 do
     print(i)
     i = i + 1
@@ -533,7 +535,7 @@ end
 Just like in `if`, `while` introduces a new scope on the `while` keyword. This allows for creating
 "iterators":
 ```
-iterator = get_iterator_from_somewhere()
+let iterator = get_iterator_from_somewhere()
 while i = iterator.next do
     print(i)
 end
@@ -560,11 +562,11 @@ end
 
 do
     # This _iterator variable is hidden by the compiler, and cannot be referred to.
-    _iterator = iter
+    let _iterator = iter
     # It's also worth noting that these method calls do not involve global lookups to resolve
     # Iterator, as they would in normal Mica code.
     while Iterator.has_next(_iterator) do
-        binding = Iterator.next(_iterator)
+        let binding = Iterator.next(_iterator)
         do
             # body
         end
@@ -576,10 +578,10 @@ end
 
 A `break` expression can be used to immediately jump past a loop.
 ```mica
-i = 1
+let i = 1
 while true do
     print(i)
-    i = i + 1
+    let i = i + 1
     if i * i >= 100 do
         break
     end
@@ -592,7 +594,7 @@ truthy, execution will jump past the loop onto the line with `print`.
 `break` can also be used to override the default `nil` return value of a loop:
 ```mica
 # Find the first number whose square is greater than 100.
-i = 1
+let i = 1
 print(while true do
     i = i + 1
     if i * i > 100 do
@@ -611,11 +613,11 @@ func name(param1, param2, param3) = expression
 This syntax is almost exactly the same as:
 ```mica
 # Introduce the variable into scope first, so that the function can be called recursively.
-name = nil
+let name = nil
 name = func (param1, param2, param3) = expression
 ```
-However, the `func name() = expression` form is preferred as it assigns a name to the function, which is
-visible in stack traces. Anonymous functions have the name `<anonymous>`.
+However, the `func name() = expression` form is preferred as it assigns a name to the function,
+which is visible in stack traces. Anonymous functions have the name `<anonymous>`.
 
 To create a multiline function, a `do` block can be used as the expression:
 ```mica
@@ -659,9 +661,8 @@ _instance_ functions.
 A static function is created by adding the `static` keyword after function parameters. Static
 functions can be used as a way of putting functions into namespaces.
 ```mica
-struct Greetings
-
-Greetings impl
+# Thanks to `impl`'s infix position, it can be chained naturally after a struct declaration.
+struct Greetings impl
     func get(for_whom) static =
         "Hello, ".cat(for_whom).cat("!")
 end
@@ -681,9 +682,7 @@ constructor. Additionally, each constructor after the first one must assign to a
 declared in the first one.
 
 ```mica
-struct Vector
-
-Vector impl
+struct Vector impl
     func new(x, y) constructor = do
         # Declare fields that will store the X/Y coordinates of the vector.
         @x = x
@@ -737,15 +736,6 @@ obtain_struct() impl
     # ...
 end
 ```
-This also leads to the following idiom, where a newly created struct is implemented right away:
-```mica
-struct Immediate impl
-    # ...
-end
-```
-This idiom is why `impl` is a postfix operator rather than a prefix operator - it reads much more
-naturally than `impl struct Immediate`, and better displays the scoping of the newly declared
-struct.
 
 Apart from this, an `impl` block returns the implemented struct, so eg. returning a newly
 implemented struct from a function is possible.
@@ -756,10 +746,10 @@ func make_me_a_struct() =
             print("Hi!!")
     end
 
-AStruct = make_me_a_struct()
+let AStruct = make_me_a_struct()
 AStruct.say_hi()
 
-Another = make_me_a_struct()
+let Another = make_me_a_struct()
 assert(Another != AStruct)
 ```
 
@@ -796,6 +786,6 @@ language - _everything is a value._
 To call a trait method, the usual `receiver.do_something()` syntax cannot be used, because it would
 be ambiguous - instead, the trait must be used as a "relay":
 ```mica
-receiver = MyImplementer.new()
+let receiver = MyImplementer.new()
 MyTrait.do_something(receiver)  # the first argument becomes `self`
 ```

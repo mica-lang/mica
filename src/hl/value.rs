@@ -51,11 +51,11 @@ pub enum Value {
     /// A list.
     ///
     /// Lists are opaque to the Rust API and must be converted into a typed `Vec<T>`.
-    List(Hidden<List>),
+    List(Hidden<Box<dyn value::UserData>>),
     /// A dict.
     ///
     /// Dicts are opaque to the Rust API, no conversion function currently exists for them.
-    Dict(Hidden<Dict>),
+    Dict(Hidden<Box<dyn value::UserData>>),
     /// Arbitrarily typed user data.
     UserData(Gc<Box<dyn value::UserData>>),
 }
@@ -101,7 +101,7 @@ impl Value {
             Value::Trait(s) => &s.0.dtable().type_name,
             Value::List(_) => "List",
             Value::Dict(_) => "Dict",
-            Value::UserData(u) => &unsafe { u.dtable() }.type_name,
+            Value::UserData(u) => u.type_name(),
         }
     }
 
@@ -310,7 +310,7 @@ impl IntoValue for Vec<RawValue> {
     type EngineUse = DoesNotUseEngine;
 
     fn into_value(self, _: &()) -> Value {
-        Value::List(Hidden(Gc::new(List::new(self))))
+        Value::List(Hidden(Gc::new(Box::new(List::new(self)))))
     }
 }
 
@@ -321,7 +321,7 @@ impl IntoValue for Dict {
     type EngineUse = DoesNotUseEngine;
 
     fn into_value(self, _: &()) -> Value {
-        Value::Dict(Hidden(Gc::new(self)))
+        Value::Dict(Hidden(Gc::new(Box::new(self))))
     }
 }
 
@@ -459,12 +459,16 @@ where
 {
     fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
         if let Value::List(l) = value {
-            let elements = unsafe { l.0.as_slice() };
-            let mut result = vec![];
-            for &element in elements {
-                result.push(T::try_from_value(&Value::from_raw(element), env)?);
+            if let Some(list) = l.0.as_any().downcast_ref::<List>() {
+                let elements = unsafe { list.as_slice() };
+                let mut result = vec![];
+                for &element in elements {
+                    result.push(T::try_from_value(&Value::from_raw(element), env)?);
+                }
+                Ok(result)
+            } else {
+                unreachable!("Value::List must contain a list")
             }
-            Ok(result)
         } else {
             Err(type_mismatch("List", value))
         }

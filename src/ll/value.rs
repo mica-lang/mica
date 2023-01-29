@@ -9,7 +9,10 @@ mod lists;
 mod structs;
 mod traits;
 
-use std::{any::Any, borrow::Cow, cmp::Ordering, fmt, fmt::Write, marker::PhantomData, ops::Deref};
+use std::{
+    any::Any, borrow::Cow, cmp::Ordering, fmt, hash::Hasher, hint::unreachable_unchecked,
+    marker::PhantomData, ops::Deref,
+};
 
 pub use closures::*;
 pub use dicts::*;
@@ -18,6 +21,7 @@ pub use lists::*;
 pub use structs::*;
 pub use traits::*;
 
+use super::bytecode::Environment;
 use crate::ll::{bytecode::DispatchTable, error::LanguageErrorKind, gc::GcRaw};
 
 /// The kind of a [`RawValue`].
@@ -30,8 +34,6 @@ pub enum ValueKind {
     Function,
     Struct,
     Trait,
-    List,
-    Dict,
     UserData,
 }
 
@@ -44,8 +46,6 @@ trait ValueCommon: Clone + PartialEq {
     fn new_function(f: GcRaw<Closure>) -> Self;
     fn new_struct(s: GcRaw<Struct>) -> Self;
     fn new_trait(s: GcRaw<Trait>) -> Self;
-    fn new_list(s: GcRaw<List>) -> Self;
-    fn new_dict(d: GcRaw<Dict>) -> Self;
     fn new_user_data(u: GcRaw<Box<dyn UserData>>) -> Self;
 
     fn kind(&self) -> ValueKind;
@@ -57,8 +57,6 @@ trait ValueCommon: Clone + PartialEq {
     unsafe fn get_raw_function_unchecked(&self) -> GcRaw<Closure>;
     unsafe fn get_raw_struct_unchecked(&self) -> GcRaw<Struct>;
     unsafe fn get_raw_trait_unchecked(&self) -> GcRaw<Trait>;
-    unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List>;
-    unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict>;
     unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>>;
 }
 
@@ -88,8 +86,6 @@ impl RawValue {
             ValueKind::Number => "Number".into(),
             ValueKind::String => "String".into(),
             ValueKind::Function => "Function".into(),
-            ValueKind::List => "List".into(),
-            ValueKind::Dict => "Dict".into(),
             ValueKind::Struct => unsafe { self.0.get_raw_struct_unchecked().get().dtable() }
                 .type_name
                 .deref()
@@ -100,11 +96,9 @@ impl RawValue {
                 .deref()
                 .to_owned()
                 .into(),
-            ValueKind::UserData => unsafe { self.0.get_raw_user_data_unchecked().get().dtable() }
-                .type_name
-                .deref()
-                .to_owned()
-                .into(),
+            ValueKind::UserData => unsafe {
+                self.0.get_raw_user_data_unchecked().get().type_name().into()
+            },
         }
     }
 
@@ -160,28 +154,27 @@ impl RawValue {
         self.0.get_raw_trait_unchecked()
     }
 
-    /// Returns a list value without performing any checks.
-    ///
-    /// # Safety
-    /// Calling this on a value that isn't known to be a list is undefined behavior.
-    pub unsafe fn get_raw_list_unchecked(&self) -> GcRaw<List> {
-        self.0.get_raw_list_unchecked()
-    }
-
-    /// Returns a dict value without performing any checks.
-    ///
-    /// # Safety
-    /// Calling this on a value that isn't known to be a dict is undefined behavior.
-    pub unsafe fn get_raw_dict_unchecked(&self) -> GcRaw<Dict> {
-        self.0.get_raw_dict_unchecked()
-    }
-
     /// Returns a user data value without performing any checks.
     ///
     /// # Safety
     /// Calling this on a value that isn't known to be a user data is undefined behavior.
     pub unsafe fn get_raw_user_data_unchecked(&self) -> GcRaw<Box<dyn UserData>> {
         self.0.get_raw_user_data_unchecked()
+    }
+
+    /// Downcasts a user data value into a reference without performing any checks.
+    ///
+    /// # Safety
+    /// Calling this on a value that isn't known to be user data of type T is undefined behavior.
+    pub unsafe fn downcast_user_data_unchecked<T>(&self) -> &T
+    where
+        T: UserData,
+    {
+        if let Some(value) = self.get_raw_user_data_unchecked().get().as_any().downcast_ref::<T>() {
+            value
+        } else {
+            unreachable_unchecked()
+        }
     }
 
     /// Ensures the value is a `Nil`, returning a type mismatch error if that's not the case.
@@ -298,13 +291,11 @@ impl RawValue {
                 ValueKind::Function => Ok(None),
                 ValueKind::Struct => Ok(None),
                 ValueKind::Trait => Ok(None),
-                ValueKind::List => unsafe {
-                    let a = self.0.get_raw_list_unchecked();
-                    let b = other.0.get_raw_list_unchecked();
-                    a.get().try_partial_cmp(b.get())
+                ValueKind::UserData => unsafe {
+                    let a = self.0.get_raw_user_data_unchecked();
+                    let b = other.0.get_raw_user_data_unchecked();
+                    a.get().try_partial_cmp(b.get().deref())
                 },
-                ValueKind::Dict => todo!(),
-                ValueKind::UserData => Ok(None),
             }
         }
     }
@@ -358,18 +349,6 @@ impl From<GcRaw<Trait>> for RawValue {
     }
 }
 
-impl From<GcRaw<List>> for RawValue {
-    fn from(s: GcRaw<List>) -> Self {
-        Self(ValueImpl::new_list(s), PhantomData)
-    }
-}
-
-impl From<GcRaw<Dict>> for RawValue {
-    fn from(s: GcRaw<Dict>) -> Self {
-        Self(ValueImpl::new_dict(s), PhantomData)
-    }
-}
-
 impl From<GcRaw<Box<dyn UserData>>> for RawValue {
     fn from(u: GcRaw<Box<dyn UserData>>) -> Self {
         Self(ValueImpl::new_user_data(u), PhantomData)
@@ -394,43 +373,9 @@ impl fmt::Debug for RawValue {
                 ValueKind::Function => {
                     write!(f, "<func {:?}>", self.0.get_raw_function_unchecked().get_raw())
                 }
-                ValueKind::List => {
-                    f.write_char('[')?;
-                    let list = self.0.get_raw_list_unchecked();
-                    let elements = list.get().as_slice();
-                    for (i, element) in elements.iter().enumerate() {
-                        if i != 0 {
-                            f.write_str(", ")?;
-                        }
-                        fmt::Debug::fmt(element, f)?;
-                    }
-                    f.write_char(']')?;
-                    Ok(())
-                }
-                ValueKind::Dict => {
-                    let dict = self.0.get_raw_dict_unchecked();
-                    let dict = dict.get();
-                    if dict.is_empty() {
-                        f.write_str("[:]")?;
-                    } else {
-                        f.write_char('[')?;
-                        for (i, (key, value)) in dict.iter().enumerate() {
-                            if i != 0 {
-                                f.write_str(", ")?;
-                            }
-                            fmt::Debug::fmt(&key, f)?;
-                            f.write_str(": ")?;
-                            fmt::Debug::fmt(&value, f)?;
-                        }
-                        f.write_char(']')?;
-                    }
-                    Ok(())
-                }
                 ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
                 ValueKind::Trait => dtable(f, self.0.get_raw_trait_unchecked().get().dtable()),
-                ValueKind::UserData => {
-                    dtable(f, self.0.get_raw_user_data_unchecked().get().dtable())
-                }
+                ValueKind::UserData => self.0.get_raw_user_data_unchecked().get().fmt(f),
             }
         }
     }
@@ -447,18 +392,45 @@ impl fmt::Display for RawValue {
     }
 }
 
-pub trait UserData: Any {
+pub trait UserData: Any + fmt::Debug {
     /// Returns a GC reference to the user data's dispatch table.
-    fn dtable_gcraw(&self) -> GcRaw<DispatchTable>;
+    ///
+    /// This dispatch table can be obtained from the provided environment if needed, or taken from
+    /// the object itself.
+    ///
+    /// # Panics
+    ///
+    /// If the value requires the environment but it's not provided. This only happens with certain
+    /// built-in types that are implemented as user data under the hood.
+    fn dtable_gcraw(&self, env: Option<&Environment>) -> GcRaw<DispatchTable>;
 
     /// Returns the user data's dispatch table.
     ///
     /// # Safety
     /// This is basically sugar for `dtable_gcraw().get()`, so all the footguns of [`GcRaw::get`]
     /// apply.
-    unsafe fn dtable(&self) -> &DispatchTable {
-        self.dtable_gcraw().get()
+    unsafe fn dtable(&self, env: Option<&Environment>) -> &DispatchTable {
+        self.dtable_gcraw(env).get()
     }
+
+    /// This is overridden by built-in types that need magical treatment (lists, dicts.)
+    fn value_kind(&self) -> ValueKind {
+        ValueKind::UserData
+    }
+
+    /// Implementation of equality used by the `==` operator.
+    ///
+    /// We can't use `PartialEq` here since we want the argument to be `&dyn UserData`,
+    fn partial_eq(&self, other: &dyn UserData) -> bool;
+
+    /// Comparison function.
+    ///
+    /// We can't use `PartialOrd` here since the comparison function can fail.
+    fn try_partial_cmp(&self, other: &dyn UserData) -> Result<Option<Ordering>, LanguageErrorKind>;
+
+    fn hash(&self, hasher: &mut dyn Hasher);
+
+    fn type_name(&self) -> &str;
 
     fn visit_references(&self, _visit: &mut dyn FnMut(RawValue)) {}
 

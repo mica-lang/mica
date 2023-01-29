@@ -170,26 +170,6 @@ impl Memory {
                         }
                     }
                 }
-                ValueKind::List => {
-                    let raw = value.get_raw_list_unchecked();
-                    if !raw.get_mem().reachable.get() {
-                        raw.mark_reachable();
-                        let elements = raw.get().as_slice();
-                        for &element in elements {
-                            self.gray_stack.push(element);
-                        }
-                    }
-                }
-                ValueKind::Dict => {
-                    let raw = value.get_raw_dict_unchecked();
-                    if !raw.get_mem().reachable.get() {
-                        raw.mark_reachable();
-                        for (key, value) in raw.get().iter() {
-                            self.gray_stack.push(key);
-                            self.gray_stack.push(value);
-                        }
-                    }
-                }
                 ValueKind::Struct => {
                     let raw = value.get_raw_struct_unchecked();
                     if !raw.get_mem().reachable.get() {
@@ -213,12 +193,12 @@ impl Memory {
                     let raw = value.get_raw_user_data_unchecked();
                     if !raw.get_mem().reachable.get() {
                         raw.mark_reachable();
+                        let dtable = raw.get().dtable_gcraw(None);
+                        self.mark_dtable_reachable_rec(dtable);
+                        raw.get().visit_references(&mut |value| {
+                            self.gray_stack.push(value);
+                        });
                     }
-                    let dtable = raw.get().dtable_gcraw();
-                    self.mark_dtable_reachable_rec(dtable);
-                    raw.get().visit_references(&mut |value| {
-                        self.gray_stack.push(value);
-                    });
                 }
             }
         }

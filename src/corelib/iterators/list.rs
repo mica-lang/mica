@@ -1,4 +1,8 @@
-use crate::{builtin_traits::iterator, ll::value::RawValue, Engine, Error, TypeBuilder, UserData};
+use crate::{
+    builtin_traits::iterator,
+    ll::value::{List, RawValue},
+    Engine, Error, TypeBuilder, UserData,
+};
 
 pub(crate) struct ListIter {
     list: RawValue,
@@ -8,7 +12,7 @@ pub(crate) struct ListIter {
 
 impl ListIter {
     pub(crate) unsafe fn new(list: RawValue) -> Self {
-        let slice = unsafe { list.get_raw_list_unchecked().get().as_slice() };
+        let slice = unsafe { list.downcast_user_data_unchecked::<List>().as_slice() };
         ListIter { list, i: 0, len: slice.len() }
     }
 
@@ -18,7 +22,7 @@ impl ListIter {
 
     fn next(&mut self) -> Result<Option<RawValue>, LenChangedDuringIteration> {
         unsafe {
-            let list = self.list.get_raw_list_unchecked().get();
+            let list = self.list.downcast_user_data_unchecked::<List>();
             let slice = list.as_slice();
             if slice.len() != self.len {
                 return Err(LenChangedDuringIteration { was: self.len, became: slice.len() });

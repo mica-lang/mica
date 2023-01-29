@@ -2,6 +2,7 @@
 
 use std::{
     cell::UnsafeCell,
+    cmp::Ordering,
     collections::hash_map::RandomState,
     hash::{BuildHasher, Hash, Hasher},
     mem,
@@ -9,7 +10,15 @@ use std::{
 
 use hashbrown::raw::RawTable;
 
-use super::{RawValue, ValueKind};
+use super::{RawValue, UserData, ValueKind};
+use crate::{
+    ll::{
+        bytecode::{DispatchTable, Environment},
+        error::LanguageErrorKind,
+        gc::GcRaw,
+    },
+    Gc,
+};
 
 type DictMap = RawTable<(RawValue, RawValue)>;
 type DictHashBuilder = RandomState;
@@ -123,6 +132,48 @@ impl PartialEq for Dict {
     }
 }
 
+impl UserData for Dict {
+    fn dtable_gcraw(&self, env: Option<&Environment>) -> GcRaw<DispatchTable> {
+        Gc::as_raw(
+            &env.expect("UserData::dtable_gcraw called on a Dict with no environment")
+                .builtin_dtables
+                .dict,
+        )
+    }
+
+    fn partial_eq(&self, other: &dyn UserData) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Dict>() {
+            self == other
+        } else {
+            false
+        }
+    }
+
+    fn try_partial_cmp(
+        &self,
+        _other: &dyn UserData,
+    ) -> Result<Option<Ordering>, LanguageErrorKind> {
+        Ok(None)
+    }
+
+    fn hash(&self, mut hasher: &mut dyn Hasher) {
+        unsafe {
+            for (key, value) in self.iter() {
+                key.hash(&mut hasher);
+                value.hash(&mut hasher);
+            }
+        }
+    }
+
+    fn type_name(&self) -> &str {
+        "Dict"
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 impl RawValue {
     /// Hashes the value.
     /// Note that this is not part of a `std::hash::Hash` implementation because this may get extra
@@ -146,24 +197,8 @@ impl RawValue {
                 ValueKind::Function => self.get_raw_function_unchecked().get_raw().hash(state),
                 ValueKind::Struct => self.get_raw_struct_unchecked().get_raw().hash(state),
                 ValueKind::Trait => self.get_raw_trait_unchecked().get_raw().hash(state),
-                ValueKind::List => {
-                    let slice = self.get_raw_list_unchecked().get().as_slice();
-                    slice.len().hash(state);
-                    for value in slice.iter() {
-                        value.hash(state);
-                    }
-                }
-                ValueKind::Dict => {
-                    // This is another hash that Rust doesn't want you to have, but I see no reason
-                    // to leave it out in Mica. Yes, it's stupid, and nobody in
-                    // their right mind is gonna use it, but also, why not?
-                    let dict = self.get_raw_dict_unchecked().get();
-                    for (key, value) in dict.iter() {
-                        key.hash(state);
-                        value.hash(state);
-                    }
-                }
-                ValueKind::UserData => self.get_raw_user_data_unchecked().get_raw().hash(state),
+                // Except for user data, which have its own hash().
+                ValueKind::UserData => self.get_raw_user_data_unchecked().get().hash(state),
             }
         }
         state.finish()

@@ -1,12 +1,16 @@
 use std::{
     any::Any,
     cell::{Cell, UnsafeCell},
+    cmp::Ordering,
+    fmt,
+    hash::Hasher,
     marker::PhantomData,
 };
 
 use crate::{
     ll::{
-        bytecode::DispatchTable,
+        bytecode::{DispatchTable, Environment},
+        error::LanguageErrorKind,
         gc::{Gc, GcRaw},
         value::{self, RawValue},
     },
@@ -51,7 +55,6 @@ pub trait UserData: Any {
 }
 
 /// A type. This is used to represent user-defined Rust types in the VM (but not their instances).
-#[derive(Debug)]
 pub(crate) struct Type<T> {
     dtable: Gc<DispatchTable>,
     _data: PhantomData<T>,
@@ -63,16 +66,44 @@ impl<T> Type<T> {
     }
 }
 
+impl<T> fmt::Debug for Type<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}]", self.dtable.pretty_name)
+    }
+}
+
 impl<T> value::UserData for Type<T>
 where
     T: Any,
 {
-    fn dtable_gcraw(&self) -> GcRaw<DispatchTable> {
+    fn dtable_gcraw(&self, _: Option<&Environment>) -> GcRaw<DispatchTable> {
         Gc::as_raw(&self.dtable)
     }
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn partial_eq(&self, other: &dyn value::UserData) -> bool {
+        self as *const dyn value::UserData == other
+    }
+
+    fn try_partial_cmp(
+        &self,
+        _other: &dyn value::UserData,
+    ) -> Result<Option<Ordering>, LanguageErrorKind> {
+        Ok(None)
+    }
+
+    fn hash(&self, mut hasher: &mut dyn Hasher) {
+        std::ptr::hash(self, &mut hasher);
+    }
+
+    // This does return the correct name, clippy.
+    #[allow(clippy::misnamed_getters)]
+
+    fn type_name(&self) -> &str {
+        &self.dtable.pretty_name
     }
 }
 
@@ -81,7 +112,6 @@ where
 /// Built-in types such as [`f64`] shouldn't be used as the `T` of an `Object`, because they are
 /// can be represented by values inherently. `Object` however may be used for binding types that are
 /// not directly supported by the VM, like [`std::fs::File`].
-#[derive(Debug)]
 pub(crate) struct Object<T> {
     pub(crate) dtable: Gc<DispatchTable>,
     // The functionality of the RefCell unfortunately has to be replicated because we need unsafe
@@ -132,16 +162,43 @@ impl<T> Object<T> {
     }
 }
 
+impl<T> fmt::Debug for Object<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}]", self.dtable.pretty_name)
+    }
+}
+
 impl<T> value::UserData for Object<T>
 where
     T: Any,
 {
-    fn dtable_gcraw(&self) -> GcRaw<DispatchTable> {
+    fn dtable_gcraw(&self, _: Option<&Environment>) -> GcRaw<DispatchTable> {
         Gc::as_raw(&self.dtable)
     }
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn partial_eq(&self, other: &dyn value::UserData) -> bool {
+        self as *const dyn value::UserData == other
+    }
+
+    fn try_partial_cmp(
+        &self,
+        _other: &dyn value::UserData,
+    ) -> Result<Option<Ordering>, LanguageErrorKind> {
+        Ok(None)
+    }
+
+    fn hash(&self, mut hasher: &mut dyn Hasher) {
+        std::ptr::hash(self, &mut hasher);
+    }
+
+    // This does return the correct name, clippy.
+    #[allow(clippy::misnamed_getters)]
+    fn type_name(&self) -> &str {
+        &self.dtable.pretty_name
     }
 }
 

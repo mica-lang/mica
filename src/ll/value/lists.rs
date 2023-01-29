@@ -2,6 +2,7 @@ use std::{
     any::Any,
     cell::UnsafeCell,
     cmp::Ordering,
+    fmt,
     hash::{Hash, Hasher},
 };
 
@@ -16,7 +17,6 @@ use crate::{
 };
 
 /// A Mica list.
-#[derive(Debug)]
 pub struct List {
     elements: UnsafeCell<Vec<RawValue>>,
 }
@@ -67,6 +67,22 @@ impl List {
 impl PartialEq for List {
     fn eq(&self, other: &Self) -> bool {
         (unsafe { &*self.elements.get() } == unsafe { &*other.elements.get() })
+    }
+}
+
+impl fmt::Debug for List {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")?;
+        unsafe {
+            for (i, &element) in self.as_slice().iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{element}")?;
+            }
+        }
+        write!(f, "]")?;
+        Ok(())
     }
 }
 

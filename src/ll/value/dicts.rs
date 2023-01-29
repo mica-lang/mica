@@ -4,6 +4,7 @@ use std::{
     cell::UnsafeCell,
     cmp::Ordering,
     collections::hash_map::RandomState,
+    fmt,
     hash::{BuildHasher, Hash, Hasher},
     mem,
 };
@@ -33,7 +34,7 @@ struct DictInner {
 ///
 /// Note that this type has interior mutability. This is because dicts in Mica are shared by
 /// reference; creating a new dict requires using `clone`.
-#[derive(Default, Debug)]
+#[derive(Default)]
 pub struct Dict {
     inner: UnsafeCell<DictInner>,
 }
@@ -129,6 +130,26 @@ impl PartialEq for Dict {
             return false;
         }
         unsafe { self.iter() }.all(|(key, value)| other.get(key).map_or(false, |v| value == v))
+    }
+}
+
+impl fmt::Debug for Dict {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_empty() {
+            write!(f, "[:]")?;
+        } else {
+            write!(f, "[")?;
+            unsafe {
+                for (i, (key, value)) in self.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{key}: {value}")?;
+                }
+            }
+            write!(f, "]")?;
+        }
+        Ok(())
     }
 }
 

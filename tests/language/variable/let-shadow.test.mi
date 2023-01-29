@@ -1,0 +1,6 @@
+# Tests that let can shadow previous bindings within the same scope.
+
+let x = 1
+let x = "hello"
+
+assert(x == "hello")

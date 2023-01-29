@@ -105,6 +105,7 @@ impl<'e> CodeGenerator<'e> {
             NodeKind::And => self.generate_and(ast, node)?,
             NodeKind::Or => self.generate_or(ast, node)?,
 
+            NodeKind::Let => self.generate_let(ast, node, expr)?,
             NodeKind::Assign => self.generate_assignment(ast, node, expr)?,
             NodeKind::Dot => self.generate_dot(ast, node)?,
             NodeKind::Field => self.generate_field(ast, node)?,

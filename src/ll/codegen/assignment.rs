@@ -18,6 +18,7 @@ impl<'e> CodeGenerator<'e> {
         &mut self,
         ast: &Ast,
         node: NodeId,
+        result: Expression,
     ) -> Result<(), LanguageError> {
         match ast.kind(node) {
             NodeKind::Identifier => {
@@ -25,11 +26,34 @@ impl<'e> CodeGenerator<'e> {
                 let variable = self
                     .create_variable(name, VariableAllocation::Allocate)
                     .map_err(|kind| ast.error(node, kind))?;
-                self.generate_variable_sink(variable);
+                match result {
+                    Expression::Used => self.generate_variable_assign(variable),
+                    Expression::Discarded => self.generate_variable_sink(variable),
+                }
             }
             _ => return Err(ast.error(node, LanguageErrorKind::InvalidPattern)),
         }
         Ok(())
+    }
+
+    /// Generates code for a `let` expression.
+    pub(super) fn generate_let(
+        &mut self,
+        ast: &Ast,
+        node: NodeId,
+        result: Expression,
+    ) -> Result<ExpressionResult, LanguageError> {
+        let (assignment, _) = ast.node_pair(node);
+        if ast.kind(assignment) != NodeKind::Assign {
+            return Err(ast.error(assignment, LanguageErrorKind::LetRhsMustBeAssignment));
+        }
+        let (place, value) = ast.node_pair(assignment);
+        self.generate_node(ast, value, Expression::Used)?;
+        self.generate_pattern_destructuring(ast, place, result)?;
+        Ok(match result {
+            Expression::Discarded => ExpressionResult::Absent,
+            Expression::Used => ExpressionResult::Present,
+        })
     }
 
     /// Generates code for an assignment.
@@ -50,8 +74,9 @@ impl<'e> CodeGenerator<'e> {
                 {
                     slot
                 } else {
-                    self.create_variable(name, VariableAllocation::Allocate)
-                        .map_err(|kind| ast.error(node, kind))?
+                    return Err(
+                        ast.error(target, LanguageErrorKind::VariableDoesNotExist(Rc::clone(name)))
+                    );
                 };
                 match result {
                     Expression::Used => self.generate_variable_assign(variable),

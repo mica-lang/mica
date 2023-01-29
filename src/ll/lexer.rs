@@ -18,6 +18,7 @@ pub enum TokenKind {
     True,
     False,
 
+    Let,
     Do,
     If,
     Elif,
@@ -428,6 +429,7 @@ impl Lexer {
             "and" => TokenKind::And,
             "or" => TokenKind::Or,
 
+            "let" => TokenKind::Let,
             "do" => TokenKind::Do,
             "if" => TokenKind::If,
             "elif" => TokenKind::Elif,

@@ -68,7 +68,7 @@ impl<T> Type<T> {
 
 impl<T> fmt::Debug for Type<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}]", self.dtable.pretty_name)
+        write!(f, "<[{}]>", self.dtable.pretty_name)
     }
 }
 
@@ -164,7 +164,7 @@ impl<T> Object<T> {
 
 impl<T> fmt::Debug for Object<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{}]", self.dtable.pretty_name)
+        write!(f, "<[{}]>", self.dtable.pretty_name)
     }
 }
 

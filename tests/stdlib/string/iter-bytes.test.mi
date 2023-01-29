@@ -1,0 +1,7 @@
+# Tests the string bytes iterator.
+
+bytes = []
+for b in "cześć".bytes do
+    bytes.push(b)
+end
+assert(bytes == [\u'c', \u'z', \u'e', \xC5, \x9B, \xC4, \x87])

@@ -1,0 +1,7 @@
+# Tests the string rsplit iterator.
+
+fragments = []
+for fragment in "example,hello,world".rsplit(",") do
+    fragments.push(fragment)
+end
+assert(fragments == ["world", "hello", "example"])

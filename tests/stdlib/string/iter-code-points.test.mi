@@ -1,0 +1,7 @@
+# Tests the string code_points iterator.
+
+chars = []
+for c in "cześć".code_points do
+    chars.push(c)
+end
+assert(chars == [\u'c', \u'z', \u'e', \u'ś', \u'ć'])

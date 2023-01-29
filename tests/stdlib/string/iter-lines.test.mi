@@ -1,0 +1,13 @@
+# Tests the string lines iterator.
+
+text =
+    \\Hello
+    \\world!
+    \\
+    \\That was a blank.
+
+lines = []
+for line in text.lines do
+    lines.push(line)
+end
+assert(lines == ["Hello", "world!", "", "That was a blank."])

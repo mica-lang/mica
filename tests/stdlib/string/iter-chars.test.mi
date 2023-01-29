@@ -1,0 +1,7 @@
+# Tests the string chars iterator.
+
+chars = []
+for c in "cześć".chars do
+    chars.push(c)
+end
+assert(chars == ["c", "z", "e", "ś", "ć"])

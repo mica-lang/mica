@@ -1,6 +1,14 @@
 use std::ops::Deref;
 
-use crate::{ll::gc::Gc, TypeBuilder};
+use crate::{
+    corelib::iterators::string::{
+        bytes::StringBytes, chars::StringChars, code_points::StringCodePoints, lines::StringLines,
+        rsplit::StringRSplit, split::StringSplit,
+    },
+    ll::gc::Gc,
+    Arguments, IntoValue, MethodParameterCount, MicaLanguageResultExt, RawFunctionKind,
+    TypeBuilder,
+};
 
 pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
     builder
@@ -38,4 +46,61 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
             s.replacen(pat.deref().deref(), &with, n)
         })
         .add_function("trim", |s: &String| s.trim().to_owned())
+        // TODO: It should be possible to implement these without raw functions in the future.
+        .add_raw_function(
+            "bytes",
+            MethodParameterCount::from_count_with_self(1),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let iter = unsafe { StringBytes::new(*arguments.raw_self()) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
+        .add_raw_function(
+            "chars",
+            MethodParameterCount::from_count_with_self(1),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let iter = unsafe { StringChars::new(*arguments.raw_self()) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
+        .add_raw_function(
+            "code_points",
+            MethodParameterCount::from_count_with_self(1),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let iter = unsafe { StringCodePoints::new(*arguments.raw_self()) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
+        .add_raw_function(
+            "lines",
+            MethodParameterCount::from_count_with_self(1),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let iter = unsafe { StringLines::new(*arguments.raw_self()) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
+        .add_raw_function(
+            "split",
+            MethodParameterCount::from_count_with_self(2),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let sep: Gc<String> = arguments.get(0).to_language_error()?;
+                let iter = unsafe { StringSplit::new(*arguments.raw_self(), sep) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
+        .add_raw_function(
+            "rsplit",
+            MethodParameterCount::from_count_with_self(2),
+            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
+                let arguments = Arguments::new(args, env);
+                let sep: Gc<String> = arguments.get(0).to_language_error()?;
+                let iter = unsafe { StringRSplit::new(*arguments.raw_self(), sep) };
+                Ok(iter.into_value_with_environment(env).to_raw(gc))
+            })),
+        )
 }

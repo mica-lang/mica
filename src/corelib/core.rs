@@ -25,6 +25,10 @@ fn debug(arguments: Arguments) {
     println!();
 }
 
+fn string(x: Value) -> String {
+    x.to_string()
+}
+
 #[derive(Debug)]
 struct UserError(String);
 
@@ -58,6 +62,7 @@ fn assert(condition: Value, message: Option<Value>) -> Result<Value, Error> {
 pub(crate) fn load_core(engine: &mut Engine) -> Result<(), Error> {
     engine.add_function("print", print)?;
     engine.add_function("debug", debug)?;
+    engine.add_function("string", string)?;
     engine.add_function("error", error)?;
     engine.add_function("assert", assert)?;
 

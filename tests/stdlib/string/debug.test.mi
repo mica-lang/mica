@@ -1,0 +1,24 @@
+# Tests the String.debug method against all types.
+
+assert(String.debug(nil) == "nil")
+
+assert(String.debug(true) == "true")
+assert(String.debug(false) == "false")
+
+assert(String.debug(1) == "1")
+assert(String.debug(3.14159265) == "3.14159265")
+
+assert(String.debug("Hello") ==
+    \\"Hello"
+)
+
+assert(String.debug([]) == "[]")
+assert(String.debug([1]) == "[1]")
+assert(String.debug([1, 2, 3]) == "[1, 2, 3]")
+
+assert(String.debug([:]) == "[:]")
+assert(String.debug([1: 2]) == "[1: 2]")
+assert(String.debug([1: 2, 3: 4]) == "[1: 2, 3: 4]")
+
+assert(String.debug(CountUp) == "<[type CountUp]>")
+assert(String.debug(countup(1, 10)) == "<[CountUp]>")

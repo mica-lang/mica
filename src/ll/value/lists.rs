@@ -1,10 +1,22 @@
-use std::{cell::UnsafeCell, cmp::Ordering};
+use std::{
+    any::Any,
+    cell::UnsafeCell,
+    cmp::Ordering,
+    fmt,
+    hash::{Hash, Hasher},
+};
 
-use super::RawValue;
-use crate::ll::error::LanguageErrorKind;
+use super::{RawValue, UserData};
+use crate::{
+    ll::{
+        bytecode::{DispatchTable, Environment},
+        error::LanguageErrorKind,
+        gc::GcRaw,
+    },
+    Gc,
+};
 
 /// A Mica list.
-#[derive(Debug)]
 pub struct List {
     elements: UnsafeCell<Vec<RawValue>>,
 }
@@ -55,5 +67,76 @@ impl List {
 impl PartialEq for List {
     fn eq(&self, other: &Self) -> bool {
         (unsafe { &*self.elements.get() } == unsafe { &*other.elements.get() })
+    }
+}
+
+impl fmt::Debug for List {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")?;
+        unsafe {
+            for (i, &element) in self.as_slice().iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write!(f, "{element}")?;
+            }
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
+}
+
+impl UserData for List {
+    fn dtable_gcraw(&self, env: Option<&Environment>) -> GcRaw<DispatchTable> {
+        Gc::as_raw(
+            &env.expect("UserData::dtable_gcraw called on List with no environment")
+                .builtin_dtables
+                .list,
+        )
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn partial_eq(&self, other: &dyn UserData) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<List>() {
+            self == other
+        } else {
+            false
+        }
+    }
+
+    fn try_partial_cmp(&self, other: &dyn UserData) -> Result<Option<Ordering>, LanguageErrorKind> {
+        if let Some(other) = other.as_any().downcast_ref::<List>() {
+            unsafe { self.try_partial_cmp(other) }
+        } else {
+            Err(LanguageErrorKind::TypeError {
+                expected: "List".into(),
+                got: other.type_name().to_owned().into(),
+            })
+        }
+    }
+
+    fn hash(&self, mut hasher: &mut dyn Hasher) {
+        unsafe {
+            let slice = self.as_slice();
+            slice.len().hash(&mut hasher);
+            for &element in slice {
+                element.hash(&mut hasher);
+            }
+        }
+    }
+
+    fn type_name(&self) -> &str {
+        "List"
+    }
+
+    fn visit_references(&self, visit: &mut dyn FnMut(RawValue)) {
+        unsafe {
+            for &value in self.as_slice() {
+                visit(value);
+            }
+        }
     }
 }

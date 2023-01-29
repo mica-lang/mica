@@ -1,0 +1,3 @@
+# Tests that lists can be compared.
+
+assert([1] < [2])

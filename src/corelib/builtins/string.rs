@@ -7,11 +7,12 @@ use crate::{
     },
     ll::gc::Gc,
     Arguments, IntoValue, MethodParameterCount, MicaLanguageResultExt, RawFunctionKind,
-    TypeBuilder,
+    TypeBuilder, Value,
 };
 
 pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
     builder
+        .add_static("debug", |x: Value| format!("{x:?}"))
         .add_function("cat", |s: &String, t: Gc<String>| format!("{s}{t}"))
         .add_function("contains", |s: &String, sub: Gc<String>| s.contains(sub.deref().deref()))
         .add_function("starts_with", |s: &String, prefix: Gc<String>| {

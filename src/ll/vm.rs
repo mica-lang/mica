@@ -10,7 +10,9 @@ use crate::ll::{
     },
     error::{LanguageError, LanguageErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
-    value::{create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, ValueKind},
+    value::{
+        create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, UserData, ValueKind,
+    },
 };
 
 /// Storage for global variables.
@@ -381,11 +383,9 @@ impl Fiber {
                 ValueKind::Number => &env.builtin_dtables.number,
                 ValueKind::String => &env.builtin_dtables.string,
                 ValueKind::Function => &env.builtin_dtables.function,
-                ValueKind::List => &env.builtin_dtables.list,
-                ValueKind::Dict => &env.builtin_dtables.dict,
                 ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
                 ValueKind::Trait => value.get_raw_trait_unchecked().get().dtable(),
-                ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(),
+                ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(Some(env)),
             }
         }
     }
@@ -564,7 +564,8 @@ impl Fiber {
                     unsafe { gc.auto_collect(self.roots(globals)) };
                     let len = usize::from(operand);
                     let elements = self.stack.drain(self.stack.len() - len..).collect();
-                    let list = gc.allocate(List::new(elements));
+                    let list: Box<dyn UserData> = Box::new(List::new(elements));
+                    let list = gc.allocate(list);
                     self.push(RawValue::from(list));
                 }
                 Opcode::CreateDict => {
@@ -578,6 +579,7 @@ impl Fiber {
                             dict.insert(key, value);
                         }
                     }
+                    let dict: Box<dyn UserData> = Box::new(dict);
                     let dict = gc.allocate(dict);
                     self.push(RawValue::from(dict));
                 }

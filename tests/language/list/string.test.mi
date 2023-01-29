@@ -1,0 +1,5 @@
+# Tests that the string representation of lists makes sense.
+
+assert(string([]) == "[]")
+assert(string([1]) == "[1]")
+assert(string([1, 2]) == "[1, 2]")

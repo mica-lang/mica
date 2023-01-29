@@ -3,7 +3,7 @@ use std::hint::unreachable_unchecked;
 use crate::{
     ll::{
         gc::{Gc, Memory},
-        value::{Dict, RawValue, ValueKind},
+        value::{Dict, List, RawValue, ValueKind},
     },
     Error, Hidden, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value,
 };
@@ -60,10 +60,16 @@ impl Value {
                 ValueKind::Trait => {
                     Self::Trait(Hidden(Gc::from_raw(raw.get_raw_trait_unchecked())))
                 }
-                ValueKind::List => Self::List(Hidden(Gc::from_raw(raw.get_raw_list_unchecked()))),
-                ValueKind::Dict => Self::Dict(Hidden(Gc::from_raw(raw.get_raw_dict_unchecked()))),
                 ValueKind::UserData => {
-                    Self::UserData(Gc::from_raw(raw.get_raw_user_data_unchecked()))
+                    let raw_ptr_user_data = raw.get_raw_user_data_unchecked();
+                    let user_data = raw_ptr_user_data.get();
+                    if user_data.as_any().is::<List>() {
+                        Self::List(Hidden(Gc::from_raw(raw_ptr_user_data)))
+                    } else if user_data.as_any().is::<Dict>() {
+                        Self::Dict(Hidden(Gc::from_raw(raw_ptr_user_data)))
+                    } else {
+                        Self::UserData(Gc::from_raw(raw_ptr_user_data))
+                    }
                 }
             }
         }
@@ -134,7 +140,7 @@ impl SelfFromRawValue for Vec<RawValue> {
     type Guard = ();
 
     unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
-        Ok((&*v.get_raw_list_unchecked().get().get_mut(), ()))
+        Ok((&*v.downcast_user_data_unchecked::<List>().get_mut(), ()))
     }
 }
 
@@ -142,7 +148,7 @@ impl SelfFromRawValue for Dict {
     type Guard = ();
 
     unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
-        Ok((v.get_raw_dict_unchecked().get(), ()))
+        Ok((v.downcast_user_data_unchecked::<Dict>(), ()))
     }
 }
 
@@ -190,7 +196,7 @@ impl MutSelfFromRawValue for Vec<RawValue> {
     type Guard = ();
 
     unsafe fn mut_self_from_raw_value(v: &RawValue) -> Result<(&mut Self, Self::Guard), Error> {
-        Ok((&mut *v.get_raw_list_unchecked().get().get_mut(), ()))
+        Ok((&mut *v.downcast_user_data_unchecked::<List>().get_mut(), ()))
     }
 }
 

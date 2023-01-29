@@ -1,6 +1,7 @@
 use crate::{
-    corelib::iterators::list::ListIter, ll::value::RawValue, Arguments, IntoValue,
-    MethodParameterCount, RawFunctionKind, TypeBuilder,
+    corelib::iterators::list::ListIter,
+    ll::value::{List, RawValue},
+    Arguments, IntoValue, MethodParameterCount, RawFunctionKind, TypeBuilder,
 };
 
 pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
@@ -8,14 +9,15 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
         .add_function("len", Vec::len)
         .add_function("is_empty", Vec::is_empty)
         // get is a common operation and is thus implemented as a raw function to avoid a roundtrip
-        // conversion to and from a safe Value, which is not zero-cost as of now.
+        // conversion to and from a safe Value, which is not zero-cost.
         .add_raw_function(
             "get",
             MethodParameterCount::from_count_with_self(2),
             RawFunctionKind::Foreign(Box::new(|env, _, args| {
                 let arguments = Arguments::new(args, env);
-                let v =
-                    unsafe { &mut *arguments.raw_self().get_raw_list_unchecked().get().get_mut() };
+                let v = unsafe {
+                    arguments.raw_self().downcast_user_data_unchecked::<List>().as_slice()
+                };
                 let index = arguments.nth(0).unwrap().ensure_number()? as usize;
                 Ok(v.get(index).copied().unwrap_or(RawValue::from(())))
             })),

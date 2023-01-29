@@ -21,7 +21,7 @@ struct Counter impl
     end
 end
 
-c = Counter.new(1, 1)
+let c = Counter.new(1, 1)
 while c.value < 100 do
     print(c.value)
     if c.value.mod(2) == 0 do
@@ -149,7 +149,7 @@ of just returning values.
 let _: () =
     engine.start(
         "code.mi",
-        r#" x = 1
+        r#" let x = 1
             nil "# // Explicitly return nil, because every assignment evaluates to its right-hand side
     )?
     .trampoline()?;
@@ -269,7 +269,7 @@ engine.add_type(
 assert_eq!(
     engine
         .start("type.mi", r#"
-            counter = Counter.new(10, 2)
+            let counter = Counter.new(10, 2)
             counter.increment()
             counter.value
         "#)?

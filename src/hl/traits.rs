@@ -40,7 +40,7 @@ use crate::{
 /// let my_game: Value = engine
 ///     .start(
 ///         "game.mi",
-///         r#" tick_count = 0
+///         r#" let tick_count = 0
 ///
 ///             struct MyGame impl
 ///                 func new() constructor = nil

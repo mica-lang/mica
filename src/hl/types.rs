@@ -228,7 +228,7 @@ where
     /// let i: i32 = engine
     ///     .start(
     ///         "counter.mi",
-    ///         r#" count = Counter.new()
+    ///         r#" let count = Counter.new()
     ///             count.increment()
     ///             count.increment()
     ///             count.value "#
@@ -289,7 +289,7 @@ where
     ///     .start(
     ///         "counter.mi",
     ///         r#"
-    ///             i = 1
+    ///             let i = 1
     ///             for _ in Count10.new() do
     ///                 i = i * 2
     ///             end

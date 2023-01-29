@@ -12,7 +12,7 @@ use crate::{
 
 pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
     builder
-        .add_function("cat", |s: &String, t: Gc<String>| format!("{}{}", s, t))
+        .add_function("cat", |s: &String, t: Gc<String>| format!("{s}{t}"))
         .add_function("contains", |s: &String, sub: Gc<String>| s.contains(sub.deref().deref()))
         .add_function("starts_with", |s: &String, prefix: Gc<String>| {
             s.starts_with(prefix.deref().deref())

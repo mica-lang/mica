@@ -30,7 +30,7 @@ pub fn generate() -> anyhow::Result<Utf8PathBuf> {
     info!("created output directory");
 
     let mut output = File::create(output_filename)?;
-    writeln!(output, "{}", PRELUDE)?;
+    writeln!(output, "{PRELUDE}")?;
     debug!("write prelude");
 
     generate_for_params(&mut output, &[])?;

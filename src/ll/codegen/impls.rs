@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use super::{
     functions::{FunctionCallConv, GenerateFunctionOptions},
-    structs::StructData,
     CodeGenerator, Expression, ExpressionResult,
 };
 use crate::ll::{
@@ -36,7 +35,7 @@ impl<'e> CodeGenerator<'e> {
         // There's no need to save any old struct data because `impl` blocks don't nest freely.
         // Yes, you can create an `impl` block in a function inside this `impl` block, but that
         // function is handled by a different generator.
-        self.struct_data = Some(Box::new(StructData::default()));
+        self.struct_data = Some(Box::default());
 
         let mut proto = Prototype::default();
         let mut state = ImplGenerationState {

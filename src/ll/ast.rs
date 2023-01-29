@@ -338,10 +338,10 @@ impl fmt::Debug for DumpAst<'_> {
             f.write_str(prefix)?;
             write!(f, "{:?} ", ast.kind(node))?;
             if let Some(n) = ast.number(node) {
-                write!(f, "{}", n)?;
+                write!(f, "{n}")?;
             }
             if let Some(s) = ast.string(node) {
-                write!(f, "{:?}", s)?;
+                write!(f, "{s:?}")?;
             }
             if ast.children(node).map(|children| children.is_empty()).unwrap_or(false) {
                 write!(f, " (children empty)")?;

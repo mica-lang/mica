@@ -75,7 +75,7 @@ impl std::fmt::Debug for Opr24 {
 
 impl std::fmt::Display for Opr24 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 

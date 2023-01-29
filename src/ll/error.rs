@@ -267,7 +267,7 @@ impl std::fmt::Display for LanguageErrorKind {
             Self::TypeError { expected, got } => {
                 write!(f, "type mismatch, expected {expected} but got {got}")
             }
-            Self::MethodDoesNotExist { type_name, signature } => write!(f, "method {} is not defined for {}", signature, type_name),
+            Self::MethodDoesNotExist { type_name, signature } => write!(f, "method {signature} is not defined for {type_name}"),
             Self::StructAlreadyImplemented => write!(f, "this struct is already implemented"),
             Self::UserDataAlreadyBorrowed => write!(f, "this user data is already borrowed"),
             Self::DoubleMethodImplementation { type_name, signature } => {
@@ -284,7 +284,7 @@ impl std::fmt::Display for LanguageErrorKind {
                 Ok(())
             }
 
-            Self::User(error) => write!(f, "{}", error),
+            Self::User(error) => write!(f, "{error}"),
         }
     }
 }
@@ -317,9 +317,9 @@ impl std::fmt::Display for LanguageError {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 let Self(file, location) = self;
                 if location.is_uninit() {
-                    write!(f, "{}", file)
+                    write!(f, "{file}")
                 } else {
-                    write!(f, "{}:{}", file, location)
+                    write!(f, "{file}:{location}")
                 }
             }
         }
@@ -329,7 +329,7 @@ impl std::fmt::Display for LanguageError {
                 write!(f, "{module_name}:{location}: error: {kind}")
             }
             LanguageError::Runtime { kind, call_stack } => {
-                writeln!(f, "error: {}", kind)?;
+                writeln!(f, "error: {kind}")?;
                 write!(f, "stack traceback (most recent call first):")?;
                 let file_location_width = call_stack
                     .iter()

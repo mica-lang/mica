@@ -39,7 +39,7 @@ impl std::error::Error for UserError {}
 fn error(arguments: Arguments) -> Result<(), UserError> {
     let mut message = String::new();
     for value in arguments.array() {
-        write!(message, "{}", value).unwrap();
+        write!(message, "{value}").unwrap();
     }
     Err(UserError(message))
 }

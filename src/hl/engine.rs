@@ -178,7 +178,7 @@ impl Engine {
             eprintln!("Mica - global environment:");
             eprintln!("{:#?}", self.env);
             eprintln!("Mica - main chunk disassembly:");
-            eprintln!("{:#?}", main_chunk);
+            eprintln!("{main_chunk:#?}");
         }
 
         Ok(Script { engine: self, main_chunk })

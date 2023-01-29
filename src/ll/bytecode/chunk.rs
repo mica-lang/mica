@@ -156,7 +156,7 @@ impl fmt::Debug for Chunk {
             let location = self.location(pc);
             let show_pc = pc;
             let (opcode, operand) = unsafe { self.read_instruction(&mut pc) };
-            write!(f, "{show_pc:06x} {} {opcode:?}({operand:?}) ", location)?;
+            write!(f, "{show_pc:06x} {location} {opcode:?}({operand:?}) ")?;
 
             #[allow(clippy::single_match)]
             match opcode {

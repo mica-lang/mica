@@ -51,7 +51,7 @@ impl<'b> TraitBuilder<'b> {
 
         let mut chunk = Chunk::new(module_name);
         chunk.codegen_location = codegen_location;
-        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), parameter_count as u8))));
+        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), parameter_count))));
         chunk.emit(Opcode::Return);
 
         let shim_name = Rc::from(format!("trait {trait_name}.{} <shim>", method_signature.name));

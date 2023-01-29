@@ -444,7 +444,7 @@ where
             Value::Nil => Ok(None),
             _ => Ok(Some(T::try_from_value(value, env).map_err(|error| {
                 if let Error::TypeMismatch { expected, got } = error {
-                    Error::TypeMismatch { expected: format!("{} or Nil", expected).into(), got }
+                    Error::TypeMismatch { expected: format!("{expected} or Nil").into(), got }
                 } else {
                     unreachable!()
                 }

@@ -1,0 +1,4 @@
+# Check that using let with a non-assignment raises a compilation error.
+# @error {file}:{:LINE}:5: error: the right hand side of 'let' must be an assignment, like 'let x = y'
+
+let 1  # @line LINE

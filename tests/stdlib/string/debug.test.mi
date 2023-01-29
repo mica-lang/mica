@@ -18,6 +18,7 @@ assert(String.debug([1, 2, 3]) == "[1, 2, 3]")
 
 assert(String.debug([:]) == "[:]")
 assert(String.debug([1: 2]) == "[1: 2]")
+# We can't really test multiple pairs since lists do not maintain deterministic order.
 assert(String.debug([1: 2, 3: 4]) == "[1: 2, 3: 4]")
 
 assert(String.debug(CountUp) == "<[type CountUp]>")

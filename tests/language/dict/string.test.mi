@@ -2,4 +2,5 @@
 
 assert(string([:]) == "[:]")
 assert(string([1: 2]) == "[1: 2]")
-assert(string([1: 2, 3: 4]) == "[1: 2, 3: 4]")
+# We can't really test multiple pairs since lists do not maintain deterministic order.
+# assert(string([1: 2, 3: 4]) == "[1: 2, 3: 4]")

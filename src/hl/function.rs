@@ -1,14 +1,8 @@
 pub use crate::ll::bytecode::{FunctionParameterCount, MethodParameterCount};
 use crate::{
-    ll::{bytecode::Environment, gc::Memory, value::RawValue},
+    ll::{bytecode::Library, value::RawValue},
     Error, IntoValue, LanguageErrorKind, RawForeignFunction, TryFromValue, Value,
 };
-
-fn create_rawff(
-    f: impl Fn(&Environment, &mut Memory, &[RawValue]) -> Result<RawValue, LanguageErrorKind> + 'static,
-) -> RawForeignFunction {
-    Box::new(f)
-}
 
 /// Arguments passed to a varargs function.
 ///
@@ -17,15 +11,15 @@ fn create_rawff(
 pub struct Arguments<'a> {
     this: RawValue,
     inner: &'a [RawValue],
-    env: &'a Environment,
+    library: &'a Library,
 }
 
 impl<'a> Arguments<'a> {
     /// Creates a new [`Arguments`] from a raw argument list, as is passed into a
     /// [raw function][RawForeignFunction].
-    pub fn new(raw_arguments: &'a [RawValue], env: &'a Environment) -> Self {
+    pub fn new(raw_arguments: &'a [RawValue], library: &'a Library) -> Self {
         // Skip the first argument, which is `self` (or the currently called function).
-        Self { this: raw_arguments[0], inner: &raw_arguments[1..], env }
+        Self { this: raw_arguments[0], inner: &raw_arguments[1..], library }
     }
 
     /// Returns the number of arguments passed to the function.
@@ -68,7 +62,7 @@ impl<'a> Arguments<'a> {
         T: TryFromValue,
     {
         let value = self.inner.get(n).cloned().unwrap_or(RawValue::from(()));
-        T::try_from_value(&Value::from_raw(value), self.env).map_err(|error| {
+        T::try_from_value(&Value::from_raw(value), self.library).map_err(|error| {
             if let Error::TypeMismatch { expected, got } = error {
                 Error::ArgumentTypeMismatch { index: n, expected, got }
             } else {
@@ -272,9 +266,9 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = FunctionParameterCount::Varargs;
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        create_rawff(move |env, gc, args| {
-            self(Arguments::new(args, env))
-                .map(|value| value.into_value_with_environment(env).to_raw(gc))
+        Box::new(move |library, gc, args| {
+            self(Arguments::new(args, library))
+                .map(|value| value.into_value_with_library(library).to_raw(gc))
                 .map_err(|error| LanguageErrorKind::User(Box::new(error)))
         })
     }
@@ -290,8 +284,8 @@ where
     const PARAMETER_COUNT: Self::ParameterCount = FunctionParameterCount::Varargs;
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
-        create_rawff(move |env, gc, args| {
-            Ok(self(Arguments::new(args, env)).into_value_with_environment(env).to_raw(gc))
+        Box::new(move |library, gc, args| {
+            Ok(self(Arguments::new(args, library)).into_value_with_library(library).to_raw(gc))
         })
     }
 }

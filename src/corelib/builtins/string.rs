@@ -51,57 +51,57 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
         .add_raw_function(
             "bytes",
             MethodParameterCount::from_count_with_self(1),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringBytes::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
         .add_raw_function(
             "chars",
             MethodParameterCount::from_count_with_self(1),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringChars::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
         .add_raw_function(
             "code_points",
             MethodParameterCount::from_count_with_self(1),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringCodePoints::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
         .add_raw_function(
             "lines",
             MethodParameterCount::from_count_with_self(1),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringLines::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
         .add_raw_function(
             "split",
             MethodParameterCount::from_count_with_self(2),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let sep: Gc<String> = arguments.get(0).to_language_error()?;
                 let iter = unsafe { StringSplit::new(*arguments.raw_self(), sep) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
         .add_raw_function(
             "rsplit",
             MethodParameterCount::from_count_with_self(2),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let sep: Gc<String> = arguments.get(0).to_language_error()?;
                 let iter = unsafe { StringRSplit::new(*arguments.raw_self(), sep) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
 }

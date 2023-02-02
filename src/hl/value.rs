@@ -7,7 +7,7 @@ pub use raw::*;
 use self::into_value::{DoesNotUseEngine, EngineUse, UsesEngine};
 use crate::{
     ll::{
-        bytecode::{DispatchTable, Environment},
+        bytecode::{DispatchTable, Library},
         gc::Gc,
         value::{self, Closure, Dict, List, RawValue, Struct, Trait},
     },
@@ -131,24 +131,24 @@ impl fmt::Display for Value {
 /// Helper types for [`IntoValue`].
 #[allow(missing_debug_implementations)]
 pub mod into_value {
-    use crate::ll::bytecode::Environment;
+    use crate::ll::bytecode::Library;
 
     /// Marker for whether an implementation of [`IntoValue`][crate::IntoValue] requires an engine.
     pub trait EngineUse {
         #[doc(hidden)]
-        type Environment;
+        type Library;
 
         #[doc(hidden)]
-        fn change_type(env: &Environment) -> &Self::Environment;
+        fn change_type(env: &Library) -> &Self::Library;
     }
 
     /// Marker for implementations of [`IntoValue`][crate::IntoValue] that do require an engine.
     pub enum UsesEngine {}
 
     impl EngineUse for UsesEngine {
-        type Environment = Environment;
+        type Library = Library;
 
-        fn change_type(env: &Environment) -> &Self::Environment {
+        fn change_type(env: &Library) -> &Self::Library {
             env
         }
     }
@@ -158,9 +158,9 @@ pub mod into_value {
     pub enum DoesNotUseEngine {}
 
     impl EngineUse for DoesNotUseEngine {
-        type Environment = ();
+        type Library = ();
 
-        fn change_type(_: &Environment) -> &Self::Environment {
+        fn change_type(_: &Library) -> &Self::Library {
             &()
         }
     }
@@ -177,16 +177,16 @@ pub trait IntoValue {
 
     /// Performs the conversion.
     #[doc(hidden)]
-    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Environment) -> Value;
+    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Library) -> Value;
 
-    /// Performs the conversion providing an environment, regardless of whether the conversion
+    /// Performs the conversion providing a library, regardless of whether the conversion
     /// requires one or not.
     #[doc(hidden)]
-    fn into_value_with_environment(self, env: &Environment) -> Value
+    fn into_value_with_library(self, library: &Library) -> Value
     where
         Self: Sized,
     {
-        self.into_value(<Self::EngineUse as EngineUse>::change_type(env))
+        self.into_value(<Self::EngineUse as EngineUse>::change_type(library))
     }
 }
 
@@ -294,7 +294,7 @@ where
 {
     type EngineUse = T::EngineUse;
 
-    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Environment) -> Value {
+    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Library) -> Value {
         match self {
             Some(value) => value.into_value(env),
             None => Value::Nil,
@@ -331,8 +331,8 @@ where
 {
     type EngineUse = UsesEngine;
 
-    fn into_value(self, env: &Environment) -> Value {
-        let dtable = env.get_user_dtable::<T>().map(Gc::clone).unwrap_or_else(|| {
+    fn into_value(self, library: &Library) -> Value {
+        let dtable = library.get_user_dtable::<T>().map(Gc::clone).unwrap_or_else(|| {
             let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
             Gc::new(ad_hoc_dtable)
         });
@@ -347,7 +347,7 @@ where
     Self: Sized,
 {
     /// Tries to perform the conversion, returning an [`Error`] on failure.
-    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error>;
+    fn try_from_value(value: &Value, library: &Library) -> Result<Self, Error>;
 }
 
 fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
@@ -355,7 +355,7 @@ fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
 }
 
 impl TryFromValue for Value {
-    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Library) -> Result<Self, Error> {
         Ok(value.clone())
     }
 }
@@ -365,13 +365,13 @@ impl TryFromValue for Value {
 /// and cause memory safety issues.
 #[doc(hidden)]
 impl TryFromValue for RawValue {
-    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Library) -> Result<Self, Error> {
         Ok(value.to_raw_unmanaged())
     }
 }
 
 impl TryFromValue for () {
-    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Library) -> Result<Self, Error> {
         if let Value::Nil = value {
             Ok(())
         } else {
@@ -381,7 +381,7 @@ impl TryFromValue for () {
 }
 
 impl TryFromValue for bool {
-    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Library) -> Result<Self, Error> {
         match value {
             Value::True => Ok(true),
             Value::False => Ok(false),
@@ -393,7 +393,7 @@ impl TryFromValue for bool {
 macro_rules! try_from_value_numeric {
     ($T:ty) => {
         impl TryFromValue for $T {
-            fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
+            fn try_from_value(value: &Value, _: &Library) -> Result<Self, Error> {
                 if let Value::Number(number) = value {
                     Ok(*number as $T)
                 } else {
@@ -420,7 +420,7 @@ try_from_value_numeric!(f32);
 try_from_value_numeric!(f64);
 
 impl TryFromValue for Gc<String> {
-    fn try_from_value(value: &Value, _: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, _: &Library) -> Result<Self, Error> {
         if let Value::String(s) = value {
             Ok(Gc::clone(s))
         } else {
@@ -430,8 +430,8 @@ impl TryFromValue for Gc<String> {
 }
 
 impl TryFromValue for String {
-    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
-        <Gc<String>>::try_from_value(value, env).map(|s| s.to_string())
+    fn try_from_value(value: &Value, library: &Library) -> Result<Self, Error> {
+        <Gc<String>>::try_from_value(value, library).map(|s| s.to_string())
     }
 }
 
@@ -439,10 +439,10 @@ impl<T> TryFromValue for Option<T>
 where
     T: TryFromValue,
 {
-    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, library: &Library) -> Result<Self, Error> {
         match value {
             Value::Nil => Ok(None),
-            _ => Ok(Some(T::try_from_value(value, env).map_err(|error| {
+            _ => Ok(Some(T::try_from_value(value, library).map_err(|error| {
                 if let Error::TypeMismatch { expected, got } = error {
                     Error::TypeMismatch { expected: format!("{expected} or Nil").into(), got }
                 } else {
@@ -457,13 +457,13 @@ impl<T> TryFromValue for Vec<T>
 where
     T: TryFromValue,
 {
-    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, library: &Library) -> Result<Self, Error> {
         if let Value::List(l) = value {
             if let Some(list) = l.0.as_any().downcast_ref::<List>() {
                 let elements = unsafe { list.as_slice() };
                 let mut result = vec![];
                 for &element in elements {
-                    result.push(T::try_from_value(&Value::from_raw(element), env)?);
+                    result.push(T::try_from_value(&Value::from_raw(element), library)?);
                 }
                 Ok(result)
             } else {
@@ -485,7 +485,7 @@ impl<T> TryFromValue for T
 where
     T: UserData + Clone,
 {
-    fn try_from_value(value: &Value, env: &Environment) -> Result<Self, Error> {
+    fn try_from_value(value: &Value, library: &Library) -> Result<Self, Error> {
         if let Value::UserData(u) = value {
             let u: &dyn value::UserData = (**u).as_ref();
             if let Some(object) = u.as_any().downcast_ref::<Object<T>>() {
@@ -493,7 +493,7 @@ where
                 return Ok(object.clone());
             }
         }
-        let type_name = if let Some(dtable) = env.get_user_dtable::<T>() {
+        let type_name = if let Some(dtable) = library.get_user_dtable::<T>() {
             dtable.type_name.to_string()
         } else {
             type_name::<T>().to_string()

@@ -1,16 +1,14 @@
 //! Static execution environment.
 
 use std::{
-    any::{Any, TypeId},
     collections::{HashMap, HashSet},
     rc::Rc,
 };
 
-use super::{BuiltinDispatchTables, DispatchTable, Function, Opr24, Prototype, TraitPrototype};
+use super::{Function, Opr24, Prototype, TraitPrototype};
 use crate::ll::{
     bytecode::MethodParameterCount,
     error::{LanguageErrorKind, RenderedSignature},
-    gc::Gc,
 };
 
 /// The unique index of a function.
@@ -128,7 +126,7 @@ impl TraitIndex {
 }
 
 /// An environment containing information about declared globals, functions, vtables.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Environment {
     /// Mapping from global names to global slots.
     globals: HashMap<String, GlobalIndex>,
@@ -141,11 +139,6 @@ pub struct Environment {
     /// Mapping from method indices to function signatures.
     method_signatures: Vec<MethodSignature>,
 
-    /// Dispatch tables for builtin types.
-    pub builtin_dtables: BuiltinDispatchTables,
-    /// Dispatch tables for user types.
-    user_dtables: HashMap<TypeId, Gc<DispatchTable>>,
-
     /// `impl` prototypes.
     prototypes: Vec<Option<Prototype>>,
     /// Trait prototypes.
@@ -154,17 +147,8 @@ pub struct Environment {
 
 impl Environment {
     /// Creates a new, empty environment.
-    pub fn new(builtin_dtables: BuiltinDispatchTables) -> Self {
-        Self {
-            globals: HashMap::new(),
-            functions: Vec::new(),
-            method_indices: HashMap::new(),
-            method_signatures: Vec::new(),
-            builtin_dtables,
-            user_dtables: HashMap::new(),
-            prototypes: Vec::new(),
-            traits: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Tries to create a global. Returns the global slot number, or an error if there are too many
@@ -279,22 +263,5 @@ impl Environment {
     pub fn get_trait_mut(&mut self, id: TraitIndex) -> Option<&mut TraitPrototype> {
         let TraitIndex(id) = id;
         self.traits.get_mut(usize::from(id))
-    }
-
-    /// Adds a dispatch table for a user-defined type.
-    pub fn add_user_dtable<T>(&mut self, dtable: Gc<DispatchTable>)
-    where
-        T: Any,
-    {
-        let type_id = TypeId::of::<T>();
-        self.user_dtables.insert(type_id, dtable);
-    }
-
-    /// Returns the user-defined dispatch table, if available.
-    pub fn get_user_dtable<T>(&self) -> Option<&Gc<DispatchTable>>
-    where
-        T: Any,
-    {
-        self.user_dtables.get(&TypeId::of::<T>())
     }
 }

@@ -52,10 +52,10 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
         .add_raw_function(
             "iter",
             MethodParameterCount::from_count_with_self(1),
-            RawFunctionKind::Foreign(Box::new(|env, gc, args| {
-                let arguments = Arguments::new(args, env);
+            RawFunctionKind::Foreign(Box::new(|library, gc, args| {
+                let arguments = Arguments::new(args, library);
                 let iter = unsafe { ListIter::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_environment(env).to_raw(gc))
+                Ok(iter.into_value_with_library(library).to_raw(gc))
             })),
         )
 }

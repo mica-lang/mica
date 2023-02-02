@@ -21,7 +21,7 @@ pub use lists::*;
 pub use structs::*;
 pub use traits::*;
 
-use super::bytecode::Environment;
+use super::bytecode::Library;
 use crate::ll::{bytecode::DispatchTable, error::LanguageErrorKind, gc::GcRaw};
 
 /// The kind of a [`RawValue`].
@@ -402,15 +402,15 @@ pub trait UserData: Any + fmt::Debug {
     ///
     /// If the value requires the environment but it's not provided. This only happens with certain
     /// built-in types that are implemented as user data under the hood.
-    fn dtable_gcraw(&self, env: Option<&Environment>) -> GcRaw<DispatchTable>;
+    fn dtable_gcraw(&self, library: Option<&Library>) -> GcRaw<DispatchTable>;
 
     /// Returns the user data's dispatch table.
     ///
     /// # Safety
     /// This is basically sugar for `dtable_gcraw().get()`, so all the footguns of [`GcRaw::get`]
     /// apply.
-    unsafe fn dtable(&self, env: Option<&Environment>) -> &DispatchTable {
-        self.dtable_gcraw(env).get()
+    unsafe fn dtable(&self, library: Option<&Library>) -> &DispatchTable {
+        self.dtable_gcraw(library).get()
     }
 
     /// This is overridden by built-in types that need magical treatment (lists, dicts.)

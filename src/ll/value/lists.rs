@@ -9,7 +9,7 @@ use std::{
 use super::{RawValue, UserData};
 use crate::{
     ll::{
-        bytecode::{DispatchTable, Environment},
+        bytecode::{DispatchTable, Library},
         error::LanguageErrorKind,
         gc::GcRaw,
     },
@@ -87,9 +87,10 @@ impl fmt::Debug for List {
 }
 
 impl UserData for List {
-    fn dtable_gcraw(&self, env: Option<&Environment>) -> GcRaw<DispatchTable> {
+    fn dtable_gcraw(&self, library: Option<&Library>) -> GcRaw<DispatchTable> {
         Gc::as_raw(
-            &env.expect("UserData::dtable_gcraw called on List with no environment")
+            &library
+                .expect("UserData::dtable_gcraw called on List with no environment")
                 .builtin_dtables
                 .list,
         )

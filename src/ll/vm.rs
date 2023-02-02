@@ -2,7 +2,7 @@
 
 use std::{collections::HashSet, fmt, pin::Pin, ptr, rc::Rc};
 
-use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, MethodIndex};
+use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, Library, MethodIndex};
 use crate::ll::{
     bytecode::{
         CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind,
@@ -261,6 +261,7 @@ impl Fiber {
     fn enter_function(
         &mut self,
         env: &Environment,
+        library: &Library,
         globals: &mut Globals,
         gc: &mut Memory,
         closure: GcRaw<Closure>,
@@ -279,7 +280,7 @@ impl Fiber {
             FunctionKind::Foreign(f) => {
                 let arguments =
                     unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
-                let result = match f(env, gc, arguments) {
+                let result = match f(library, gc, arguments) {
                     Ok(value) => value,
                     Err(kind) => {
                         return Err(self.error_outside_function_call(Some(closure), env, kind));
@@ -375,17 +376,19 @@ impl Fiber {
     }
 
     /// Returns the dispatch table of the given value.
-    fn get_dispatch_table(value: RawValue, env: &Environment) -> &DispatchTable {
+    fn get_dispatch_table(value: RawValue, library: &Library) -> &DispatchTable {
         unsafe {
             match value.kind() {
-                ValueKind::Nil => &env.builtin_dtables.nil,
-                ValueKind::Boolean => &env.builtin_dtables.boolean,
-                ValueKind::Number => &env.builtin_dtables.number,
-                ValueKind::String => &env.builtin_dtables.string,
-                ValueKind::Function => &env.builtin_dtables.function,
+                ValueKind::Nil => &library.builtin_dtables.nil,
+                ValueKind::Boolean => &library.builtin_dtables.boolean,
+                ValueKind::Number => &library.builtin_dtables.number,
+                ValueKind::String => &library.builtin_dtables.string,
+                ValueKind::Function => &library.builtin_dtables.function,
                 ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
                 ValueKind::Trait => value.get_raw_trait_unchecked().get().dtable(),
-                ValueKind::UserData => value.get_raw_user_data_unchecked().get().dtable(Some(env)),
+                ValueKind::UserData => {
+                    value.get_raw_user_data_unchecked().get().dtable(Some(library))
+                }
             }
         }
     }
@@ -478,6 +481,7 @@ impl Fiber {
     pub fn interpret(
         &mut self,
         env: &Environment,
+        library: &Library,
         globals: &mut Globals,
         gc: &mut Memory,
     ) -> Result<RawValue, LanguageError> {
@@ -724,13 +728,13 @@ impl Fiber {
                     let argument_count = usize::from(operand) + 1;
                     let function = self.nth_from_top(argument_count);
                     let closure = wrap_error!(function.ensure_raw_function());
-                    self.enter_function(env, globals, gc, closure, argument_count)?;
+                    self.enter_function(env, library, globals, gc, closure, argument_count)?;
                 }
                 Opcode::CallMethod => {
                     let (method_index, argument_count) = operand.unpack();
                     let method_index = MethodIndex::from_u16(method_index);
                     let receiver = self.nth_from_top(argument_count as usize);
-                    let dtable = Self::get_dispatch_table(receiver, env);
+                    let dtable = Self::get_dispatch_table(receiver, library);
                     #[cfg(feature = "trace-vm-calls")]
                     {
                         println!(
@@ -741,7 +745,14 @@ impl Fiber {
                         );
                     }
                     if let Some(closure) = dtable.get_method(method_index) {
-                        self.enter_function(env, globals, gc, closure, argument_count as usize)?;
+                        self.enter_function(
+                            env,
+                            library,
+                            globals,
+                            gc,
+                            closure,
+                            argument_count as usize,
+                        )?;
                     } else {
                         let signature = env
                             .get_method_signature(method_index)

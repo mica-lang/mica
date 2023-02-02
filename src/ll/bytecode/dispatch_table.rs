@@ -1,13 +1,7 @@
 use std::{fmt::Debug, rc::Rc};
 
-use super::{BuiltinTraits, Environment, MethodIndex};
-use crate::{
-    ll::{
-        gc::{GcRaw, Memory},
-        value::Closure,
-    },
-    Gc,
-};
+use super::MethodIndex;
+use crate::ll::{gc::GcRaw, value::Closure};
 
 /// A dispatch table containing functions bound to an instance of a value.
 #[derive(Debug)]
@@ -61,45 +55,5 @@ impl DispatchTable {
     /// Returns an iterator over all methods in this dispatch table.
     pub(crate) fn methods(&self) -> impl Iterator<Item = GcRaw<Closure>> + '_ {
         self.methods.iter().copied().flatten()
-    }
-}
-
-pub trait BuiltinDispatchTableGenerator: Debug {
-    fn generate_tuple(
-        &self,
-        env: &mut Environment,
-        gc: &mut Memory,
-        builtin_traits: &BuiltinTraits,
-        size: usize,
-    ) -> Gc<DispatchTable>;
-}
-
-/// Dispatch tables for instances of builtin types. These should be constructed by the standard
-/// library.
-#[derive(Debug)]
-pub struct BuiltinDispatchTables {
-    pub nil: Gc<DispatchTable>,
-    pub boolean: Gc<DispatchTable>,
-    pub number: Gc<DispatchTable>,
-    pub string: Gc<DispatchTable>,
-    pub function: Gc<DispatchTable>,
-    pub list: Gc<DispatchTable>,
-    pub dict: Gc<DispatchTable>,
-    pub tuples: Vec<Option<Gc<DispatchTable>>>,
-}
-
-/// Default dispatch tables for built-in types are empty and do not implement any methods.
-impl BuiltinDispatchTables {
-    pub fn empty() -> Self {
-        Self {
-            nil: Gc::new(DispatchTable::new("Nil", "Nil")),
-            boolean: Gc::new(DispatchTable::new("Boolean", "Boolean")),
-            number: Gc::new(DispatchTable::new("Number", "Boolean")),
-            string: Gc::new(DispatchTable::new("String", "String")),
-            function: Gc::new(DispatchTable::new("Function", "Function")),
-            list: Gc::new(DispatchTable::new("List", "List")),
-            dict: Gc::new(DispatchTable::new("Dict", "Dict")),
-            tuples: vec![],
-        }
     }
 }

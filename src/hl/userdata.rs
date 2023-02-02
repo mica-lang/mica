@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     ll::{
-        bytecode::{DispatchTable, Environment},
+        bytecode::{DispatchTable, Library},
         error::LanguageErrorKind,
         gc::{Gc, GcRaw},
         value::{self, RawValue},
@@ -76,7 +76,7 @@ impl<T> value::UserData for Type<T>
 where
     T: Any,
 {
-    fn dtable_gcraw(&self, _: Option<&Environment>) -> GcRaw<DispatchTable> {
+    fn dtable_gcraw(&self, _: Option<&Library>) -> GcRaw<DispatchTable> {
         Gc::as_raw(&self.dtable)
     }
 
@@ -172,7 +172,7 @@ impl<T> value::UserData for Object<T>
 where
     T: Any,
 {
-    fn dtable_gcraw(&self, _: Option<&Environment>) -> GcRaw<DispatchTable> {
+    fn dtable_gcraw(&self, _: Option<&Library>) -> GcRaw<DispatchTable> {
         Gc::as_raw(&self.dtable)
     }
 

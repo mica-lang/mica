@@ -6,7 +6,8 @@ use crate::{
     hl::userdata::Type,
     ll::{
         bytecode::{
-            BuiltinTraits, DispatchTable, Environment, Function, FunctionKind, MethodSignature,
+            BuiltinTraits, DispatchTable, Environment, Function, FunctionKind, Library,
+            MethodSignature,
         },
         gc::{Gc, Memory},
         value::{self, Closure},
@@ -391,8 +392,6 @@ where
             builtin_traits,
         )?;
         let instance_dtable = Gc::new(instance_dtable);
-
-        env.add_user_dtable::<T>(Gc::clone(&instance_dtable));
         type_dtable.instance = Some(Gc::as_raw(&instance_dtable));
 
         let type_dtable = Gc::new(type_dtable);
@@ -402,6 +401,20 @@ where
             type_name: self.type_name,
             _data: PhantomData,
         })
+    }
+
+    pub(crate) fn build_in_library(
+        self,
+        env: &mut Environment,
+        library: &mut Library,
+        gc: &mut Memory,
+    ) -> Result<BuiltType<T>, Error>
+    where
+        T: Any + Sized,
+    {
+        let built_type = self.build(env, gc, &library.builtin_traits)?;
+        library.add_user_dtable::<T>(Gc::clone(&built_type.instance_dtable));
+        Ok(built_type)
     }
 }
 

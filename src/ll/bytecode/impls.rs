@@ -5,11 +5,8 @@ use std::{
     rc::Rc,
 };
 
-use super::{Environment, FunctionIndex, MethodIndex, TraitIndex};
-use crate::{
-    ll::{codegen::TraitBuilder, error::LanguageErrorKind},
-    MethodParameterCount,
-};
+use super::{FunctionIndex, MethodIndex};
+use crate::{ll::error::LanguageErrorKind, MethodParameterCount};
 
 /// The index of a trait in an `impl` block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -68,35 +65,4 @@ pub struct TraitPrototype {
     pub required: HashSet<MethodIndex>,
     /// List of `(method_id, function_id)` mappings that make up the dtable of shims for the trait.
     pub shims: Vec<(MethodIndex, FunctionIndex)>,
-}
-
-/// IDs of built-in traits and their methods.
-#[derive(Debug)]
-pub struct BuiltinTraits {
-    pub iterator: TraitIndex,
-    pub iterator_has_next: MethodIndex,
-    pub iterator_next: MethodIndex,
-}
-
-impl BuiltinTraits {
-    /// Tries to register built-in traits in the given environment.
-    fn try_register_in(env: &mut Environment) -> Result<Self, LanguageErrorKind> {
-        let mut builder = TraitBuilder::new(env, None, Rc::from("Iterator"))?;
-        let iterator_has_next = builder
-            .add_method(Rc::from("has_next"), MethodParameterCount::from_count_with_self(1))?;
-        let iterator_next =
-            builder.add_method(Rc::from("next"), MethodParameterCount::from_count_with_self(1))?;
-        let (iterator, _) = builder.build();
-
-        Ok(Self { iterator, iterator_has_next, iterator_next })
-    }
-
-    /// Registers built-in traits in the given environment.
-    ///
-    /// # Panics
-    /// If there are too many traits, methods, or functions registered in the environment.
-    pub fn register_in(env: &mut Environment) -> Self {
-        Self::try_register_in(env)
-            .expect("environment should have enough space for built-in traits")
-    }
 }

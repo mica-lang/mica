@@ -14,7 +14,7 @@ use hashbrown::raw::RawTable;
 use super::{RawValue, UserData, ValueKind};
 use crate::{
     ll::{
-        bytecode::{DispatchTable, Environment},
+        bytecode::{DispatchTable, Library},
         error::LanguageErrorKind,
         gc::GcRaw,
     },
@@ -154,9 +154,10 @@ impl fmt::Debug for Dict {
 }
 
 impl UserData for Dict {
-    fn dtable_gcraw(&self, env: Option<&Environment>) -> GcRaw<DispatchTable> {
+    fn dtable_gcraw(&self, library: Option<&Library>) -> GcRaw<DispatchTable> {
         Gc::as_raw(
-            &env.expect("UserData::dtable_gcraw called on a Dict with no environment")
+            &library
+                .expect("UserData::dtable_gcraw called on a Dict with no library")
                 .builtin_dtables
                 .dict,
         )

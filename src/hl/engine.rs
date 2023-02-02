@@ -11,7 +11,7 @@ use crate::{
         bytecode,
         bytecode::{
             BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function,
-            FunctionKind, GlobalIndex, MethodIndex, Opcode, Opr24,
+            FunctionKind, GlobalIndex, Library, MethodIndex, Opcode, Opr24,
         },
         codegen::{self, CodeGenerator},
         gc::{Gc, Memory},
@@ -38,7 +38,7 @@ pub struct DebugOptions {
 #[derive(Debug)]
 pub struct Engine {
     pub(crate) env: Environment,
-    pub(crate) builtin_traits: BuiltinTraits,
+    pub(crate) library: Library,
     pub(crate) globals: Globals,
     // This field is needed to keep all builtin dispatch tables alive for longer than `gc`.
     pub(crate) gc: Memory,
@@ -100,11 +100,9 @@ impl Engine {
     /// ```
     pub fn with_debug_options(mut corelib: impl CoreLibrary, debug_options: DebugOptions) -> Self {
         let mut gc = Memory::new();
-        // This is a little bad because it allocates a bunch of empty dtables only to discard them.
-        let mut env = Environment::new(BuiltinDispatchTables::empty());
+        let mut env = Environment::new();
 
         let builtin_traits = BuiltinTraits::register_in(&mut env);
-        let iterator = create_trait_value(&mut env, &mut gc, builtin_traits.iterator);
 
         macro_rules! get_dtables {
             ($type_name:tt, $define:tt) => {{
@@ -120,17 +118,22 @@ impl Engine {
         let string = get_dtables!("String", define_string);
         let list = get_dtables!("List", define_list);
         let dict = get_dtables!("Dict", define_dict);
-        env.builtin_dtables = BuiltinDispatchTables {
-            nil: Gc::clone(&nil.instance_dtable),
-            boolean: Gc::clone(&boolean.instance_dtable),
-            number: Gc::clone(&number.instance_dtable),
-            string: Gc::clone(&string.instance_dtable),
-            function: Gc::new(DispatchTable::new_for_instance("Function")),
-            list: Gc::clone(&list.instance_dtable),
-            dict: Gc::clone(&dict.instance_dtable),
-        };
+        let library = Library::new(
+            BuiltinDispatchTables {
+                nil: Gc::clone(&nil.instance_dtable),
+                boolean: Gc::clone(&boolean.instance_dtable),
+                number: Gc::clone(&number.instance_dtable),
+                string: Gc::clone(&string.instance_dtable),
+                function: Gc::new(DispatchTable::new_for_instance("Function")),
+                list: Gc::clone(&list.instance_dtable),
+                dict: Gc::clone(&dict.instance_dtable),
+            },
+            builtin_traits,
+        );
 
-        let mut engine = Self { env, builtin_traits, globals: Globals::new(), gc, debug_options };
+        let iterator = create_trait_value(&mut env, &mut gc, library.builtin_traits.iterator);
+
+        let mut engine = Self { env, library, globals: Globals::new(), gc, debug_options };
         // Unwrapping here is fine because at this point we haven't got quite that many globals
         // registered to overflow an Opr24.
         engine.set_built_type(&nil).unwrap();
@@ -172,8 +175,9 @@ impl Engine {
             eprintln!("{:?}", DumpAst(&ast, root_node));
         }
 
-        let main_chunk = CodeGenerator::new(module_name, &mut self.env, &self.builtin_traits)
-            .generate(&ast, root_node)?;
+        let main_chunk =
+            CodeGenerator::new(module_name, &mut self.env, &self.library.builtin_traits)
+                .generate(&ast, root_node)?;
         if self.debug_options.dump_bytecode {
             eprintln!("Mica - global environment:");
             eprintln!("{:#?}", self.env);
@@ -385,7 +389,7 @@ impl Engine {
     /// # }
     /// ```
     pub fn create_value(&self, from: impl IntoValue) -> Value {
-        from.into_value_with_environment(&self.env)
+        from.into_value_with_library(&self.library)
     }
 
     /// Returns the unique global ID for the global with the given name, or an error if there
@@ -434,7 +438,7 @@ impl Engine {
     /// ```
     pub fn set(&mut self, id: impl GlobalName, value: impl IntoValue) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into_value_with_environment(&self.env).to_raw(&mut self.gc));
+        self.globals.set(id.0, value.into_value_with_library(&self.library).to_raw(&mut self.gc));
         Ok(())
     }
 
@@ -461,9 +465,9 @@ impl Engine {
         T: TryFromValue,
     {
         if let Some(id) = id.try_to_global_id(&self.env) {
-            T::try_from_value(&Value::from_raw(self.globals.get(id.0)), &self.env)
+            T::try_from_value(&Value::from_raw(self.globals.get(id.0)), &self.library)
         } else {
-            T::try_from_value(&Value::from_raw(RawValue::from(())), &self.env)
+            T::try_from_value(&Value::from_raw(RawValue::from(())), &self.library)
         }
     }
 
@@ -558,7 +562,7 @@ impl Engine {
     where
         T: UserData,
     {
-        let built = builder.build(&mut self.env, &mut self.gc, &self.builtin_traits)?;
+        let built = builder.build_in_library(&mut self.env, &mut self.library, &mut self.gc)?;
         self.set_built_type(&built)?;
         Ok(())
     }

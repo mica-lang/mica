@@ -1,4 +1,4 @@
-use std::{any::Any, fmt, ops::Deref, rc::Rc};
+use std::{any::Any, fmt, fmt::Debug, ops::Deref, rc::Rc};
 
 /// The implementation of a raw foreign function.
 pub use crate::ll::bytecode::ForeignFunction as RawForeignFunction;
@@ -10,8 +10,9 @@ use crate::{
         ast::DumpAst,
         bytecode,
         bytecode::{
-            BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function,
-            FunctionKind, GlobalIndex, MethodIndex, Opcode, Opr24,
+            BuiltinDispatchTableGenerator, BuiltinDispatchTables, BuiltinTraits, Chunk,
+            DispatchTable, Environment, Function, FunctionKind, GlobalIndex, MethodIndex, Opcode,
+            Opr24,
         },
         codegen::{self, CodeGenerator},
         gc::{Gc, Memory},
@@ -74,7 +75,10 @@ impl Engine {
     ///
     /// let mut engine = Engine::with_corelib(mica::corelib::Lib);
     /// ```
-    pub fn with_corelib(corelib: impl CoreLibrary) -> Self {
+    pub fn with_corelib<L>(corelib: L) -> Self
+    where
+        L: CoreLibrary,
+    {
         Self::with_debug_options(corelib, Default::default())
     }
 
@@ -98,10 +102,42 @@ impl Engine {
     ///     dump_bytecode: true,
     /// });
     /// ```
-    pub fn with_debug_options(mut corelib: impl CoreLibrary, debug_options: DebugOptions) -> Self {
+    pub fn with_debug_options<L>(corelib: L, debug_options: DebugOptions) -> Self
+    where
+        L: CoreLibrary,
+    {
+        #[derive(Debug)]
+        struct DtableGenerator<L> {
+            corelib: Rc<L>,
+        }
+
+        impl<L> BuiltinDispatchTableGenerator for DtableGenerator<L>
+        where
+            L: CoreLibrary + Debug,
+        {
+            fn generate_tuple(
+                &self,
+                env: &mut Environment,
+                gc: &mut Memory,
+                builtin_traits: &BuiltinTraits,
+                size: usize,
+            ) -> Gc<DispatchTable> {
+                self.corelib
+                    .define_tuple(size, TypeBuilder::new("Tuple"))
+                    .build(env, gc, builtin_traits)
+                    .expect("corelib declares too many methods")
+                    .instance_dtable
+            }
+        }
+
+        let corelib = Rc::new(corelib);
+
         let mut gc = Memory::new();
         // This is a little bad because it allocates a bunch of empty dtables only to discard them.
-        let mut env = Environment::new(BuiltinDispatchTables::empty());
+        let mut env = Environment::new(
+            BuiltinDispatchTables::empty(),
+            Box::new(DtableGenerator { corelib: Rc::clone(&corelib) }),
+        );
 
         let builtin_traits = BuiltinTraits::register_in(&mut env);
         let iterator = create_trait_value(&mut env, &mut gc, builtin_traits.iterator);
@@ -120,15 +156,13 @@ impl Engine {
         let string = get_dtables!("String", define_string);
         let list = get_dtables!("List", define_list);
         let dict = get_dtables!("Dict", define_dict);
-        env.builtin_dtables = BuiltinDispatchTables {
-            nil: Gc::clone(&nil.instance_dtable),
-            boolean: Gc::clone(&boolean.instance_dtable),
-            number: Gc::clone(&number.instance_dtable),
-            string: Gc::clone(&string.instance_dtable),
-            function: Gc::new(DispatchTable::new_for_instance("Function")),
-            list: Gc::clone(&list.instance_dtable),
-            dict: Gc::clone(&dict.instance_dtable),
-        };
+        env.builtin_dtables.nil = Gc::clone(&nil.instance_dtable);
+        env.builtin_dtables.boolean = Gc::clone(&boolean.instance_dtable);
+        env.builtin_dtables.number = Gc::clone(&number.instance_dtable);
+        env.builtin_dtables.string = Gc::clone(&string.instance_dtable);
+        env.builtin_dtables.function = Gc::new(DispatchTable::new_for_instance("Function"));
+        env.builtin_dtables.list = Gc::clone(&list.instance_dtable);
+        env.builtin_dtables.dict = Gc::clone(&dict.instance_dtable);
 
         let mut engine = Self { env, builtin_traits, globals: Globals::new(), gc, debug_options };
         // Unwrapping here is fine because at this point we haven't got quite that many globals
@@ -172,8 +206,9 @@ impl Engine {
             eprintln!("{:?}", DumpAst(&ast, root_node));
         }
 
-        let main_chunk = CodeGenerator::new(module_name, &mut self.env, &self.builtin_traits)
-            .generate(&ast, root_node)?;
+        let main_chunk =
+            CodeGenerator::new(module_name, &mut self.env, &mut self.gc, &self.builtin_traits)
+                .generate(&ast, root_node)?;
         if self.debug_options.dump_bytecode {
             eprintln!("Mica - global environment:");
             eprintln!("{:#?}", self.env);

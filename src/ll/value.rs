@@ -8,6 +8,7 @@ mod impls;
 mod lists;
 mod structs;
 mod traits;
+mod tuples;
 
 use std::{
     any::Any, borrow::Cow, cmp::Ordering, fmt, hash::Hasher, hint::unreachable_unchecked,
@@ -20,6 +21,7 @@ use impls::ValueImpl;
 pub use lists::*;
 pub use structs::*;
 pub use traits::*;
+pub use tuples::*;
 
 use super::bytecode::Environment;
 use crate::ll::{bytecode::DispatchTable, error::LanguageErrorKind, gc::GcRaw};

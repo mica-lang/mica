@@ -6,11 +6,14 @@ use std::{
     rc::Rc,
 };
 
-use super::{BuiltinDispatchTables, DispatchTable, Function, Opr24, Prototype, TraitPrototype};
+use super::{
+    BuiltinDispatchTableGenerator, BuiltinDispatchTables, BuiltinTraits, DispatchTable, Function,
+    Opr24, Prototype, TraitPrototype,
+};
 use crate::ll::{
     bytecode::MethodParameterCount,
     error::{LanguageErrorKind, RenderedSignature},
-    gc::Gc,
+    gc::{Gc, Memory},
 };
 
 /// The unique index of a function.
@@ -143,6 +146,8 @@ pub struct Environment {
 
     /// Dispatch tables for builtin types.
     pub builtin_dtables: BuiltinDispatchTables,
+    /// Generator for builtin dispatch tables that are built on demand (tuples and records.)
+    pub builtin_dtable_generator: Box<dyn BuiltinDispatchTableGenerator>,
     /// Dispatch tables for user types.
     user_dtables: HashMap<TypeId, Gc<DispatchTable>>,
 
@@ -154,13 +159,17 @@ pub struct Environment {
 
 impl Environment {
     /// Creates a new, empty environment.
-    pub fn new(builtin_dtables: BuiltinDispatchTables) -> Self {
+    pub fn new(
+        builtin_dtables: BuiltinDispatchTables,
+        builtin_dtable_generator: Box<dyn BuiltinDispatchTableGenerator>,
+    ) -> Self {
         Self {
             globals: HashMap::new(),
             functions: Vec::new(),
             method_indices: HashMap::new(),
             method_signatures: Vec::new(),
             builtin_dtables,
+            builtin_dtable_generator,
             user_dtables: HashMap::new(),
             prototypes: Vec::new(),
             traits: Vec::new(),
@@ -279,6 +288,14 @@ impl Environment {
     pub fn get_trait_mut(&mut self, id: TraitIndex) -> Option<&mut TraitPrototype> {
         let TraitIndex(id) = id;
         self.traits.get_mut(usize::from(id))
+    }
+
+    /// Generates the dtable for a tuple of the given size if it doesn't exist yet.
+    pub fn generate_tuple(&mut self, size: usize, gc: &mut Memory, builtin_traits: &BuiltinTraits) {
+        if self.builtin_dtables.tuples.len() <= size {
+            self.builtin_dtables.tuples.resize(size + 1, None);
+        }
+        self.builtin_dtables.tuples[size] = todo!();
     }
 
     /// Adds a dispatch table for a user-defined type.

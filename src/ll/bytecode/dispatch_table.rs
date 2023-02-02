@@ -1,8 +1,11 @@
-use std::rc::Rc;
+use std::{fmt::Debug, rc::Rc};
 
-use super::MethodIndex;
+use super::{BuiltinTraits, Environment, MethodIndex};
 use crate::{
-    ll::{gc::GcRaw, value::Closure},
+    ll::{
+        gc::{GcRaw, Memory},
+        value::Closure,
+    },
     Gc,
 };
 
@@ -61,6 +64,16 @@ impl DispatchTable {
     }
 }
 
+pub trait BuiltinDispatchTableGenerator: Debug {
+    fn generate_tuple(
+        &self,
+        env: &mut Environment,
+        gc: &mut Memory,
+        builtin_traits: &BuiltinTraits,
+        size: usize,
+    ) -> Gc<DispatchTable>;
+}
+
 /// Dispatch tables for instances of builtin types. These should be constructed by the standard
 /// library.
 #[derive(Debug)]
@@ -72,6 +85,7 @@ pub struct BuiltinDispatchTables {
     pub function: Gc<DispatchTable>,
     pub list: Gc<DispatchTable>,
     pub dict: Gc<DispatchTable>,
+    pub tuples: Vec<Option<Gc<DispatchTable>>>,
 }
 
 /// Default dispatch tables for built-in types are empty and do not implement any methods.
@@ -85,6 +99,7 @@ impl BuiltinDispatchTables {
             function: Gc::new(DispatchTable::new("Function", "Function")),
             list: Gc::new(DispatchTable::new("List", "List")),
             dict: Gc::new(DispatchTable::new("Dict", "Dict")),
+            tuples: vec![],
         }
     }
 }

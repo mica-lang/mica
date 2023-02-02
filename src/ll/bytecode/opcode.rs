@@ -36,6 +36,8 @@ pub enum Opcode {
     /// Creates a dict from `operand * 2` values that are at the top of the stack. The values have
     /// to be arranged in `key, value, key, value...` order, from bottom to top.
     CreateDict,
+    /// Creates a tuple from `operand` values that are at the top of the stack.
+    CreateTuple,
 
     /// Assigns the value at the top of the stack to a global. The value stays on the stack.
     AssignGlobal,

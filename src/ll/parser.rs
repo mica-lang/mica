@@ -195,6 +195,36 @@ impl Parser {
         }
     }
 
+    /// Parses a parenthesized expression `(x)` or a tuple - `()`, `(x,)`, or `(x, y)`.
+    fn parse_paren_or_tuple(&mut self, token: Token) -> Result<NodeId, LanguageError> {
+        if self.lexer.peek_token()?.kind == TokenKind::RightParen {
+            let _right_paren = self.lexer.next_token();
+            return Ok(self
+                .ast
+                .build_node(NodeKind::Tuple, ())
+                .with_children(vec![])
+                .with_location(token.location)
+                .done());
+        }
+        let inner = self.parse_expression(0)?;
+        match self.lexer.next_token()?.kind {
+            TokenKind::RightParen => Ok(inner),
+            TokenKind::Comma => {
+                let mut elements = vec![];
+                self.parse_comma_separated(&mut elements, TokenKind::RightParen, |p| {
+                    p.parse_expression(0)
+                })?;
+                Ok(self
+                    .ast
+                    .build_node(NodeKind::Tuple, ())
+                    .with_children(elements)
+                    .with_location(token.location)
+                    .done())
+            }
+            _ => Err(self.error(&token, LanguageErrorKind::MissingRightParen)),
+        }
+    }
+
     /// Parses a list or dict literal.
     fn parse_list_or_dict(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         #[derive(Clone, Copy, PartialEq, Eq)]
@@ -221,7 +251,7 @@ impl Parser {
                         let colon = p.lexer.next_token()?;
                         let value = p.parse_expression(0)?;
                         Ok(p.ast
-                            .build_node(NodeKind::DictPair, (key, value))
+                            .build_node(NodeKind::Pair, (key, value))
                             .with_location(colon.location)
                             .done())
                     } else {
@@ -236,7 +266,7 @@ impl Parser {
                     })?;
                     let value = p.parse_expression(0)?;
                     Ok(p.ast
-                        .build_node(NodeKind::DictPair, (key, value))
+                        .build_node(NodeKind::Pair, (key, value))
                         .with_location(colon.location)
                         .done())
                 }
@@ -493,13 +523,7 @@ impl Parser {
                 Ok(self.ast.build_node(NodeKind::Field, name).with_location(token.location).done())
             }
 
-            TokenKind::LeftParen => {
-                let inner = self.parse_expression(0)?;
-                if !matches!(self.lexer.next_token()?.kind, TokenKind::RightParen) {
-                    return Err(self.error(&token, LanguageErrorKind::MissingRightParen));
-                }
-                Ok(inner)
-            }
+            TokenKind::LeftParen => self.parse_paren_or_tuple(token),
             TokenKind::LeftBracket => self.parse_list_or_dict(token),
 
             TokenKind::Let => self.parse_let_expression(token),

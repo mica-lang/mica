@@ -198,15 +198,15 @@ impl Fiber {
     }
 
     /// Returns a reference to the `n`th value counted from the top of the stack.
-    fn nth_from_top(&self, n: usize) -> &RawValue {
+    fn nth_from_top(&self, n: usize) -> RawValue {
         #[cfg(debug_assertions)]
         {
-            &self.stack[self.stack.len() - n]
+            self.stack[self.stack.len() - n]
         }
         #[cfg(not(debug_assertions))]
         unsafe {
             let i = self.stack.len() - n;
-            self.stack.get_unchecked(i)
+            *self.stack.get_unchecked(i)
         }
     }
 
@@ -375,7 +375,7 @@ impl Fiber {
     }
 
     /// Returns the dispatch table of the given value.
-    fn get_dispatch_table<'v>(value: &'v RawValue, env: &'v Environment) -> &'v DispatchTable {
+    fn get_dispatch_table(value: RawValue, env: &Environment) -> &DispatchTable {
         unsafe {
             match value.kind() {
                 ValueKind::Nil => &env.builtin_dtables.nil,
@@ -582,6 +582,14 @@ impl Fiber {
                     let dict: Box<dyn UserData> = Box::new(dict);
                     let dict = gc.allocate(dict);
                     self.push(RawValue::from(dict));
+                }
+                Opcode::CreateTuple => {
+                    unsafe { gc.auto_collect(self.roots(globals)) };
+                    let len = usize::from(operand);
+                    let elements = self.stack.drain(self.stack.len() - len..).collect();
+                    let list: Box<dyn UserData> = Box::new(List::new(elements));
+                    let list = gc.allocate(list);
+                    self.push(RawValue::from(list));
                 }
 
                 Opcode::AssignGlobal => {

@@ -243,11 +243,21 @@ impl RawValue {
     }
 
     /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error
-    /// that's not the case.
-    pub fn get_raw_user_data<T>(&self) -> Option<GcRaw<Box<dyn UserData>>>
+    /// if that's not the case. The `type_name` should be provided for error messages.
+    pub fn ensure_raw_user_data<T>(&self, type_name: &'static str) -> Result<&T, LanguageErrorKind>
     where
         T: UserData,
     {
+        if self.0.kind() == ValueKind::UserData {
+            unsafe { Ok(self.downcast_user_data_unchecked()) }
+        } else {
+            Err(self.type_error(type_name))
+        }
+    }
+
+    /// Ensures the value is a `UserData` of the given type `T`, returning `None` if that's not
+    /// the case.
+    pub fn get_raw_user_data(&self) -> Option<GcRaw<Box<dyn UserData>>> {
         if self.0.kind() == ValueKind::UserData {
             Some(unsafe { self.0.get_raw_user_data_unchecked() })
         } else {

@@ -70,8 +70,15 @@ pub enum Opcode {
     /// Assumes the value on top is a struct and not something else.
     GetField,
 
+    /// Destructures a tuple at the top of the stack into its individual components. The operand
+    /// signifies how many elements the tuple must have to be successfully destructured; if the
+    /// tuple has a different size, an error is thrown.
+    DestructureTuple,
+
     /// Swaps the two values at the top of the stack.
     Swap,
+    /// Duplicates the value at the top of the stack.
+    Duplicate,
     /// Removes the value at the top of the stack.
     Discard,
 

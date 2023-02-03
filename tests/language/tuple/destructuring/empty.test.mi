@@ -1,0 +1,3 @@
+# Test that the unit tuple can be destructured.
+
+let () = ()

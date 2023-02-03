@@ -1,0 +1,4 @@
+# Test that a single can be destructured.
+
+let (a,) = (1,)
+assert(a == 1)

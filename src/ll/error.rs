@@ -167,6 +167,7 @@ pub enum LanguageErrorKind {
     UserDataAlreadyBorrowed,
     DoubleMethodImplementation { type_name: Rc<str>, signature: RenderedSignature },
     MethodsUnimplemented { type_name: Rc<str>, methods: Vec<RenderedSignature> },
+    TupleSizeMismatch { expected: usize, got: usize },
 
     User(Box<dyn std::error::Error>),
 }
@@ -265,6 +266,8 @@ impl std::fmt::Display for LanguageErrorKind {
             Self::AsCannotNest => write!(f, "'as' blocks cannot nest"),
             Self::FunctionKindInTrait => write!(f, "trait functions must be instance methods (cannot be constructors nor statics)"),
             Self::InvalidPattern => write!(f, "invalid pattern for destructuring into variables"),
+            Self::LetRhsMustBeAssignment => write!(f, "the right hand side of 'let' must be an assignment, like 'let x = y'"),
+            Self::TupleHasTooManyElements => write!(f, "tuple has too many elements"),
 
             Self::TypeError { expected, got } => {
                 write!(f, "type mismatch, expected {expected} but got {got}")
@@ -285,8 +288,9 @@ impl std::fmt::Display for LanguageErrorKind {
                 }
                 Ok(())
             }
-            Self::LetRhsMustBeAssignment => write!(f, "the right hand side of 'let' must be an assignment, like 'let x = y'"),
-            Self::TupleHasTooManyElements => write!(f, "tuple has too many elements"),
+            Self::TupleSizeMismatch { expected, got } => {
+                write!(f, "size mismatch when destructuring tuple: expected tuple with {expected} elements but got one with {got} elements")
+            },
 
             Self::User(error) => write!(f, "{error}"),
         }

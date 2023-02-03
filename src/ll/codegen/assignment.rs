@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::{variables::VariableAllocation, CodeGenerator, Expression, ExpressionResult};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
-    bytecode::Opcode,
+    bytecode::{Opcode, Opr24},
     error::{LanguageError, LanguageErrorKind},
 };
 
@@ -29,6 +29,24 @@ impl<'e> CodeGenerator<'e> {
                 match result {
                     Expression::Used => self.generate_variable_assign(variable),
                     Expression::Discarded => self.generate_variable_sink(variable),
+                }
+            }
+            NodeKind::Tuple => {
+                let fields = ast.children(node).unwrap();
+                if result == Expression::Used {
+                    // In case the result is used, we wanna duplicate the value so that the
+                    // destructuring doesn't eat away the tuple resulting from the assignment.
+                    self.chunk.emit(Opcode::Duplicate);
+                }
+                self.chunk.emit((
+                    Opcode::DestructureTuple,
+                    Opr24::try_from(fields.len())
+                        .map_err(|_| ast.error(node, LanguageErrorKind::TupleHasTooManyElements))?,
+                ));
+                // Iterate through the fields in reverse, since going from the top of the stack
+                // that's the order we want to destructure our variables in.
+                for &field in fields.iter().rev() {
+                    self.generate_pattern_destructuring(ast, field, Expression::Discarded)?;
                 }
             }
             _ => return Err(ast.error(node, LanguageErrorKind::InvalidPattern)),

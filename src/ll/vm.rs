@@ -677,9 +677,32 @@ impl Fiber {
                     self.push(value);
                 }
 
+                Opcode::DestructureTuple => {
+                    let tuple = self.pop();
+                    let tuple = wrap_error!(tuple.ensure_raw_user_data::<Tuple>("Tuple"));
+                    let expected_size = usize::from(operand);
+                    if tuple.fields.len() != expected_size {
+                        return Err(self.error_outside_function_call(
+                            None,
+                            env,
+                            LanguageErrorKind::TupleSizeMismatch {
+                                expected: expected_size,
+                                got: tuple.fields.len(),
+                            },
+                        ));
+                    }
+                    self.stack.reserve(tuple.fields.len());
+                    for &field in &tuple.fields {
+                        self.push(field);
+                    }
+                }
+
                 Opcode::Swap => {
                     let len = self.stack.len();
                     self.stack.swap(len - 2, len - 1);
+                }
+                Opcode::Duplicate => {
+                    self.push(self.stack_top());
                 }
                 Opcode::Discard => {
                     self.pop();

@@ -1,0 +1,6 @@
+# Destructuring something other than a tuple should throw an error, even when nested.
+# @error error: type mismatch, expected Tuple but got Number
+# @error stack traceback (most recent call first):
+# @error     {file}:{:LINE}:1  <main>
+
+let (a, ()) = (1, 2)  # @line LINE

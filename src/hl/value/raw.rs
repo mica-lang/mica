@@ -3,7 +3,7 @@ use std::hint::unreachable_unchecked;
 use crate::{
     ll::{
         gc::{Gc, Memory},
-        value::{Dict, List, RawValue, ValueKind},
+        value::{Dict, List, RawValue, Tuple, ValueKind},
     },
     Error, Hidden, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value,
 };
@@ -22,6 +22,7 @@ impl Value {
             Value::Trait(t) => RawValue::from(gc.manage(&t.0)),
             Value::List(l) => RawValue::from(gc.manage(&l.0)),
             Value::Dict(d) => RawValue::from(gc.manage(&d.0)),
+            Value::Tuple(t) => RawValue::from(gc.manage(&t.0)),
             Value::UserData(u) => RawValue::from(gc.manage(u)),
         }
     }
@@ -39,6 +40,7 @@ impl Value {
             Value::Trait(t) => RawValue::from(Gc::as_raw(&t.0)),
             Value::List(l) => RawValue::from(Gc::as_raw(&l.0)),
             Value::Dict(d) => RawValue::from(Gc::as_raw(&d.0)),
+            Value::Tuple(t) => RawValue::from(Gc::as_raw(&t.0)),
             Value::UserData(u) => RawValue::from(Gc::as_raw(u)),
         }
     }
@@ -149,6 +151,14 @@ impl SelfFromRawValue for Dict {
 
     unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
         Ok((v.downcast_user_data_unchecked::<Dict>(), ()))
+    }
+}
+
+impl SelfFromRawValue for Tuple {
+    type Guard = ();
+
+    unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
+        Ok((v.downcast_user_data_unchecked::<Tuple>(), ()))
     }
 }
 

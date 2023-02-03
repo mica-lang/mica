@@ -1,0 +1,18 @@
+# Two pairs can be compared using relational operators. They are compared lexicographically.
+
+let t = (1, 2)
+let u = (2, 3)
+
+assert(t < u)
+assert(t <= u)
+assert(!(t > u))
+assert(!(t >= u))
+
+let v = (1, 1)
+assert(v < t)
+assert(v < u)
+
+let w = (0, 1)
+assert(w < t)
+assert(w < u)
+assert(w < v)

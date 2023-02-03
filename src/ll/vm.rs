@@ -11,7 +11,8 @@ use crate::ll::{
     error::{LanguageError, LanguageErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
     value::{
-        create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, UserData, ValueKind,
+        create_trait, Closure, Dict, List, RawValue, Struct, Trait, Tuple, Upvalue, UserData,
+        ValueKind,
     },
 };
 
@@ -590,8 +591,8 @@ impl Fiber {
                 Opcode::CreateTuple => {
                     unsafe { gc.auto_collect(self.roots(globals)) };
                     let len = usize::from(operand);
-                    let elements = self.stack.drain(self.stack.len() - len..).collect();
-                    let list: Box<dyn UserData> = Box::new(List::new(elements));
+                    let fields = self.stack.drain(self.stack.len() - len..).collect();
+                    let list: Box<dyn UserData> = Box::new(Tuple { fields });
                     let list = gc.allocate(list);
                     self.push(RawValue::from(list));
                 }

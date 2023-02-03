@@ -72,12 +72,8 @@ impl<'e> CodeGenerator<'e> {
         let (_, parameters) = ast.node_pair(head);
         let parameter_list = ast.children(parameters).unwrap();
 
-        let mut generator = CodeGenerator::new(
-            Rc::clone(&self.chunk.module_name),
-            self.env,
-            self.gc,
-            self.builtin_traits,
-        );
+        let mut generator =
+            CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env, self.library, self.gc);
         // NOTE: Hopefully the allocation from this mem::take gets optimized out.
         generator.locals.parent = Some(mem::take(&mut self.locals));
         if call_conv.has_field_access() {

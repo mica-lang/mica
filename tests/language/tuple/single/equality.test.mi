@@ -1,0 +1,8 @@
+# Two singles wrapping the same value are equal to each other.
+
+let s = (1,)
+let t = (1,)
+let u = (2,)
+assert(s == t)
+assert(s != u)
+assert(t != u)

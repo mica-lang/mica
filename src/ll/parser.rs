@@ -210,7 +210,7 @@ impl Parser {
         match self.lexer.next_token()?.kind {
             TokenKind::RightParen => Ok(inner),
             TokenKind::Comma => {
-                let mut elements = vec![];
+                let mut elements = vec![inner];
                 self.parse_comma_separated(&mut elements, TokenKind::RightParen, |p| {
                     p.parse_expression(0)
                 })?;

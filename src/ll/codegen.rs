@@ -4,17 +4,17 @@ use std::{collections::HashSet, fmt, rc::Rc};
 
 pub use self::traits::TraitBuilder;
 use self::{control_flow::BreakableBlock, structs::StructData, variables::Locals};
-use super::gc::Memory;
+use super::{bytecode::Library, gc::Memory};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
-    bytecode::{BuiltinTraits, Chunk, Environment, Opcode},
+    bytecode::{Chunk, Environment, Opcode},
     error::{LanguageError, LanguageErrorKind},
 };
 
 pub struct CodeGenerator<'e> {
     env: &'e mut Environment,
+    library: &'e mut Library,
     gc: &'e mut Memory,
-    builtin_traits: &'e BuiltinTraits,
 
     chunk: Chunk,
 
@@ -32,14 +32,14 @@ impl<'e> CodeGenerator<'e> {
     pub fn new(
         module_name: Rc<str>,
         env: &'e mut Environment,
+        library: &'e mut Library,
         gc: &'e mut Memory,
-        builtin_traits: &'e BuiltinTraits,
     ) -> Self {
         Self {
             env,
+            library,
             gc,
             chunk: Chunk::new(module_name),
-            builtin_traits,
 
             locals: Default::default(),
             breakable_blocks: Vec::new(),

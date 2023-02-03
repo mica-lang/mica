@@ -44,7 +44,7 @@ impl CoreLibrary for Lib {
     }
 
     fn define_tuple(&self, size: usize, builder: TypeBuilder<Tuple>) -> TypeBuilder<Tuple> {
-        builder
+        tuple::define(size, builder)
     }
 
     fn load(&self, engine: &mut Engine) -> Result<(), Error> {

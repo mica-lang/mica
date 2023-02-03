@@ -1,0 +1,8 @@
+# Two tuples containing the same pairs of values are equal to each other.
+
+let s = (1, 2)
+let t = (1, 2)
+let u = (2, 1)
+assert(s == t)
+assert(s != u)
+assert(t != u)

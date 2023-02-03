@@ -10,8 +10,9 @@ use crate::{
         ast::DumpAst,
         bytecode,
         bytecode::{
-            BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function,
-            FunctionKind, GlobalIndex, Library, MethodIndex, Opcode, Opr24,
+            BuiltinDispatchTableGenerator, BuiltinDispatchTables, BuiltinTraits, Chunk,
+            DispatchTable, Environment, Function, FunctionKind, GlobalIndex, Library, MethodIndex,
+            Opcode, Opr24,
         },
         codegen::{self, CodeGenerator},
         gc::{Gc, Memory},
@@ -107,7 +108,7 @@ impl Engine {
     {
         #[derive(Debug)]
         struct DtableGenerator<L> {
-            corelib: Rc<L>,
+            corelib: L,
         }
 
         impl<L> BuiltinDispatchTableGenerator for DtableGenerator<L>
@@ -128,8 +129,6 @@ impl Engine {
                     .instance_dtable
             }
         }
-
-        let corelib = Rc::new(corelib);
 
         let mut gc = Memory::new();
         let mut env = Environment::new();
@@ -159,7 +158,9 @@ impl Engine {
                 function: Gc::new(DispatchTable::new_for_instance("Function")),
                 list: Gc::clone(&list.instance_dtable),
                 dict: Gc::clone(&dict.instance_dtable),
+                tuples: vec![],
             },
+            Box::new(DtableGenerator { corelib: corelib.clone() }),
             builtin_traits,
         );
 
@@ -208,7 +209,7 @@ impl Engine {
         }
 
         let main_chunk =
-            CodeGenerator::new(module_name, &mut self.env, &self.library.builtin_traits)
+            CodeGenerator::new(module_name, &mut self.env, &mut self.library, &mut self.gc)
                 .generate(&ast, root_node)?;
         if self.debug_options.dump_bytecode {
             eprintln!("Mica - global environment:");

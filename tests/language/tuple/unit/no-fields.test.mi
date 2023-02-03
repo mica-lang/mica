@@ -1,0 +1,7 @@
+# It should be possible to create empty tuples, where _0.._n are not defined.
+# @error error: method _0/0 is not defined for Tuple
+# @error stack traceback (most recent call first):
+# @error     {file}:{:LINE}:5  <main>
+
+let unit = ()
+unit._0  # @line LINE

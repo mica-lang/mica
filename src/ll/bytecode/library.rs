@@ -1,12 +1,13 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
+    fmt::Debug,
     rc::Rc,
 };
 
 use super::{DispatchTable, Environment, MethodIndex, TraitIndex};
 use crate::{
-    ll::{codegen::TraitBuilder, error::LanguageErrorKind},
+    ll::{codegen::TraitBuilder, error::LanguageErrorKind, gc::Memory},
     Gc, MethodParameterCount,
 };
 
@@ -16,6 +17,9 @@ pub struct Library {
     /// Built-in dispatch tables. This has to be initialized with proper dtables by the core
     /// library.
     pub builtin_dtables: BuiltinDispatchTables,
+
+    builtin_dtable_generator: Box<dyn BuiltinDispatchTableGenerator>,
+
     /// Built-in traits. This is initialized by the compiler itself after the environment is
     /// available.
     pub builtin_traits: BuiltinTraits,
@@ -25,8 +29,17 @@ pub struct Library {
 }
 
 impl Library {
-    pub fn new(builtin_dtables: BuiltinDispatchTables, builtin_traits: BuiltinTraits) -> Self {
-        Self { builtin_dtables, builtin_traits, user_dtables: HashMap::new() }
+    pub fn new(
+        builtin_dtables: BuiltinDispatchTables,
+        builtin_dtable_generator: Box<dyn BuiltinDispatchTableGenerator>,
+        builtin_traits: BuiltinTraits,
+    ) -> Self {
+        Self {
+            builtin_dtables,
+            builtin_dtable_generator,
+            builtin_traits,
+            user_dtables: HashMap::new(),
+        }
     }
 
     /// Adds a dispatch table for a user-defined type.
@@ -45,6 +58,15 @@ impl Library {
     {
         self.user_dtables.get(&TypeId::of::<T>())
     }
+
+    /// Generates the dtable for tuple of the given size if it doesn't exist yet.
+    pub(crate) fn generate_tuple(&mut self, env: &mut Environment, gc: &mut Memory, size: usize) {
+        if size >= self.builtin_dtables.tuples.len() {
+            self.builtin_dtables.tuples.resize(size + 1, None);
+        }
+        self.builtin_dtables.tuples[size] =
+            Some(self.builtin_dtable_generator.generate_tuple(env, gc, &self.builtin_traits, size));
+    }
 }
 
 /// Dispatch tables for instances of builtin types. These should be constructed by the core
@@ -58,21 +80,18 @@ pub struct BuiltinDispatchTables {
     pub function: Gc<DispatchTable>,
     pub list: Gc<DispatchTable>,
     pub dict: Gc<DispatchTable>,
+    pub tuples: Vec<Option<Gc<DispatchTable>>>,
 }
 
-/// Default dispatch tables for built-in types are empty and do not implement any methods.
-impl BuiltinDispatchTables {
-    pub fn empty() -> Self {
-        Self {
-            nil: Gc::new(DispatchTable::new_for_instance("Nil")),
-            boolean: Gc::new(DispatchTable::new_for_instance("Boolean")),
-            number: Gc::new(DispatchTable::new_for_instance("Number")),
-            string: Gc::new(DispatchTable::new_for_instance("String")),
-            function: Gc::new(DispatchTable::new_for_instance("Function")),
-            list: Gc::new(DispatchTable::new_for_instance("List")),
-            dict: Gc::new(DispatchTable::new_for_instance("Dict")),
-        }
-    }
+/// Generator of builtin dispatch tables that need to be generated on demand, such as tuples.
+pub trait BuiltinDispatchTableGenerator: Debug {
+    fn generate_tuple(
+        &self,
+        env: &mut Environment,
+        gc: &mut Memory,
+        builtin_traits: &BuiltinTraits,
+        size: usize,
+    ) -> Gc<DispatchTable>;
 }
 
 /// IDs of built-in traits and their methods.

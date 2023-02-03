@@ -1,0 +1,7 @@
+# A pair doesn't have a _2 field.
+# @error error: method _2/0 is not defined for Tuple
+# @error stack traceback (most recent call first):
+# @error     {file}:{:LINE}:2  <main>
+
+let s = (1, 2)
+s._2  # @line LINE

@@ -9,7 +9,7 @@ use crate::{
 /// [corelib][crate::corelib].
 ///
 /// Each function must return the original builder, possibly with functions added into it.
-pub trait CoreLibrary: 'static + Debug {
+pub trait CoreLibrary: 'static + Debug + Clone {
     /// Defines the `Nil` type using the given type builder.
     fn define_nil(&self, builder: TypeBuilder<()>) -> TypeBuilder<()>;
 

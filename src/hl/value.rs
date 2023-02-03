@@ -56,6 +56,10 @@ pub enum Value {
     ///
     /// Dicts are opaque to the Rust API, no conversion function currently exists for them.
     Dict(Hidden<Box<dyn value::UserData>>),
+    /// A tuple.
+    ///
+    /// Tuples are opaque to the Rust API, no conversion function currently exists for them.
+    Tuple(Hidden<Box<dyn value::UserData>>),
     /// Arbitrarily typed user data.
     UserData(Gc<Box<dyn value::UserData>>),
 }
@@ -101,6 +105,7 @@ impl Value {
             Value::Trait(s) => &s.0.dtable().type_name,
             Value::List(_) => "List",
             Value::Dict(_) => "Dict",
+            Value::Tuple(_) => "Tuple",
             Value::UserData(u) => u.type_name(),
         }
     }

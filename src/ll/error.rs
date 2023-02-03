@@ -158,6 +158,7 @@ pub enum LanguageErrorKind {
     FunctionKindInTrait,
     InvalidPattern,
     LetRhsMustBeAssignment,
+    TupleHasTooManyElements,
 
     // Runtime
     TypeError { expected: Cow<'static, str>, got: Cow<'static, str> },
@@ -285,6 +286,7 @@ impl std::fmt::Display for LanguageErrorKind {
                 Ok(())
             }
             Self::LetRhsMustBeAssignment => write!(f, "the right hand side of 'let' must be an assignment, like 'let x = y'"),
+            Self::TupleHasTooManyElements => write!(f, "tuple has too many elements"),
 
             Self::User(error) => write!(f, "{error}"),
         }

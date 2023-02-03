@@ -244,7 +244,7 @@ impl<'e> CodeGenerator<'e> {
                 generator.generate_variable_load(iterator_var);
                 generator.chunk.emit((
                     Opcode::CallMethod,
-                    Opr24::pack((generator.builtin_traits.iterator_has_next.to_u16(), 1)),
+                    Opr24::pack((generator.library.builtin_traits.iterator_has_next.to_u16(), 1)),
                 ));
                 Ok(())
             },
@@ -252,7 +252,7 @@ impl<'e> CodeGenerator<'e> {
                 generator.generate_variable_load(iterator_var);
                 generator.chunk.emit((
                     Opcode::CallMethod,
-                    Opr24::pack((generator.builtin_traits.iterator_next.to_u16(), 1)),
+                    Opr24::pack((generator.library.builtin_traits.iterator_next.to_u16(), 1)),
                 ));
                 generator.generate_pattern_destructuring(ast, binding, Expression::Discarded)?;
                 generator.generate_node_list(ast, body)?;

@@ -283,9 +283,7 @@ impl Outcome {
                 } else {
                     "<panic payload of unknown type>"
                 };
-                Self::Failure(format!(
-                    "(!) the test should have succeeded, but panicked: {message}"
-                ))
+                Self::Failure(format!("(!) test panicked: {message}"))
             }
         }
     }

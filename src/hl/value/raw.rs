@@ -3,7 +3,7 @@ use std::hint::unreachable_unchecked;
 use crate::{
     ll::{
         gc::{Gc, Memory},
-        value::{Dict, List, RawValue, Tuple, ValueKind},
+        value::{Dict, List, RawValue, Record, Tuple, ValueKind},
     },
     Error, Hidden, Object, UnsafeMutGuard, UnsafeRefGuard, UserData, Value,
 };
@@ -23,6 +23,7 @@ impl Value {
             Value::List(l) => RawValue::from(gc.manage(&l.0)),
             Value::Dict(d) => RawValue::from(gc.manage(&d.0)),
             Value::Tuple(t) => RawValue::from(gc.manage(&t.0)),
+            Value::Record(r) => RawValue::from(gc.manage(&r.0)),
             Value::UserData(u) => RawValue::from(gc.manage(u)),
         }
     }
@@ -41,6 +42,7 @@ impl Value {
             Value::List(l) => RawValue::from(Gc::as_raw(&l.0)),
             Value::Dict(d) => RawValue::from(Gc::as_raw(&d.0)),
             Value::Tuple(t) => RawValue::from(Gc::as_raw(&t.0)),
+            Value::Record(r) => RawValue::from(Gc::as_raw(&r.0)),
             Value::UserData(u) => RawValue::from(Gc::as_raw(u)),
         }
     }
@@ -69,6 +71,10 @@ impl Value {
                         Self::List(Hidden(Gc::from_raw(raw_ptr_user_data)))
                     } else if user_data.as_any().is::<Dict>() {
                         Self::Dict(Hidden(Gc::from_raw(raw_ptr_user_data)))
+                    } else if user_data.as_any().is::<Tuple>() {
+                        Self::Tuple(Hidden(Gc::from_raw(raw_ptr_user_data)))
+                    } else if user_data.as_any().is::<Record>() {
+                        Self::Record(Hidden(Gc::from_raw(raw_ptr_user_data)))
                     } else {
                         Self::UserData(Gc::from_raw(raw_ptr_user_data))
                     }
@@ -159,6 +165,14 @@ impl SelfFromRawValue for Tuple {
 
     unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
         Ok((v.downcast_user_data_unchecked::<Tuple>(), ()))
+    }
+}
+
+impl SelfFromRawValue for Record {
+    type Guard = ();
+
+    unsafe fn self_from_raw_value(v: &RawValue) -> Result<(&Self, Self::Guard), Error> {
+        Ok((v.downcast_user_data_unchecked::<Record>(), ()))
     }
 }
 

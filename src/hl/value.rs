@@ -58,8 +58,12 @@ pub enum Value {
     Dict(Hidden<Box<dyn value::UserData>>),
     /// A tuple.
     ///
-    /// Tuples are opaque to the Rust API, no conversion function currently exists for them.
+    /// Tuples are opaque to the Rust API and must be converted into a typed tuple `(T, U, ..)`.
     Tuple(Hidden<Box<dyn value::UserData>>),
+    /// A tuple.
+    ///
+    /// Tuples are opaque to the Rust API, no conversion function currently exists for them.
+    Record(Hidden<Box<dyn value::UserData>>),
     /// Arbitrarily typed user data.
     UserData(Gc<Box<dyn value::UserData>>),
 }
@@ -106,6 +110,7 @@ impl Value {
             Value::List(_) => "List",
             Value::Dict(_) => "Dict",
             Value::Tuple(_) => "Tuple",
+            Value::Record(_) => "Record",
             Value::UserData(u) => u.type_name(),
         }
     }

@@ -38,6 +38,10 @@ pub enum Opcode {
     CreateDict,
     /// Creates a tuple from `operand` values that are at the top of the stack.
     CreateTuple,
+    /// Creates a record from `operand` values that are at the top of the stack.
+    /// The opcode is encoded with `operand` additional pairs of `u16` following it, where the
+    /// pairs define which value should be assigned to each field.
+    CreateRecord,
 
     /// Assigns the value at the top of the stack to a global. The value stays on the stack.
     AssignGlobal,

@@ -151,6 +151,7 @@ impl<'e> CodeGenerator<'e> {
             NodeKind::ImplAs => return Err(ast.error(node, LanguageErrorKind::AsOutsideOfImpl)),
 
             NodeKind::Pair
+            | NodeKind::Rest
             | NodeKind::IfBranch
             | NodeKind::ElseBranch
             | NodeKind::FunctionHead

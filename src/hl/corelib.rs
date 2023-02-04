@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    ll::value::{Dict, RawValue, Tuple},
+    ll::value::{Dict, RawValue, Record, Tuple},
     Engine, Error, TypeBuilder,
 };
 
@@ -30,6 +30,14 @@ pub trait CoreLibrary: 'static + Debug + Clone {
 
     /// Defines the `Tuple` type of the given size using the given type builder.
     fn define_tuple(&self, size: usize, builder: TypeBuilder<Tuple>) -> TypeBuilder<Tuple>;
+
+    /// Defines the `Record` type with the given `(field_name, field_index)` mappings using the
+    /// given type builder.
+    fn define_record<'a>(
+        &self,
+        fields: impl Iterator<Item = (&'a str, usize)>,
+        builder: TypeBuilder<Record>,
+    ) -> TypeBuilder<Record>;
 
     /// Loads additional types into the engine once the fundamental types are built.
     fn load(&self, engine: &mut Engine) -> Result<(), Error>;

@@ -239,6 +239,8 @@ pub enum NodeKind {
     Record,
     /// A `key: value` pair in a dict or record literal.
     Pair,
+    /// The `..` token at the end of a record.
+    Rest,
 
     /// Negation operator (prefix `-`).
     Negate,

@@ -1,4 +1,4 @@
-use std::{any::Any, fmt, fmt::Debug, ops::Deref, rc::Rc};
+use std::{any::Any, collections::HashMap, fmt, fmt::Debug, ops::Deref, rc::Rc};
 
 /// The implementation of a raw foreign function.
 pub use crate::ll::bytecode::ForeignFunction as RawForeignFunction;
@@ -128,6 +128,21 @@ impl Engine {
                     .expect("corelib declares too many methods")
                     .instance_dtable
             }
+
+            fn generate_record(
+                &self,
+                env: &mut Environment,
+                gc: &mut Memory,
+                builtin_traits: &BuiltinTraits,
+                identifier: &str,
+            ) -> Gc<DispatchTable> {
+                let fields = identifier.split('+').enumerate().map(|(index, name)| (name, index));
+                self.corelib
+                    .define_record(fields, TypeBuilder::new("Record"))
+                    .build(env, gc, builtin_traits)
+                    .expect("corelib declares too many methods")
+                    .instance_dtable
+            }
         }
 
         let mut gc = Memory::new();
@@ -159,6 +174,8 @@ impl Engine {
                 list: Gc::clone(&list.instance_dtable),
                 dict: Gc::clone(&dict.instance_dtable),
                 tuples: vec![],
+                records: vec![],
+                records_by_identifier: HashMap::new(),
             },
             Box::new(DtableGenerator { corelib: corelib.clone() }),
             builtin_traits,

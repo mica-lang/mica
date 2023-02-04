@@ -6,13 +6,13 @@ use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, Library
 use crate::ll::{
     bytecode::{
         CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind,
-        MethodParameterCount, MethodSignature, Opcode, PrototypeIndex, TraitIndex,
+        MethodParameterCount, MethodSignature, Opcode, PrototypeIndex, RecordTypeIndex, TraitIndex,
     },
     error::{LanguageError, LanguageErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
     value::{
-        create_trait, Closure, Dict, List, RawValue, Struct, Trait, Tuple, Upvalue, UserData,
-        ValueKind,
+        create_trait, Closure, Dict, List, RawValue, Record, Struct, Trait, Tuple, Upvalue,
+        UserData, ValueKind,
     },
 };
 
@@ -592,9 +592,30 @@ impl Fiber {
                     unsafe { gc.auto_collect(self.roots(globals)) };
                     let len = usize::from(operand);
                     let fields = self.stack.drain(self.stack.len() - len..).collect();
-                    let list: Box<dyn UserData> = Box::new(Tuple { fields });
-                    let list = gc.allocate(list);
-                    self.push(RawValue::from(list));
+                    let tuple: Box<dyn UserData> = Box::new(Tuple { fields });
+                    let tuple = gc.allocate(tuple);
+                    self.push(RawValue::from(tuple));
+                }
+                Opcode::CreateRecord => {
+                    unsafe { gc.auto_collect(self.roots(globals)) };
+                    let record_type_index = RecordTypeIndex::from_opr24(operand);
+                    let record_type = library.builtin_dtables.get_record(record_type_index);
+
+                    let mut fields = vec![RawValue::from(()); record_type.field_count];
+                    let values = &self.stack[self.stack.len() - fields.len()..];
+                    for field in &mut fields {
+                        let value_index = unsafe { self.chunk.read_u32(&mut self.pc) as usize };
+                        *field = values[value_index];
+                    }
+                    for _ in 0..fields.len() {
+                        self.pop();
+                    }
+                    let _sentinel = unsafe { self.chunk.read_u32(&mut self.pc) };
+
+                    let record: Box<dyn UserData> =
+                        Box::new(Record { record_type: Rc::clone(record_type), fields });
+                    let record = gc.allocate(record);
+                    self.push(RawValue::from(record));
                 }
 
                 Opcode::AssignGlobal => {

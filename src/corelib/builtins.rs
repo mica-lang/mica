@@ -1,6 +1,7 @@
 pub(crate) mod dict;
 pub(crate) mod list;
 pub(crate) mod number;
+pub(crate) mod record;
 pub(crate) mod string;
 pub(crate) mod tuple;
 

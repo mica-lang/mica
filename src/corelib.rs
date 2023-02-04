@@ -2,7 +2,7 @@
 
 use self::{builtins::*, core::load_core};
 use crate::{
-    ll::value::{Dict, RawValue, Tuple},
+    ll::value::{Dict, RawValue, Record, Tuple},
     CoreLibrary, Engine, Error, TypeBuilder,
 };
 
@@ -45,6 +45,14 @@ impl CoreLibrary for Lib {
 
     fn define_tuple(&self, size: usize, builder: TypeBuilder<Tuple>) -> TypeBuilder<Tuple> {
         tuple::define(size, builder)
+    }
+
+    fn define_record<'a>(
+        &self,
+        fields: impl Iterator<Item = (&'a str, usize)>,
+        builder: TypeBuilder<Record>,
+    ) -> TypeBuilder<Record> {
+        record::define(fields, builder)
     }
 
     fn load(&self, engine: &mut Engine) -> Result<(), Error> {

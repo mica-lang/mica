@@ -119,6 +119,7 @@ pub enum LanguageErrorKind {
     ColonExpectedAfterDictKey,
     RightBracketExpectedToCloseEmptyDict,
     InExpectedAfterForBinding,
+    RestMustBeFollowedByRightBrace,
 
     // Code generator
     VariableDoesNotExist(Rc<str>),
@@ -159,6 +160,10 @@ pub enum LanguageErrorKind {
     InvalidPattern,
     LetRhsMustBeAssignment,
     TupleHasTooManyElements,
+    RecordHasTooManyFields,
+    DuplicateRecordField(Rc<str>),
+    TooManyRecords,
+    RestInRecordConstructor,
 
     // Runtime
     TypeError { expected: Cow<'static, str>, got: Cow<'static, str> },
@@ -214,6 +219,8 @@ impl std::fmt::Display for LanguageErrorKind {
             Self::RightBracketExpectedToCloseEmptyDict => write!(f, "right bracket ']' expected to close empty dict literal [:]"),
             Self::MissingFunctionBody => write!(f, "missing function body ('= expression')"),
             Self::InExpectedAfterForBinding => write!(f, "'in' expected after 'for' loop variable binding"),
+            Self::RestMustBeFollowedByRightBrace => write!(f, "'..' in record pattern cannot be followed by any elements"),
+            Self::RestInRecordConstructor => write!(f, "'..' may only appear in record patterns"),
 
             Self::VariableDoesNotExist(name) => write!(f, "variable '{name}' does not exist"),
             Self::InvalidAssignment => write!(f, "invalid left hand side of assignment"),
@@ -268,6 +275,9 @@ impl std::fmt::Display for LanguageErrorKind {
             Self::InvalidPattern => write!(f, "invalid pattern for destructuring into variables"),
             Self::LetRhsMustBeAssignment => write!(f, "the right hand side of 'let' must be an assignment, like 'let x = y'"),
             Self::TupleHasTooManyElements => write!(f, "tuple has too many elements"),
+            Self::RecordHasTooManyFields => write!(f, "record has too many fields"),
+            Self::DuplicateRecordField(name) => write!(f, "duplicate record field '{name}'"),
+            Self::TooManyRecords => write!(f, "too many distinct records"),
 
             Self::TypeError { expected, got } => {
                 write!(f, "type mismatch, expected {expected} but got {got}")

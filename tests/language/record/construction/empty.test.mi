@@ -1,0 +1,3 @@
+# It should be possible to create an empty record.
+
+let rec = {}

@@ -1,0 +1,3 @@
+# Records can be constructed using { x: y } syntax.
+
+let rec = { x: 1, y: 2 }

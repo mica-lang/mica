@@ -1,0 +1,16 @@
+# Two records are equal if they have the same set of fields and their fields are all equal.
+
+# A record is equal to itself.
+let a = { x: 1, y: 2 }
+assert(a == a)
+
+# Two instances of the same record are equal.
+let b = { x: 1, y: 2 }
+assert(a == b)
+
+# Two instances of different records are not equal.
+let c = { x: 4, y: 8 }
+let d = {}
+assert(c != d)
+assert(c != a)
+assert(d != a)

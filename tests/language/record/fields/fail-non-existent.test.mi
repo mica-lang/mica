@@ -1,0 +1,5 @@
+# Fields that do not exist should throw an error.
+# @error TODO
+
+let rec = {}
+rec.x  # @line LINE

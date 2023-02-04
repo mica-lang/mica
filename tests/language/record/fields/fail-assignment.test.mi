@@ -1,0 +1,5 @@
+# Record fields are not assignable.
+# @error TODO
+
+let rec = { x: 1 }
+rec.x = 2  # @line LINE

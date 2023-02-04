@@ -1,0 +1,4 @@
+# It's possible to make a pattern non-exhaustive by using a .. element at the end.
+
+let { y, .. } = { x: 1, y: 2 }
+assert(y == 2)

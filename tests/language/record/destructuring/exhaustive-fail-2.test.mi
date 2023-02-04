@@ -1,0 +1,5 @@
+# An exhaustive pattern that does not fully match a given record throws an error.
+# This tests a pattern that doesn't have fields that are present in the record.
+# @error TODO
+
+let {} = { x: 1 }  # @line LINE

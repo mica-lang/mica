@@ -1,0 +1,6 @@
+# Record construction has a shorthand form which automatically assigns variables to fields.
+
+let x = 1
+let y = 2
+let rec = { x, y }
+assert(rec == { x: x, y: y })

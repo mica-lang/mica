@@ -78,6 +78,14 @@ pub enum Opcode {
     /// signifies how many elements the tuple must have to be successfully destructured; if the
     /// tuple has a different size, an error is thrown.
     DestructureTuple,
+    /// Destructures a record a the top of the stack exhaustively. The operand signifies which type
+    /// the record must be to be successfully destructured; if the record has a different type an
+    /// error is thrown.
+    DestructureRecord,
+    /// Destructures a record non-exhaustively. Since the actual destructuring is handled by
+    /// CallMethod instructions following this instruction, this only ensures the value at the top
+    /// of the stack is a record.
+    DestructureRecordNonExhaustive,
 
     /// Swaps the two values at the top of the stack.
     Swap,

@@ -49,6 +49,7 @@ impl<'e> CodeGenerator<'e> {
                     self.generate_pattern_destructuring(ast, field, Expression::Discarded)?;
                 }
             }
+            NodeKind::Record => self.generate_record_destructuring(ast, node, result)?,
             _ => return Err(ast.error(node, LanguageErrorKind::InvalidPattern)),
         }
         Ok(())

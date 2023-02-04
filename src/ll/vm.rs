@@ -717,6 +717,11 @@ impl Fiber {
                         self.push(field);
                     }
                 }
+                Opcode::DestructureRecord => todo!("exhaustive record destructuring is NYI"),
+                Opcode::DestructureRecordNonExhaustive => {
+                    let record = self.stack_top();
+                    wrap_error!(record.ensure_raw_user_data::<Record>("Record"));
+                }
 
                 Opcode::Swap => {
                     let len = self.stack.len();

@@ -100,11 +100,24 @@ impl Library {
                 } else {
                     0
                 },
+                index,
             }));
             self.builtin_dtables.records_by_identifier.insert(identifier, index);
             Ok(index)
         }
     }
+}
+
+/// Creates a record identifier `x+y+...` from an iterator of field names.
+pub fn make_record_identifier<'a>(fields: impl Iterator<Item = &'a str>) -> Rc<str> {
+    let mut identifier = fields.fold(String::new(), |mut a, b| {
+        a.reserve(b.len() + 1);
+        a.push_str(b);
+        a.push_str("+");
+        a
+    });
+    identifier.pop();
+    Rc::from(identifier)
 }
 
 /// Dispatch tables for instances of builtin types. These should be constructed by the core
@@ -151,6 +164,7 @@ pub struct RecordType {
     pub dtable: Gc<DispatchTable>,
     pub identifier: Rc<str>,
     pub field_count: usize,
+    pub index: RecordTypeIndex,
 }
 
 /// Generator of builtin dispatch tables that need to be generated on demand, such as tuples.

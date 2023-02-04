@@ -1,14 +1,16 @@
 //! Code generation for tuples and records, which are closely related.
 //! Tuples and records are both essentially just syntax sugar for anonymous structs.
 
+use std::{ops::Deref, rc::Rc};
+
 use super::{CodeGenerator, Expression, ExpressionResult};
 use crate::{
     ll::{
         ast::{Ast, NodeId, NodeKind},
-        bytecode::{Opcode, Opr24},
+        bytecode::{make_record_identifier, MethodSignature, Opcode, Opr24},
         error::LanguageErrorKind,
     },
-    LanguageError,
+    LanguageError, MethodParameterCount,
 };
 
 impl<'e> CodeGenerator<'e> {
@@ -61,13 +63,7 @@ impl<'e> CodeGenerator<'e> {
             field_order.push(field_index as u32);
         }
 
-        let mut identifier = fields.iter().fold(String::new(), |mut a, b| {
-            a.reserve(b.len() + 1);
-            a.push_str(b);
-            a.push_str("+");
-            a
-        });
-        identifier.pop();
+        let identifier = make_record_identifier(fields.iter().map(|&rc| rc.deref()));
         let record_type_index = self
             .library
             .get_or_generate_record(&mut self.env, &mut self.gc, &identifier)
@@ -82,5 +78,46 @@ impl<'e> CodeGenerator<'e> {
         self.chunk.emit_u32(0xFFFF_FFFF);
 
         Ok(ExpressionResult::Present)
+    }
+
+    pub(super) fn generate_record_destructuring(
+        &mut self,
+        ast: &Ast,
+        node: NodeId,
+        result: Expression,
+    ) -> Result<(), LanguageError> {
+        let pairs = ast.children(node).unwrap();
+        let is_non_exhaustive =
+            !pairs.is_empty() && ast.kind(*pairs.last().unwrap()) == NodeKind::Rest;
+
+        if is_non_exhaustive {
+            self.chunk.emit(Opcode::DestructureRecordNonExhaustive);
+
+            // Skip the last element, which is guaranteed to be Rest.
+            for &pair in &pairs[..pairs.len() - 1] {
+                let (key, value) = ast.node_pair(pair);
+
+                let signature = MethodSignature::new(
+                    Rc::clone(ast.string(key).unwrap()),
+                    MethodParameterCount::from_count_with_self(1),
+                );
+                let method_index = self
+                    .env
+                    .get_or_create_method_index(&signature)
+                    .map_err(|e| ast.error(key, e))?;
+                // For now this simply calls methods on the record; this is the simplest way of
+                // doing things without complicating the implementation too much.
+                // We can swap it out for something more performant if it becomes too slow.
+                self.chunk.emit(Opcode::Duplicate);
+                self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
+
+                let pattern = if value == NodeId::EMPTY { key } else { value };
+                self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
+            }
+        } else {
+            todo!("exhaustive patterns");
+        }
+
+        Ok(())
     }
 }

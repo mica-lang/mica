@@ -169,7 +169,7 @@ impl Engine {
         let string = get_dtables!("String", define_string);
         let list = get_dtables!("List", define_list);
         let dict = get_dtables!("Dict", define_dict);
-        let library = Library::new(
+        let mut library = Library::new(
             BuiltinDispatchTables {
                 nil: Gc::clone(&nil.instance_dtable),
                 boolean: Gc::clone(&boolean.instance_dtable),
@@ -185,6 +185,13 @@ impl Engine {
             Box::new(DtableGenerator { corelib: corelib.clone() }),
             builtin_traits,
         );
+
+        // Pre-generate tuples up to size 8, which is what you can receive or produce automagically
+        // using the high-level API. If we don't do that and the VM receives any of those tuples,
+        // it'll cause panics whenever the VM tries to touch them.
+        for size in 0..=8 {
+            library.generate_tuple(&mut env, &mut gc, size);
+        }
 
         let iterator = create_trait_value(&mut env, &mut gc, library.builtin_traits.iterator);
 

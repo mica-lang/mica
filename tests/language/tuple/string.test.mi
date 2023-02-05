@@ -1,0 +1,6 @@
+# Tuples should be stringifiable using the `string` function.
+
+assert(string(()) == "()")
+assert(string((1,)) == "(1,)")
+assert(string((1, 2)) == "(1, 2)")
+assert(string((1, 2, 3)) == "(1, 2, 3)")

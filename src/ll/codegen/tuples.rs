@@ -115,7 +115,25 @@ impl<'e> CodeGenerator<'e> {
                 self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
             }
         } else {
-            todo!("exhaustive patterns");
+            let identifier = make_record_identifier(pairs.iter().map(|&pair| {
+                let (key, _) = ast.node_pair(pair);
+                ast.string(key).unwrap().deref()
+            }));
+            let record_type_index = self
+                .library
+                .get_or_generate_record(self.env, self.gc, &identifier)
+                .map_err(|_| ast.error(node, LanguageErrorKind::TooManyRecords))?;
+            // In case the record is used after destructuring, we need to copy it so that the
+            // original stays on the stack.
+            if result == Expression::Used {
+                self.chunk.emit(Opcode::Duplicate);
+            }
+            self.chunk.emit((Opcode::DestructureRecord, record_type_index.to_opr24()));
+            for &pair in pairs {
+                let (key, value) = ast.node_pair(pair);
+                let pattern = if value == NodeId::EMPTY { key } else { value };
+                self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
+            }
         }
 
         Ok(())

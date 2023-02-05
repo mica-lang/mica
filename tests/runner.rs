@@ -198,6 +198,7 @@ impl<'s> ErrorMatcher<'s> {
                         }
                         self.position_in_error += 1;
                         self.position_in_pattern += 1;
+                        continue;
                     }
 
                     let start = self.position_in_pattern;
@@ -209,6 +210,20 @@ impl<'s> ErrorMatcher<'s> {
 
                     let inside = &self.pattern[start..end];
                     if !self.check_matcher(inside) {
+                        return false;
+                    }
+                }
+                b'}' => {
+                    self.position_in_pattern += 1;
+                    if self.pattern_char() == b'}' {
+                        if self.error_char() != self.pattern_char() {
+                            return false;
+                        }
+                        self.position_in_error += 1;
+                        self.position_in_pattern += 1;
+                    } else {
+                        // This could really use a better error message...
+                        // If you use only a single }, the match will always fail.
                         return false;
                     }
                 }

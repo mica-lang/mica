@@ -1,5 +1,5 @@
 # Trying to non-exhaustively match on a field that doesn't exist is an error.
-# @error error: method bogus/0 is not defined for Record
+# @error error: method bogus/0 is not defined for Record{{nope}}
 # @error stack traceback (most recent call first):
 # @error     {file}:{:LINE}:1  <main>
 

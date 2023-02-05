@@ -1,8 +1,10 @@
 use std::{
     any::Any,
+    borrow::Cow,
     cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
+    ops::Deref,
     rc::Rc,
 };
 
@@ -68,8 +70,8 @@ impl UserData for Record {
         }
     }
 
-    fn type_name(&self) -> &str {
-        &self.record_type.dtable.pretty_name
+    fn type_name(&self) -> Cow<'_, str> {
+        Cow::Borrowed(self.record_type.dtable.pretty_name.deref())
     }
 
     fn as_any(&self) -> &dyn Any {

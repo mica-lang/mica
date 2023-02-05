@@ -1,5 +1,6 @@
 use std::{
     any::Any,
+    borrow::Cow,
     cell::{Cell, UnsafeCell},
     cmp::Ordering,
     fmt,
@@ -102,8 +103,8 @@ where
     // This does return the correct name, clippy.
     #[allow(clippy::misnamed_getters)]
 
-    fn type_name(&self) -> &str {
-        &self.dtable.pretty_name
+    fn type_name(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.dtable.pretty_name)
     }
 }
 
@@ -197,8 +198,8 @@ where
 
     // This does return the correct name, clippy.
     #[allow(clippy::misnamed_getters)]
-    fn type_name(&self) -> &str {
-        &self.dtable.pretty_name
+    fn type_name(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.dtable.pretty_name)
     }
 }
 

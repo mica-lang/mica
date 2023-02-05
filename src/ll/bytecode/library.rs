@@ -79,7 +79,7 @@ impl Library {
         &mut self,
         env: &mut Environment,
         gc: &mut Memory,
-        identifier: &str,
+        identifier: &Rc<str>,
     ) -> Result<RecordTypeIndex, Opr24OutOfRange> {
         if let Some(&index) = self.builtin_dtables.records_by_identifier.get(identifier) {
             Ok(index)
@@ -91,7 +91,6 @@ impl Library {
                 &self.builtin_traits,
                 identifier,
             );
-            let identifier = Rc::from(identifier);
             self.builtin_dtables.records.push(Rc::new(RecordType {
                 dtable,
                 identifier: Rc::clone(&identifier),
@@ -102,7 +101,7 @@ impl Library {
                 },
                 index,
             }));
-            self.builtin_dtables.records_by_identifier.insert(identifier, index);
+            self.builtin_dtables.records_by_identifier.insert(Rc::clone(identifier), index);
             Ok(index)
         }
     }

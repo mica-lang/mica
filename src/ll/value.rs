@@ -83,7 +83,7 @@ impl RawValue {
         self.0.kind()
     }
 
-    fn type_name(&self) -> Cow<'static, str> {
+    pub fn type_name(&self) -> Cow<'static, str> {
         match self.0.kind() {
             ValueKind::Nil => "Nil".into(),
             ValueKind::Boolean => "Boolean".into(),
@@ -106,8 +106,8 @@ impl RawValue {
         }
     }
 
-    fn type_error(&self, expected: &'static str) -> LanguageErrorKind {
-        LanguageErrorKind::TypeError { expected: Cow::from(expected), got: self.type_name() }
+    fn type_error(&self, expected: impl Into<Cow<'static, str>>) -> LanguageErrorKind {
+        LanguageErrorKind::TypeError { expected: expected.into(), got: self.type_name() }
     }
 
     /// Returns a boolean value without performing any checks.
@@ -246,14 +246,16 @@ impl RawValue {
 
     /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error
     /// if that's not the case. The `type_name` should be provided for error messages.
-    pub fn ensure_raw_user_data<T>(&self, type_name: &'static str) -> Result<&T, LanguageErrorKind>
+    pub fn ensure_raw_user_data<T, F, R>(&self, type_name: F) -> Result<&T, LanguageErrorKind>
     where
         T: UserData,
+        F: FnOnce() -> R,
+        R: Into<Cow<'static, str>>,
     {
         if self.0.kind() == ValueKind::UserData {
             unsafe { Ok(self.downcast_user_data_unchecked()) }
         } else {
-            Err(self.type_error(type_name))
+            Err(self.type_error(type_name()))
         }
     }
 
@@ -444,7 +446,7 @@ pub trait UserData: Any + fmt::Debug {
 
     fn hash(&self, hasher: &mut dyn Hasher);
 
-    fn type_name(&self) -> &str;
+    fn type_name(&self) -> Cow<'_, str>;
 
     fn visit_references(&self, _visit: &mut dyn FnMut(RawValue)) {}
 

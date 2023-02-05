@@ -96,21 +96,21 @@ impl Value {
     }
 
     /// Returns the name of this value's type.
-    pub fn type_name(&self) -> &str {
+    pub fn type_name(&self) -> Cow<'_, str> {
         match self {
-            Value::Nil => "Nil",
-            Value::False => "False",
-            Value::True => "True",
-            Value::Number(_) => "Number",
-            Value::String(_) => "String",
-            Value::Function(_) => "Function",
+            Value::Nil => "Nil".into(),
+            Value::False => "False".into(),
+            Value::True => "True".into(),
+            Value::Number(_) => "Number".into(),
+            Value::String(_) => "String".into(),
+            Value::Function(_) => "Function".into(),
             // Hopefully this doesn't explode.
-            Value::Struct(s) => &unsafe { s.0.dtable() }.type_name,
-            Value::Trait(s) => &s.0.dtable().type_name,
-            Value::List(_) => "List",
-            Value::Dict(_) => "Dict",
-            Value::Tuple(_) => "Tuple",
-            Value::Record(_) => "Record",
+            Value::Struct(s) => Cow::Borrowed(&unsafe { s.0.dtable() }.type_name),
+            Value::Trait(s) => Cow::Borrowed(&s.0.dtable().type_name),
+            Value::List(_) => "List".into(),
+            Value::Dict(_) => "Dict".into(),
+            Value::Tuple(_) => "Tuple".into(),
+            Value::Record(_) => "Record".into(),
             Value::UserData(u) => u.type_name(),
         }
     }

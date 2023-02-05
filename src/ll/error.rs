@@ -172,7 +172,6 @@ pub enum LanguageErrorKind {
     UserDataAlreadyBorrowed,
     DoubleMethodImplementation { type_name: Rc<str>, signature: RenderedSignature },
     MethodsUnimplemented { type_name: Rc<str>, methods: Vec<RenderedSignature> },
-    TupleSizeMismatch { expected: usize, got: usize },
 
     User(Box<dyn std::error::Error>),
 }
@@ -298,9 +297,6 @@ impl std::fmt::Display for LanguageErrorKind {
                 }
                 Ok(())
             }
-            Self::TupleSizeMismatch { expected, got } => {
-                write!(f, "size mismatch when destructuring tuple: expected tuple with {expected} elements but got one with {got} elements")
-            },
 
             Self::User(error) => write!(f, "{error}"),
         }

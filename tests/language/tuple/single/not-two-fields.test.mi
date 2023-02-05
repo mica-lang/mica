@@ -1,5 +1,5 @@
 # A single doesn't have a _1 field.
-# @error error: method _1/0 is not defined for Tuple
+# @error error: method _1/0 is not defined for Tuple(1)
 # @error stack traceback (most recent call first):
 # @error     {file}:{:LINE}:2  <main>
 

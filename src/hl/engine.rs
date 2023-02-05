@@ -123,7 +123,7 @@ impl Engine {
                 size: usize,
             ) -> Gc<DispatchTable> {
                 self.corelib
-                    .define_tuple(size, TypeBuilder::new("Tuple"))
+                    .define_tuple(size, TypeBuilder::new(format!("Tuple({size})")))
                     .build(env, gc, builtin_traits)
                     .expect("corelib declares too many methods")
                     .instance_dtable
@@ -137,8 +137,13 @@ impl Engine {
                 identifier: &str,
             ) -> Gc<DispatchTable> {
                 let fields = identifier.split('+').enumerate().map(|(index, name)| (name, index));
+                let type_name = if identifier.len() == 0 {
+                    String::from("Record{}")
+                } else {
+                    format!("Record{{{}}}", identifier.replace("+", ", "))
+                };
                 self.corelib
-                    .define_record(fields, TypeBuilder::new("Record"))
+                    .define_record(fields, TypeBuilder::new(type_name))
                     .build(env, gc, builtin_traits)
                     .expect("corelib declares too many methods")
                     .instance_dtable

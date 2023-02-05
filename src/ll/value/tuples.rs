@@ -1,5 +1,6 @@
 use std::{
     any::Any,
+    borrow::Cow,
     cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
@@ -87,8 +88,8 @@ impl UserData for Tuple {
         }
     }
 
-    fn type_name(&self) -> &str {
-        "Tuple"
+    fn type_name(&self) -> Cow<'_, str> {
+        Cow::Owned(format!("Tuple({})", self.fields.len()))
     }
 
     fn as_any(&self) -> &dyn Any {

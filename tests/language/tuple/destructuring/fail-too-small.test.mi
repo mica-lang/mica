@@ -1,5 +1,5 @@
 # Test that destructuring a tuple of a non-matching length fails.
-# @error error: size mismatch when destructuring tuple: expected tuple with 2 elements but got one with 1 elements
+# @error error: type mismatch, expected Tuple(2) but got Tuple(1)
 # @error stack traceback (most recent call first):
 # @error     {file}:{:LINE}:1  <main>
 

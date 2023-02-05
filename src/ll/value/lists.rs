@@ -1,5 +1,6 @@
 use std::{
     any::Any,
+    borrow::Cow,
     cell::UnsafeCell,
     cmp::Ordering,
     fmt,
@@ -114,7 +115,7 @@ impl UserData for List {
         } else {
             Err(LanguageErrorKind::TypeError {
                 expected: "List".into(),
-                got: other.type_name().to_owned().into(),
+                got: other.type_name().into_owned().into(),
             })
         }
     }
@@ -129,8 +130,8 @@ impl UserData for List {
         }
     }
 
-    fn type_name(&self) -> &str {
-        "List"
+    fn type_name(&self) -> Cow<'_, str> {
+        Cow::Borrowed("List")
     }
 
     fn visit_references(&self, visit: &mut dyn FnMut(RawValue)) {

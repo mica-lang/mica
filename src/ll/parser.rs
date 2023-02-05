@@ -217,7 +217,10 @@ impl Parser {
         }
         let inner = self.parse_expression(0)?;
         match self.lexer.next_token()?.kind {
-            TokenKind::RightParen => Ok(inner),
+            TokenKind::RightParen => {
+                let location = self.ast.location(inner);
+                Ok(self.ast.build_node(NodeKind::Paren, inner).with_location(location).done())
+            }
             TokenKind::Comma => {
                 let mut elements = vec![inner];
                 self.parse_comma_separated(&mut elements, TokenKind::RightParen, |p| {

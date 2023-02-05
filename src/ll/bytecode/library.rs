@@ -1,12 +1,13 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
+    fmt::Debug,
     rc::Rc,
 };
 
-use super::{DispatchTable, Environment, MethodIndex, TraitIndex};
+use super::{DispatchTable, Environment, MethodIndex, Opr24, Opr24OutOfRange, TraitIndex};
 use crate::{
-    ll::{codegen::TraitBuilder, error::LanguageErrorKind},
+    ll::{codegen::TraitBuilder, error::LanguageErrorKind, gc::Memory},
     Gc, MethodParameterCount,
 };
 
@@ -16,6 +17,9 @@ pub struct Library {
     /// Built-in dispatch tables. This has to be initialized with proper dtables by the core
     /// library.
     pub builtin_dtables: BuiltinDispatchTables,
+
+    builtin_dtable_generator: Box<dyn BuiltinDispatchTableGenerator>,
+
     /// Built-in traits. This is initialized by the compiler itself after the environment is
     /// available.
     pub builtin_traits: BuiltinTraits,
@@ -25,8 +29,17 @@ pub struct Library {
 }
 
 impl Library {
-    pub fn new(builtin_dtables: BuiltinDispatchTables, builtin_traits: BuiltinTraits) -> Self {
-        Self { builtin_dtables, builtin_traits, user_dtables: HashMap::new() }
+    pub fn new(
+        builtin_dtables: BuiltinDispatchTables,
+        builtin_dtable_generator: Box<dyn BuiltinDispatchTableGenerator>,
+        builtin_traits: BuiltinTraits,
+    ) -> Self {
+        Self {
+            builtin_dtables,
+            builtin_dtable_generator,
+            builtin_traits,
+            user_dtables: HashMap::new(),
+        }
     }
 
     /// Adds a dispatch table for a user-defined type.
@@ -45,6 +58,65 @@ impl Library {
     {
         self.user_dtables.get(&TypeId::of::<T>())
     }
+
+    /// Generates the dtable for tuple of the given size if it doesn't exist yet.
+    pub(crate) fn generate_tuple(&mut self, env: &mut Environment, gc: &mut Memory, size: usize) {
+        if size >= self.builtin_dtables.tuples.len() {
+            self.builtin_dtables.tuples.resize(size + 1, None);
+        }
+        self.builtin_dtables.tuples[size] =
+            Some(self.builtin_dtable_generator.generate_tuple(env, gc, &self.builtin_traits, size));
+    }
+
+    /// Returns the record type index of the record with the given identifier, generating it if it's
+    /// not yet available.
+    ///
+    /// The identifier signifies the fields the record contains, and must be a string that joins
+    /// each field name with a `+` separator; eg. `x+y+z`. Field names must be sorted
+    /// alphabetically. This is not enforced anywhere, but it's the convention the rest of the
+    /// crate follows, and it's used for things like enumerating all fields in a record.
+    pub(crate) fn get_or_generate_record(
+        &mut self,
+        env: &mut Environment,
+        gc: &mut Memory,
+        identifier: &Rc<str>,
+    ) -> Result<RecordTypeIndex, Opr24OutOfRange> {
+        if let Some(&index) = self.builtin_dtables.records_by_identifier.get(identifier) {
+            Ok(index)
+        } else {
+            let index = RecordTypeIndex(Opr24::try_from(self.builtin_dtables.records.len())?);
+            let dtable = self.builtin_dtable_generator.generate_record(
+                env,
+                gc,
+                &self.builtin_traits,
+                identifier,
+            );
+            self.builtin_dtables.records.push(Rc::new(RecordType {
+                dtable,
+                identifier: Rc::clone(&identifier),
+                field_count: if identifier.len() > 0 {
+                    identifier.chars().filter(|&c| c == '+').count() + 1
+                } else {
+                    0
+                },
+                index,
+            }));
+            self.builtin_dtables.records_by_identifier.insert(Rc::clone(identifier), index);
+            Ok(index)
+        }
+    }
+}
+
+/// Creates a record identifier `x+y+...` from an iterator of field names.
+pub fn make_record_identifier<'a>(fields: impl Iterator<Item = &'a str>) -> Rc<str> {
+    let mut identifier = fields.fold(String::new(), |mut a, b| {
+        a.reserve(b.len() + 1);
+        a.push_str(b);
+        a.push_str("+");
+        a
+    });
+    identifier.pop();
+    Rc::from(identifier)
 }
 
 /// Dispatch tables for instances of builtin types. These should be constructed by the core
@@ -58,21 +130,59 @@ pub struct BuiltinDispatchTables {
     pub function: Gc<DispatchTable>,
     pub list: Gc<DispatchTable>,
     pub dict: Gc<DispatchTable>,
+    pub tuples: Vec<Option<Gc<DispatchTable>>>,
+    pub records: Vec<Rc<RecordType>>,
+    pub records_by_identifier: HashMap<Rc<str>, RecordTypeIndex>,
 }
 
-/// Default dispatch tables for built-in types are empty and do not implement any methods.
 impl BuiltinDispatchTables {
-    pub fn empty() -> Self {
-        Self {
-            nil: Gc::new(DispatchTable::new_for_instance("Nil")),
-            boolean: Gc::new(DispatchTable::new_for_instance("Boolean")),
-            number: Gc::new(DispatchTable::new_for_instance("Number")),
-            string: Gc::new(DispatchTable::new_for_instance("String")),
-            function: Gc::new(DispatchTable::new_for_instance("Function")),
-            list: Gc::new(DispatchTable::new_for_instance("List")),
-            dict: Gc::new(DispatchTable::new_for_instance("Dict")),
-        }
+    /// Gets the record type with the given index.
+    pub fn get_record(&self, index: RecordTypeIndex) -> &Rc<RecordType> {
+        &self.records[usize::from(index.0)]
     }
+}
+
+/// The index of a record type stored inside a [`BuiltinDispatchTables`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct RecordTypeIndex(Opr24);
+
+impl RecordTypeIndex {
+    pub(crate) fn from_opr24(x: Opr24) -> Self {
+        Self(x)
+    }
+
+    pub(crate) fn to_opr24(self) -> Opr24 {
+        self.0
+    }
+}
+
+/// Describes a record type - combines its dtable with names of fields.
+#[derive(Debug)]
+pub struct RecordType {
+    pub dtable: Gc<DispatchTable>,
+    pub identifier: Rc<str>,
+    pub field_count: usize,
+    pub index: RecordTypeIndex,
+}
+
+/// Generator of builtin dispatch tables that need to be generated on demand, such as tuples.
+pub trait BuiltinDispatchTableGenerator: Debug {
+    fn generate_tuple(
+        &self,
+        env: &mut Environment,
+        gc: &mut Memory,
+        builtin_traits: &BuiltinTraits,
+        size: usize,
+    ) -> Gc<DispatchTable>;
+
+    fn generate_record(
+        &self,
+        env: &mut Environment,
+        gc: &mut Memory,
+        builtin_traits: &BuiltinTraits,
+        identifier: &str,
+    ) -> Gc<DispatchTable>;
 }
 
 /// IDs of built-in traits and their methods.

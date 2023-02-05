@@ -1,0 +1,7 @@
+# Fields that do not exist should throw an error.
+# @error error: method x/0 is not defined for Record{{}}
+# @error stack traceback (most recent call first):
+# @error     {file}:{:LINE}:4  <main>
+
+let rec = {}
+rec.x  # @line LINE

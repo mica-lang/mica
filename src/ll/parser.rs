@@ -169,29 +169,71 @@ impl Parser {
         Ok(())
     }
 
-    /// Parses a comma-separated list.
-    fn parse_comma_separated(
+    /// Parses a comma-separated list, providing a function that returns whether parsing should end.
+    fn parse_comma_separated_ending_with(
         &mut self,
         dest: &mut Vec<NodeId>,
-        end: TokenKind,
+        is_end: impl Fn(&TokenKind) -> bool,
         mut next: impl FnMut(&mut Self) -> Result<NodeId, LanguageError>,
-    ) -> Result<(), LanguageError> {
+    ) -> Result<Token, LanguageError> {
         loop {
             let token = self.lexer.peek_token()?;
             match &token.kind {
                 TokenKind::Eof => return Err(self.error(&token, LanguageErrorKind::UnexpectedEof)),
-                kind if *kind == end => {
-                    self.lexer.next_token()?;
-                    return Ok(());
+                kind if is_end(kind) => {
+                    return Ok(self.lexer.next_token()?);
                 }
                 _ => (),
             }
             dest.push(next(self)?);
             match self.lexer.next_token()? {
                 Token { kind: TokenKind::Comma, .. } => (),
-                t if t.kind == end => return Ok(()),
+                t if is_end(&t.kind) => return Ok(t),
                 token => return Err(self.error(&token, LanguageErrorKind::CommaExpected)),
             }
+        }
+    }
+
+    /// Parses a comma-separated list.
+    fn parse_comma_separated(
+        &mut self,
+        dest: &mut Vec<NodeId>,
+        end: TokenKind,
+        next: impl FnMut(&mut Self) -> Result<NodeId, LanguageError>,
+    ) -> Result<Token, LanguageError> {
+        self.parse_comma_separated_ending_with(dest, |k| k == &end, next)
+    }
+
+    /// Parses a parenthesized expression `(x)` or a tuple - `()`, `(x,)`, or `(x, y)`.
+    fn parse_paren_or_tuple(&mut self, token: Token) -> Result<NodeId, LanguageError> {
+        if self.lexer.peek_token()?.kind == TokenKind::RightParen {
+            let _right_paren = self.lexer.next_token();
+            return Ok(self
+                .ast
+                .build_node(NodeKind::Tuple, ())
+                .with_children(vec![])
+                .with_location(token.location)
+                .done());
+        }
+        let inner = self.parse_expression(0)?;
+        match self.lexer.next_token()?.kind {
+            TokenKind::RightParen => {
+                let location = self.ast.location(inner);
+                Ok(self.ast.build_node(NodeKind::Paren, inner).with_location(location).done())
+            }
+            TokenKind::Comma => {
+                let mut elements = vec![inner];
+                self.parse_comma_separated(&mut elements, TokenKind::RightParen, |p| {
+                    p.parse_expression(0)
+                })?;
+                Ok(self
+                    .ast
+                    .build_node(NodeKind::Tuple, ())
+                    .with_children(elements)
+                    .with_location(token.location)
+                    .done())
+            }
+            _ => Err(self.error(&token, LanguageErrorKind::MissingRightParen)),
         }
     }
 
@@ -221,7 +263,7 @@ impl Parser {
                         let colon = p.lexer.next_token()?;
                         let value = p.parse_expression(0)?;
                         Ok(p.ast
-                            .build_node(NodeKind::DictPair, (key, value))
+                            .build_node(NodeKind::Pair, (key, value))
                             .with_location(colon.location)
                             .done())
                     } else {
@@ -236,7 +278,7 @@ impl Parser {
                     })?;
                     let value = p.parse_expression(0)?;
                     Ok(p.ast
-                        .build_node(NodeKind::DictPair, (key, value))
+                        .build_node(NodeKind::Pair, (key, value))
                         .with_location(colon.location)
                         .done())
                 }
@@ -255,6 +297,40 @@ impl Parser {
             )
             .with_location(token.location)
             .with_children(elements)
+            .done())
+    }
+
+    fn parse_record(&mut self, token: Token) -> Result<NodeId, LanguageError> {
+        let mut fields = vec![];
+        let end_token = self.parse_comma_separated_ending_with(
+            &mut fields,
+            |k| matches!(k, TokenKind::RightBrace | TokenKind::DotDot),
+            |p| {
+                let key = p.lexer.next_token()?;
+                let key = p.parse_identifier(key)?;
+                let value = if let TokenKind::Colon = &p.lexer.peek_token()?.kind {
+                    let _colon = p.lexer.next_token()?;
+                    p.parse_expression(0)?
+                } else {
+                    NodeId::EMPTY
+                };
+                let location = p.ast.location(key);
+                Ok(p.ast.build_node(NodeKind::Pair, (key, value)).with_location(location).done())
+            },
+        )?;
+        if let TokenKind::DotDot = &end_token.kind {
+            fields.push(
+                self.ast.build_node(NodeKind::Rest, ()).with_location(end_token.location).done(),
+            );
+            let _right_brace = self.expect(TokenKind::RightBrace, |_| {
+                LanguageErrorKind::RestMustBeFollowedByRightBrace
+            })?;
+        }
+        Ok(self
+            .ast
+            .build_node(NodeKind::Record, ())
+            .with_children(fields)
+            .with_location(token.location)
             .done())
     }
 
@@ -493,14 +569,9 @@ impl Parser {
                 Ok(self.ast.build_node(NodeKind::Field, name).with_location(token.location).done())
             }
 
-            TokenKind::LeftParen => {
-                let inner = self.parse_expression(0)?;
-                if !matches!(self.lexer.next_token()?.kind, TokenKind::RightParen) {
-                    return Err(self.error(&token, LanguageErrorKind::MissingRightParen));
-                }
-                Ok(inner)
-            }
+            TokenKind::LeftParen => self.parse_paren_or_tuple(token),
             TokenKind::LeftBracket => self.parse_list_or_dict(token),
+            TokenKind::LeftBrace => self.parse_record(token),
 
             TokenKind::Let => self.parse_let_expression(token),
             TokenKind::Do => self.parse_do_block(token),

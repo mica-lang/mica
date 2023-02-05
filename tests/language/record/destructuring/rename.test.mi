@@ -1,0 +1,4 @@
+# It should be possible to rename fields.
+
+let { x: meow } = { x: 1 }
+assert(meow == 1)

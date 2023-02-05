@@ -1,0 +1,5 @@
+# It should be possible to mix shorthand fields with the full form.
+
+let x = 1
+let rec = { x, y: 2 }
+assert(rec == { x: 1, y: 2 })

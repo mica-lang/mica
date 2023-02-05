@@ -4,15 +4,17 @@ use std::{collections::HashSet, fmt, rc::Rc};
 
 pub use self::traits::TraitBuilder;
 use self::{control_flow::BreakableBlock, structs::StructData, variables::Locals};
+use super::{bytecode::Library, gc::Memory};
 use crate::ll::{
     ast::{Ast, NodeId, NodeKind},
-    bytecode::{BuiltinTraits, Chunk, Environment, Opcode},
+    bytecode::{Chunk, Environment, Opcode},
     error::{LanguageError, LanguageErrorKind},
 };
 
 pub struct CodeGenerator<'e> {
     env: &'e mut Environment,
-    builtin_traits: &'e BuiltinTraits,
+    library: &'e mut Library,
+    gc: &'e mut Memory,
 
     chunk: Chunk,
 
@@ -30,12 +32,14 @@ impl<'e> CodeGenerator<'e> {
     pub fn new(
         module_name: Rc<str>,
         env: &'e mut Environment,
-        builtin_traits: &'e BuiltinTraits,
+        library: &'e mut Library,
+        gc: &'e mut Memory,
     ) -> Self {
         Self {
             env,
+            library,
+            gc,
             chunk: Chunk::new(module_name),
-            builtin_traits,
 
             locals: Default::default(),
             breakable_blocks: Vec::new(),
@@ -86,8 +90,16 @@ impl<'e> CodeGenerator<'e> {
 
             NodeKind::Identifier => self.generate_variable(ast, node)?,
 
+            NodeKind::Paren => {
+                let (inner, _) = ast.node_pair(node);
+                self.generate_node(ast, inner, expr)?;
+                ExpressionResult::Present
+            }
+
             NodeKind::List => self.generate_list(ast, node)?,
             NodeKind::Dict => self.generate_dict(ast, node)?,
+            NodeKind::Tuple => self.generate_tuple(ast, node)?,
+            NodeKind::Record => self.generate_record(ast, node)?,
 
             NodeKind::Negate | NodeKind::Not => self.generate_unary(ast, node)?,
 
@@ -138,7 +150,8 @@ impl<'e> CodeGenerator<'e> {
             NodeKind::Trait => self.generate_trait(ast, node)?,
             NodeKind::ImplAs => return Err(ast.error(node, LanguageErrorKind::AsOutsideOfImpl)),
 
-            NodeKind::DictPair
+            NodeKind::Pair
+            | NodeKind::Rest
             | NodeKind::IfBranch
             | NodeKind::ElseBranch
             | NodeKind::FunctionHead
@@ -206,4 +219,5 @@ mod literals;
 mod operators;
 mod structs;
 mod traits;
+mod tuples;
 pub mod variables;

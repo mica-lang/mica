@@ -6,21 +6,21 @@ pub struct Opr24 {
     pub(super) bytes: [u8; 3],
 }
 
-/// A u32 is too big to fit in an `Opr24`.
+/// A number is too big to fit in an `Opr24`.
 #[derive(Debug)]
-pub struct U32TooBig(());
+pub struct Opr24OutOfRange(());
 
 impl Opr24 {
     pub const MAX: u32 = (1 << 24);
 
     /// Tries to construct a new `Opr24`.
-    pub fn new(x: u32) -> Result<Self, U32TooBig> {
+    pub fn new(x: u32) -> Result<Self, Opr24OutOfRange> {
         if x < Self::MAX {
             Ok(Self {
                 bytes: [(x & 0xFF) as u8, ((x >> 8) & 0xFF) as u8, ((x >> 16) & 0xFF) as u8],
             })
         } else {
-            Err(U32TooBig(()))
+            Err(Opr24OutOfRange(()))
         }
     }
 
@@ -48,10 +48,10 @@ impl From<u8> for Opr24 {
 }
 
 impl TryFrom<usize> for Opr24 {
-    type Error = U32TooBig;
+    type Error = Opr24OutOfRange;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        Self::new(u32::try_from(value).map_err(|_| U32TooBig(()))?)
+        Self::new(u32::try_from(value).map_err(|_| Opr24OutOfRange(()))?)
     }
 }
 

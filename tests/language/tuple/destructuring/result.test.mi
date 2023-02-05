@@ -1,0 +1,6 @@
+# Test that the result of using `let` to destructure a tuple is the destructured tuple.
+
+let tuple = let (a, b) = (1, 2)
+assert(tuple == (1, 2))
+assert(a == 1)
+assert(b == 2)

@@ -209,7 +209,7 @@ impl ToNodePair for () {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum NodeKind {
-    /// An empty node. Use `NodeId::EMPTY` to refer to an AST's empty node.
+    /// An empty node. This is a singleton; use `NodeId::EMPTY` to refer to an AST's empty node.
     Empty,
 
     /// A `nil` literal.
@@ -226,12 +226,21 @@ pub enum NodeKind {
     /// An identifier. Must contain string data.
     Identifier,
 
+    /// A parenthesized expression.
+    Paren,
+
     /// A list literal.
     List,
     /// A dict literal.
     Dict,
-    /// A `key: value` pair in a dict literal.
-    DictPair,
+    /// An n-tuple `(1, 2, 3)`.
+    Tuple,
+    /// A record `{ a: 1, b: 2 }`.
+    Record,
+    /// A `key: value` pair in a dict or record literal.
+    Pair,
+    /// The `..` token at the end of a record.
+    Rest,
 
     /// Negation operator (prefix `-`).
     Negate,

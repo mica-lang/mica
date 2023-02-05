@@ -2,7 +2,7 @@
 
 use self::{builtins::*, core::load_core};
 use crate::{
-    ll::value::{Dict, RawValue},
+    ll::value::{Dict, RawValue, Record, Tuple},
     CoreLibrary, Engine, Error, TypeBuilder,
 };
 
@@ -10,40 +10,49 @@ mod builtins;
 mod core;
 mod gc;
 mod iterators;
-mod pair;
-
-pub use pair::*;
 
 /// Unit struct representing the core library.
 #[derive(Debug, Clone, Copy)]
 pub struct Lib;
 
 impl CoreLibrary for Lib {
-    fn define_nil(&mut self, builder: TypeBuilder<()>) -> TypeBuilder<()> {
+    fn define_nil(&self, builder: TypeBuilder<()>) -> TypeBuilder<()> {
         builder
     }
 
-    fn define_boolean(&mut self, builder: TypeBuilder<bool>) -> TypeBuilder<bool> {
+    fn define_boolean(&self, builder: TypeBuilder<bool>) -> TypeBuilder<bool> {
         builder
     }
 
-    fn define_number(&mut self, builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
+    fn define_number(&self, builder: TypeBuilder<f64>) -> TypeBuilder<f64> {
         number::define(builder)
     }
 
-    fn define_string(&mut self, builder: TypeBuilder<String>) -> TypeBuilder<String> {
+    fn define_string(&self, builder: TypeBuilder<String>) -> TypeBuilder<String> {
         string::define(builder)
     }
 
-    fn define_list(&mut self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
+    fn define_list(&self, builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<RawValue>> {
         list::define(builder)
     }
 
-    fn define_dict(&mut self, builder: TypeBuilder<Dict>) -> TypeBuilder<Dict> {
+    fn define_dict(&self, builder: TypeBuilder<Dict>) -> TypeBuilder<Dict> {
         dict::define(builder)
     }
 
-    fn load(&mut self, engine: &mut Engine) -> Result<(), Error> {
+    fn define_tuple(&self, size: usize, builder: TypeBuilder<Tuple>) -> TypeBuilder<Tuple> {
+        tuple::define(size, builder)
+    }
+
+    fn define_record<'a>(
+        &self,
+        fields: impl Iterator<Item = (&'a str, usize)>,
+        builder: TypeBuilder<Record>,
+    ) -> TypeBuilder<Record> {
+        record::define(fields, builder)
+    }
+
+    fn load(&self, engine: &mut Engine) -> Result<(), Error> {
         load_core(engine)
     }
 }

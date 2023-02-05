@@ -6,8 +6,10 @@ mod closures;
 mod dicts;
 mod impls;
 mod lists;
+mod records;
 mod structs;
 mod traits;
+mod tuples;
 
 use std::{
     any::Any, borrow::Cow, cmp::Ordering, fmt, hash::Hasher, hint::unreachable_unchecked,
@@ -18,8 +20,10 @@ pub use closures::*;
 pub use dicts::*;
 use impls::ValueImpl;
 pub use lists::*;
+pub use records::*;
 pub use structs::*;
 pub use traits::*;
+pub use tuples::*;
 
 use super::bytecode::Library;
 use crate::ll::{bytecode::DispatchTable, error::LanguageErrorKind, gc::GcRaw};
@@ -79,7 +83,7 @@ impl RawValue {
         self.0.kind()
     }
 
-    fn type_name(&self) -> Cow<'static, str> {
+    pub fn type_name(&self) -> Cow<'static, str> {
         match self.0.kind() {
             ValueKind::Nil => "Nil".into(),
             ValueKind::Boolean => "Boolean".into(),
@@ -102,8 +106,8 @@ impl RawValue {
         }
     }
 
-    fn type_error(&self, expected: &'static str) -> LanguageErrorKind {
-        LanguageErrorKind::TypeError { expected: Cow::from(expected), got: self.type_name() }
+    fn type_error(&self, expected: impl Into<Cow<'static, str>>) -> LanguageErrorKind {
+        LanguageErrorKind::TypeError { expected: expected.into(), got: self.type_name() }
     }
 
     /// Returns a boolean value without performing any checks.
@@ -241,11 +245,23 @@ impl RawValue {
     }
 
     /// Ensures the value is a `UserData` of the given type `T`, returning a type mismatch error
-    /// that's not the case.
-    pub fn get_raw_user_data<T>(&self) -> Option<GcRaw<Box<dyn UserData>>>
+    /// if that's not the case. The `type_name` should be provided for error messages.
+    pub fn ensure_raw_user_data<T, F, R>(&self, type_name: F) -> Result<&T, LanguageErrorKind>
     where
         T: UserData,
+        F: FnOnce() -> R,
+        R: Into<Cow<'static, str>>,
     {
+        if self.0.kind() == ValueKind::UserData {
+            unsafe { Ok(self.downcast_user_data_unchecked()) }
+        } else {
+            Err(self.type_error(type_name()))
+        }
+    }
+
+    /// Ensures the value is a `UserData` of the given type `T`, returning `None` if that's not
+    /// the case.
+    pub fn get_raw_user_data(&self) -> Option<GcRaw<Box<dyn UserData>>> {
         if self.0.kind() == ValueKind::UserData {
             Some(unsafe { self.0.get_raw_user_data_unchecked() })
         } else {
@@ -430,7 +446,7 @@ pub trait UserData: Any + fmt::Debug {
 
     fn hash(&self, hasher: &mut dyn Hasher);
 
-    fn type_name(&self) -> &str;
+    fn type_name(&self) -> Cow<'_, str>;
 
     fn visit_references(&self, _visit: &mut dyn FnMut(RawValue)) {}
 

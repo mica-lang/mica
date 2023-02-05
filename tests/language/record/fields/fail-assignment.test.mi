@@ -1,0 +1,5 @@
+# Record fields are not assignable.
+# @error {file}:{:LINE}:4: error: invalid left hand side of assignment
+
+let rec = { x: 1 }
+rec.x = 2  # @line LINE

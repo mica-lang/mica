@@ -49,6 +49,13 @@ impl Chunk {
         self.locations.push(self.codegen_location);
     }
 
+    /// Emits a concrete `u32`.
+    pub fn emit_u32(&mut self, x: u32) {
+        let bytes = x.to_le_bytes();
+        self.bytes.extend_from_slice(&bytes);
+        self.locations.push(self.codegen_location);
+    }
+
     /// Pushes a string into the chunk.
     ///
     /// The string is padded with zeroes such that opcodes are aligned to four bytes.
@@ -58,7 +65,7 @@ impl Chunk {
         // I don't know of any 128-bit targets so this cast should be OK. Also, it isn't physically
         // possible to store a string as large as 2^64 bytes.
         let len = string.len() as u64;
-        let len_bytes: [u8; 8] = len.to_le_bytes();
+        let len_bytes = len.to_le_bytes();
         self.bytes.extend_from_slice(&len_bytes);
         self.bytes.extend(string.as_bytes());
         let padded_len = (string.len() + 3) & !3;
@@ -104,6 +111,19 @@ impl Chunk {
         let number = f64::from_le_bytes(bytes);
         *pc += SIZE;
         number
+    }
+
+    /// Reads a concrete `u32`.
+    ///
+    /// # Safety
+    /// Assumes that `pc` is within the chunk's bounds, skipping any checks.
+    pub unsafe fn read_u32(&self, pc: &mut usize) -> u32 {
+        const SIZE: usize = std::mem::size_of::<u32>();
+        let bytes = &self.bytes[*pc..*pc + SIZE];
+        let bytes: [u8; SIZE] = bytes.try_into().unwrap();
+        let x = u32::from_le_bytes(bytes);
+        *pc += SIZE;
+        x
     }
 
     /// Reads a string.
@@ -158,11 +178,22 @@ impl fmt::Debug for Chunk {
             let (opcode, operand) = unsafe { self.read_instruction(&mut pc) };
             write!(f, "{show_pc:06x} {location} {opcode:?}({operand:?}) ")?;
 
-            #[allow(clippy::single_match)]
             match opcode {
                 Opcode::PushNumber => write!(f, "{}", unsafe { self.read_number(&mut pc) })?,
                 Opcode::PushString | Opcode::CreateType => {
                     write!(f, "{:?}", unsafe { self.read_string(&mut pc) })?
+                }
+                Opcode::CreateRecord => {
+                    f.write_str("{ ")?;
+                    let mut i = 0;
+                    while let field_index @ ..=0xFFFF_FFFE = unsafe { self.read_u32(&mut pc) } {
+                        if i > 0 {
+                            f.write_str(", ")?;
+                        }
+                        write!(f, "{field_index}")?;
+                        i += 1;
+                    }
+                    f.write_str(" }")?;
                 }
                 Opcode::JumpForward | Opcode::JumpForwardIfFalsy | Opcode::JumpForwardIfTruthy => {
                     write!(

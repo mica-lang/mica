@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt::Debug, rc::Rc};
 
 use super::MethodIndex;
 use crate::ll::{gc::GcRaw, value::Closure};

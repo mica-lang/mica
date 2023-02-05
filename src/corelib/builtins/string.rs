@@ -54,7 +54,7 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
             RawFunctionKind::Foreign(Box::new(|library, gc, args| {
                 let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringBytes::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
         .add_raw_function(
@@ -63,7 +63,7 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
             RawFunctionKind::Foreign(Box::new(|library, gc, args| {
                 let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringChars::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
         .add_raw_function(
@@ -72,7 +72,7 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
             RawFunctionKind::Foreign(Box::new(|library, gc, args| {
                 let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringCodePoints::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
         .add_raw_function(
@@ -81,7 +81,7 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
             RawFunctionKind::Foreign(Box::new(|library, gc, args| {
                 let arguments = Arguments::new(args, library);
                 let iter = unsafe { StringLines::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
         .add_raw_function(
@@ -91,7 +91,7 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
                 let arguments = Arguments::new(args, library);
                 let sep: Gc<String> = arguments.get(0).to_language_error()?;
                 let iter = unsafe { StringSplit::new(*arguments.raw_self(), sep) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
         .add_raw_function(
@@ -101,7 +101,7 @@ pub(crate) fn define(builder: TypeBuilder<String>) -> TypeBuilder<String> {
                 let arguments = Arguments::new(args, library);
                 let sep: Gc<String> = arguments.get(0).to_language_error()?;
                 let iter = unsafe { StringRSplit::new(*arguments.raw_self(), sep) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
 }

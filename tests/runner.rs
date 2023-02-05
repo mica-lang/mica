@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     io::Write,
+    panic::UnwindSafe,
     path::{Path, PathBuf},
     process::ExitCode,
     sync::Arc,
@@ -197,6 +198,7 @@ impl<'s> ErrorMatcher<'s> {
                         }
                         self.position_in_error += 1;
                         self.position_in_pattern += 1;
+                        continue;
                     }
 
                     let start = self.position_in_pattern;
@@ -208,6 +210,20 @@ impl<'s> ErrorMatcher<'s> {
 
                     let inside = &self.pattern[start..end];
                     if !self.check_matcher(inside) {
+                        return false;
+                    }
+                }
+                b'}' => {
+                    self.position_in_pattern += 1;
+                    if self.pattern_char() == b'}' {
+                        if self.error_char() != self.pattern_char() {
+                            return false;
+                        }
+                        self.position_in_error += 1;
+                        self.position_in_pattern += 1;
+                    } else {
+                        // This could really use a better error message...
+                        // If you use only a single }, the match will always fail.
                         return false;
                     }
                 }
@@ -226,22 +242,6 @@ impl<'s> ErrorMatcher<'s> {
 }
 
 impl Outcome {
-    fn match_error_against_pattern(error: &str, pattern: &str, spec: &TestSpec) -> bool {
-        let (error, pattern) = (error.as_bytes(), pattern.as_bytes());
-        let mut matcher =
-            ErrorMatcher { spec, error, pattern, position_in_error: 0, position_in_pattern: 0 };
-        matcher.check()
-    }
-
-    /// Returns whether this outcome matches the provided pattern outcome.
-    fn matches(&self, pattern: &Outcome, spec: &TestSpec) -> bool {
-        if let (Self::Failure(error), Self::Failure(pattern)) = (self, pattern) {
-            Self::match_error_against_pattern(error, pattern, spec)
-        } else {
-            self.eq(pattern)
-        }
-    }
-
     /// Returns `true` if the outcome is [`Success`].
     ///
     /// [`Success`]: Outcome::Success
@@ -264,6 +264,43 @@ impl Outcome {
     #[must_use]
     fn is_ignored(&self) -> bool {
         matches!(self, Self::Ignored)
+    }
+
+    fn match_error_against_pattern(error: &str, pattern: &str, spec: &TestSpec) -> bool {
+        let (error, pattern) = (error.as_bytes(), pattern.as_bytes());
+        let mut matcher =
+            ErrorMatcher { spec, error, pattern, position_in_error: 0, position_in_pattern: 0 };
+        matcher.check()
+    }
+
+    /// Returns whether this outcome matches the provided pattern outcome.
+    fn matches(&self, pattern: &Outcome, spec: &TestSpec) -> bool {
+        if let (Self::Failure(error), Self::Failure(pattern)) = (self, pattern) {
+            Self::match_error_against_pattern(error, pattern, spec)
+        } else {
+            self.eq(pattern)
+        }
+    }
+
+    /// Attempts to run `f`, returning a [`Failure`][Outcome::Failure] outcome if it panics.
+    fn wrap_panic<F, R>(f: F) -> Self
+    where
+        F: FnOnce() -> R + UnwindSafe,
+        Self: From<R>,
+    {
+        match std::panic::catch_unwind(f) {
+            Ok(result) => Self::from(result),
+            Err(payload) => {
+                let message = if let Some(s) = payload.downcast_ref::<&str>() {
+                    s
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s
+                } else {
+                    "<panic payload of unknown type>"
+                };
+                Self::Failure(format!("(!) test panicked: {message}"))
+            }
+        }
     }
 }
 
@@ -324,7 +361,7 @@ impl Test {
         let mut outcome = Outcome::Success;
 
         if !spec.ignore || include_ignored {
-            let got = Outcome::from(evaluate(test_name, &code));
+            let got = Outcome::wrap_panic(|| evaluate(test_name, &code));
             if !got.matches(&spec.expected_outcome, &spec) {
                 if got.is_success() {
                     if let Outcome::Failure(error) = &spec.expected_outcome {

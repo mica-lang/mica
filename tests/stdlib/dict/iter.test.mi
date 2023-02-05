@@ -2,7 +2,7 @@
 
 let source = ["a": 1, "b": 2, "c": 3]
 let dest = [:]
-for pair in source.iter do
-    dest.insert(pair.key, pair.value)
+for (key, value) in source.iter do
+    dest.insert(key, value)
 end
 assert(source == dest)

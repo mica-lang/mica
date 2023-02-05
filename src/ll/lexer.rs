@@ -62,7 +62,10 @@ pub enum TokenKind {
     RightParen,   // )
     LeftBracket,  // [
     RightBracket, // ]
+    LeftBrace,    // {
+    RightBrace,   // }
     Comma,        // ,
+    DotDot,       // ..
 
     Eof,
 }
@@ -493,7 +496,7 @@ impl Lexer {
                 TokenKind::GreaterEqual,
             )),
 
-            '.' => Ok(self.single_char_token(TokenKind::Dot)),
+            '.' => Ok(self.single_or_double_char_token(TokenKind::Dot, '.', TokenKind::DotDot)),
             ':' => Ok(self.single_char_token(TokenKind::Colon)),
             '@' => Ok(self.single_char_token(TokenKind::At)),
 
@@ -501,6 +504,8 @@ impl Lexer {
             ')' => Ok(self.single_char_token(TokenKind::RightParen)),
             '[' => Ok(self.single_char_token(TokenKind::LeftBracket)),
             ']' => Ok(self.single_char_token(TokenKind::RightBracket)),
+            '{' => Ok(self.single_char_token(TokenKind::LeftBrace)),
+            '}' => Ok(self.single_char_token(TokenKind::RightBrace)),
             ',' => Ok(self.single_char_token(TokenKind::Comma)),
             Self::EOF => Ok(self.token(TokenKind::Eof)),
             other => Err(self.error(LanguageErrorKind::InvalidCharacter(other))),

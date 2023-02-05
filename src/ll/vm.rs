@@ -1,17 +1,18 @@
 //! The virtual machine.
 
-use std::{collections::HashSet, fmt, pin::Pin, ptr, rc::Rc};
+use std::{collections::HashSet, fmt, ops::Deref, pin::Pin, ptr, rc::Rc};
 
 use super::bytecode::{FunctionIndex, GlobalIndex, ImplementedTraitIndex, Library, MethodIndex};
 use crate::ll::{
     bytecode::{
         CaptureKind, Chunk, Control, DispatchTable, Environment, FunctionKind,
-        MethodParameterCount, MethodSignature, Opcode, PrototypeIndex, TraitIndex,
+        MethodParameterCount, MethodSignature, Opcode, PrototypeIndex, RecordTypeIndex, TraitIndex,
     },
     error::{LanguageError, LanguageErrorKind, Location, RenderedSignature, StackTraceEntry},
     gc::{GcRaw, Memory},
     value::{
-        create_trait, Closure, Dict, List, RawValue, Struct, Trait, Upvalue, UserData, ValueKind,
+        create_trait, Closure, Dict, List, RawValue, Record, Struct, Trait, Tuple, Upvalue,
+        UserData, ValueKind,
     },
 };
 
@@ -587,6 +588,35 @@ impl Fiber {
                     let dict = gc.allocate(dict);
                     self.push(RawValue::from(dict));
                 }
+                Opcode::CreateTuple => {
+                    unsafe { gc.auto_collect(self.roots(globals)) };
+                    let len = usize::from(operand);
+                    let fields = self.stack.drain(self.stack.len() - len..).collect();
+                    let tuple: Box<dyn UserData> = Box::new(Tuple::new(fields));
+                    let tuple = gc.allocate(tuple);
+                    self.push(RawValue::from(tuple));
+                }
+                Opcode::CreateRecord => {
+                    unsafe { gc.auto_collect(self.roots(globals)) };
+                    let record_type_index = RecordTypeIndex::from_opr24(operand);
+                    let record_type = library.builtin_dtables.get_record(record_type_index);
+
+                    let mut fields = vec![RawValue::from(()); record_type.field_count];
+                    let values = &self.stack[self.stack.len() - fields.len()..];
+                    for field in &mut fields {
+                        let value_index = unsafe { self.chunk.read_u32(&mut self.pc) as usize };
+                        *field = values[value_index];
+                    }
+                    for _ in 0..fields.len() {
+                        self.pop();
+                    }
+                    let _sentinel = unsafe { self.chunk.read_u32(&mut self.pc) };
+
+                    let record: Box<dyn UserData> =
+                        Box::new(Record { record_type: Rc::clone(record_type), fields });
+                    let record = gc.allocate(record);
+                    self.push(RawValue::from(record));
+                }
 
                 Opcode::AssignGlobal => {
                     let global_index = GlobalIndex::from_opr24(operand);
@@ -668,9 +698,52 @@ impl Fiber {
                     self.push(value);
                 }
 
+                Opcode::DestructureTuple => {
+                    let expected_size = usize::from(operand);
+                    let tuple_v = self.pop();
+                    let get_type_name = || format!("Tuple({expected_size})");
+                    let tuple =
+                        wrap_error!(tuple_v.ensure_raw_user_data::<Tuple, _, _>(get_type_name));
+                    if tuple.fields.len() != expected_size {
+                        wrap_error!(Err(LanguageErrorKind::TypeError {
+                            expected: get_type_name().into(),
+                            got: tuple_v.type_name()
+                        }));
+                    }
+                    self.stack.reserve(tuple.fields.len());
+                    for &field in &tuple.fields {
+                        self.push(field);
+                    }
+                }
+                Opcode::DestructureRecord => {
+                    let record_type_index = RecordTypeIndex::from_opr24(operand);
+                    let record_type = library.builtin_dtables.get_record(record_type_index);
+                    let record_v = self.pop();
+                    let get_type_name = || String::from(record_type.dtable.pretty_name.deref());
+                    let record =
+                        wrap_error!(record_v.ensure_raw_user_data::<Record, _, _>(get_type_name));
+                    if record.record_type.index != record_type_index {
+                        wrap_error!(Err(LanguageErrorKind::TypeError {
+                            expected: get_type_name().into(),
+                            got: record_v.type_name()
+                        }));
+                    }
+                    self.stack.reserve(record.fields.len());
+                    for &field in &record.fields {
+                        self.push(field);
+                    }
+                }
+                Opcode::DestructureRecordNonExhaustive => {
+                    let record = self.stack_top();
+                    wrap_error!(record.ensure_raw_user_data::<Record, _, _>(|| "Record"));
+                }
+
                 Opcode::Swap => {
                     let len = self.stack.len();
                     self.stack.swap(len - 2, len - 1);
+                }
+                Opcode::Duplicate => {
+                    self.push(self.stack_top());
                 }
                 Opcode::Discard => {
                     self.pop();

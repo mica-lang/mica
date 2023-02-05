@@ -8,7 +8,7 @@ use self::into_value::{DoesNotUseEngine, EngineUse, UsesEngine};
 use crate::{
     ll::{
         bytecode::{DispatchTable, Library},
-        gc::Gc,
+        gc::{Gc, Memory},
         value::{self, Closure, Dict, List, RawValue, Struct, Trait},
     },
     Error, Object, UserData,
@@ -56,6 +56,14 @@ pub enum Value {
     ///
     /// Dicts are opaque to the Rust API, no conversion function currently exists for them.
     Dict(Hidden<Box<dyn value::UserData>>),
+    /// A tuple.
+    ///
+    /// Tuples are opaque to the Rust API and must be converted into a typed tuple `(T, U, ..)`.
+    Tuple(Hidden<Box<dyn value::UserData>>),
+    /// A record.
+    ///
+    /// Recprds are opaque to the Rust API, no conversion function currently exists for them.
+    Record(Hidden<Box<dyn value::UserData>>),
     /// Arbitrarily typed user data.
     UserData(Gc<Box<dyn value::UserData>>),
 }
@@ -84,23 +92,25 @@ impl Value {
     /// let value = Value::new(Example);
     /// ```
     pub fn new(from: impl IntoValue<EngineUse = DoesNotUseEngine>) -> Self {
-        from.into_value(&())
+        from.into_value(())
     }
 
     /// Returns the name of this value's type.
-    pub fn type_name(&self) -> &str {
+    pub fn type_name(&self) -> Cow<'_, str> {
         match self {
-            Value::Nil => "Nil",
-            Value::False => "False",
-            Value::True => "True",
-            Value::Number(_) => "Number",
-            Value::String(_) => "String",
-            Value::Function(_) => "Function",
+            Value::Nil => "Nil".into(),
+            Value::False => "False".into(),
+            Value::True => "True".into(),
+            Value::Number(_) => "Number".into(),
+            Value::String(_) => "String".into(),
+            Value::Function(_) => "Function".into(),
             // Hopefully this doesn't explode.
-            Value::Struct(s) => &unsafe { s.0.dtable() }.type_name,
-            Value::Trait(s) => &s.0.dtable().type_name,
-            Value::List(_) => "List",
-            Value::Dict(_) => "Dict",
+            Value::Struct(s) => Cow::Borrowed(&unsafe { s.0.dtable() }.type_name),
+            Value::Trait(s) => Cow::Borrowed(&s.0.dtable().type_name),
+            Value::List(_) => "List".into(),
+            Value::Dict(_) => "Dict".into(),
+            Value::Tuple(_) => "Tuple".into(),
+            Value::Record(_) => "Record".into(),
             Value::UserData(u) => u.type_name(),
         }
     }
@@ -131,25 +141,25 @@ impl fmt::Display for Value {
 /// Helper types for [`IntoValue`].
 #[allow(missing_debug_implementations)]
 pub mod into_value {
-    use crate::ll::bytecode::Library;
+    use crate::ll::{bytecode::Library, gc::Memory};
 
     /// Marker for whether an implementation of [`IntoValue`][crate::IntoValue] requires an engine.
     pub trait EngineUse {
         #[doc(hidden)]
-        type Library;
+        type EngineState<'a>;
 
         #[doc(hidden)]
-        fn change_type(env: &Library) -> &Self::Library;
+        fn change_type<'a>(library: &'a Library, gc: &'a mut Memory) -> Self::EngineState<'a>;
     }
 
     /// Marker for implementations of [`IntoValue`][crate::IntoValue] that do require an engine.
     pub enum UsesEngine {}
 
     impl EngineUse for UsesEngine {
-        type Library = Library;
+        type EngineState<'a> = (&'a Library, &'a mut Memory);
 
-        fn change_type(env: &Library) -> &Self::Library {
-            env
+        fn change_type<'a>(library: &'a Library, gc: &'a mut Memory) -> Self::EngineState<'a> {
+            (library, gc)
         }
     }
 
@@ -158,10 +168,10 @@ pub mod into_value {
     pub enum DoesNotUseEngine {}
 
     impl EngineUse for DoesNotUseEngine {
-        type Library = ();
+        type EngineState<'a> = ();
 
-        fn change_type(_: &Library) -> &Self::Library {
-            &()
+        fn change_type<'a>(_: &Library, _: &mut Memory) -> Self::EngineState<'static> {
+            ()
         }
     }
 }
@@ -177,23 +187,23 @@ pub trait IntoValue {
 
     /// Performs the conversion.
     #[doc(hidden)]
-    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Library) -> Value;
+    fn into_value(self, env: <Self::EngineUse as EngineUse>::EngineState<'_>) -> Value;
 
     /// Performs the conversion providing a library, regardless of whether the conversion
     /// requires one or not.
     #[doc(hidden)]
-    fn into_value_with_library(self, library: &Library) -> Value
+    fn into_value_with_engine_state(self, library: &Library, gc: &mut Memory) -> Value
     where
         Self: Sized,
     {
-        self.into_value(<Self::EngineUse as EngineUse>::change_type(library))
+        self.into_value(<Self::EngineUse as EngineUse>::change_type(library, gc))
     }
 }
 
 impl IntoValue for Value {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         self
     }
 }
@@ -203,7 +213,7 @@ impl IntoValue for Value {
 impl IntoValue for RawValue {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::from_raw(self)
     }
 }
@@ -212,7 +222,7 @@ impl IntoValue for RawValue {
 impl IntoValue for () {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::Nil
     }
 }
@@ -220,7 +230,7 @@ impl IntoValue for () {
 impl IntoValue for bool {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         match self {
             true => Value::True,
             false => Value::False,
@@ -234,7 +244,7 @@ macro_rules! value_from_number {
         impl IntoValue for $T {
             type EngineUse = DoesNotUseEngine;
 
-            fn into_value(self, _: &()) -> Value {
+            fn into_value(self, _: ()) -> Value {
                 Value::Number(self as f64)
             }
         }
@@ -259,7 +269,7 @@ value_from_number!(f64);
 impl IntoValue for char {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::String(Gc::new(self.to_string()))
     }
 }
@@ -267,7 +277,7 @@ impl IntoValue for char {
 impl IntoValue for &str {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::String(Gc::new(self.to_string()))
     }
 }
@@ -275,7 +285,7 @@ impl IntoValue for &str {
 impl IntoValue for String {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::String(Gc::new(self))
     }
 }
@@ -283,7 +293,7 @@ impl IntoValue for String {
 impl IntoValue for Gc<String> {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::String(self)
     }
 }
@@ -294,9 +304,9 @@ where
 {
     type EngineUse = T::EngineUse;
 
-    fn into_value(self, env: &<Self::EngineUse as EngineUse>::Library) -> Value {
+    fn into_value(self, library: <Self::EngineUse as EngineUse>::EngineState<'_>) -> Value {
         match self {
-            Some(value) => value.into_value(env),
+            Some(value) => value.into_value(library),
             None => Value::Nil,
         }
     }
@@ -309,7 +319,7 @@ where
 impl IntoValue for Vec<RawValue> {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::List(Hidden(Gc::new(Box::new(List::new(self)))))
     }
 }
@@ -320,10 +330,14 @@ impl IntoValue for Vec<RawValue> {
 impl IntoValue for Dict {
     type EngineUse = DoesNotUseEngine;
 
-    fn into_value(self, _: &()) -> Value {
+    fn into_value(self, _: ()) -> Value {
         Value::Dict(Hidden(Gc::new(Box::new(self))))
     }
 }
+
+/// The [`IntoValue`] implementation for tuples is implemented in a separate module to work better
+/// with incremental compilation, and improve the performance of rust-analyzer on this file.
+mod tuple_into_value;
 
 impl<T> IntoValue for T
 where
@@ -331,7 +345,7 @@ where
 {
     type EngineUse = UsesEngine;
 
-    fn into_value(self, library: &Library) -> Value {
+    fn into_value(self, (library, _): (&Library, &mut Memory)) -> Value {
         let dtable = library.get_user_dtable::<T>().map(Gc::clone).unwrap_or_else(|| {
             let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
             Gc::new(ad_hoc_dtable)
@@ -474,6 +488,10 @@ where
         }
     }
 }
+
+/// The [`TryFromValue`] implementation for tuples is implemented in a separate module to work
+/// better with incremental compilation, and improve the performance of rust-analyzer on this file.
+mod tuple_try_from_value;
 
 /// It is possible to accept arbitrary types implementing [`UserData`] as parameters to functions,
 /// however some limitations apply:

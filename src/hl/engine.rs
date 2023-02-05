@@ -1,4 +1,4 @@
-use std::{any::Any, fmt, ops::Deref, rc::Rc};
+use std::{any::Any, collections::HashMap, fmt, fmt::Debug, ops::Deref, rc::Rc};
 
 /// The implementation of a raw foreign function.
 pub use crate::ll::bytecode::ForeignFunction as RawForeignFunction;
@@ -10,8 +10,9 @@ use crate::{
         ast::DumpAst,
         bytecode,
         bytecode::{
-            BuiltinDispatchTables, BuiltinTraits, Chunk, DispatchTable, Environment, Function,
-            FunctionKind, GlobalIndex, Library, MethodIndex, Opcode, Opr24,
+            BuiltinDispatchTableGenerator, BuiltinDispatchTables, BuiltinTraits, Chunk,
+            DispatchTable, Environment, Function, FunctionKind, GlobalIndex, Library, MethodIndex,
+            Opcode, Opr24,
         },
         codegen::{self, CodeGenerator},
         gc::{Gc, Memory},
@@ -74,7 +75,10 @@ impl Engine {
     ///
     /// let mut engine = Engine::with_corelib(mica::corelib::Lib);
     /// ```
-    pub fn with_corelib(corelib: impl CoreLibrary) -> Self {
+    pub fn with_corelib<L>(corelib: L) -> Self
+    where
+        L: CoreLibrary,
+    {
         Self::with_debug_options(corelib, Default::default())
     }
 
@@ -98,7 +102,54 @@ impl Engine {
     ///     dump_bytecode: true,
     /// });
     /// ```
-    pub fn with_debug_options(mut corelib: impl CoreLibrary, debug_options: DebugOptions) -> Self {
+    pub fn with_debug_options<L>(corelib: L, debug_options: DebugOptions) -> Self
+    where
+        L: CoreLibrary,
+    {
+        #[derive(Debug)]
+        struct DtableGenerator<L> {
+            corelib: L,
+        }
+
+        impl<L> BuiltinDispatchTableGenerator for DtableGenerator<L>
+        where
+            L: CoreLibrary + Debug,
+        {
+            fn generate_tuple(
+                &self,
+                env: &mut Environment,
+                gc: &mut Memory,
+                builtin_traits: &BuiltinTraits,
+                size: usize,
+            ) -> Gc<DispatchTable> {
+                self.corelib
+                    .define_tuple(size, TypeBuilder::new(format!("Tuple({size})")))
+                    .build(env, gc, builtin_traits)
+                    .expect("corelib declares too many methods")
+                    .instance_dtable
+            }
+
+            fn generate_record(
+                &self,
+                env: &mut Environment,
+                gc: &mut Memory,
+                builtin_traits: &BuiltinTraits,
+                identifier: &str,
+            ) -> Gc<DispatchTable> {
+                let fields = identifier.split('+').enumerate().map(|(index, name)| (name, index));
+                let type_name = if identifier.len() == 0 {
+                    String::from("Record{}")
+                } else {
+                    format!("Record{{{}}}", identifier.replace("+", ", "))
+                };
+                self.corelib
+                    .define_record(fields, TypeBuilder::new(type_name))
+                    .build(env, gc, builtin_traits)
+                    .expect("corelib declares too many methods")
+                    .instance_dtable
+            }
+        }
+
         let mut gc = Memory::new();
         let mut env = Environment::new();
 
@@ -118,7 +169,7 @@ impl Engine {
         let string = get_dtables!("String", define_string);
         let list = get_dtables!("List", define_list);
         let dict = get_dtables!("Dict", define_dict);
-        let library = Library::new(
+        let mut library = Library::new(
             BuiltinDispatchTables {
                 nil: Gc::clone(&nil.instance_dtable),
                 boolean: Gc::clone(&boolean.instance_dtable),
@@ -127,9 +178,20 @@ impl Engine {
                 function: Gc::new(DispatchTable::new_for_instance("Function")),
                 list: Gc::clone(&list.instance_dtable),
                 dict: Gc::clone(&dict.instance_dtable),
+                tuples: vec![],
+                records: vec![],
+                records_by_identifier: HashMap::new(),
             },
+            Box::new(DtableGenerator { corelib: corelib.clone() }),
             builtin_traits,
         );
+
+        // Pre-generate tuples up to size 8, which is what you can receive or produce automagically
+        // using the high-level API. If we don't do that and the VM receives any of those tuples,
+        // it'll cause panics whenever the VM tries to touch them.
+        for size in 0..=8 {
+            library.generate_tuple(&mut env, &mut gc, size);
+        }
 
         let iterator = create_trait_value(&mut env, &mut gc, library.builtin_traits.iterator);
 
@@ -176,7 +238,7 @@ impl Engine {
         }
 
         let main_chunk =
-            CodeGenerator::new(module_name, &mut self.env, &self.library.builtin_traits)
+            CodeGenerator::new(module_name, &mut self.env, &mut self.library, &mut self.gc)
                 .generate(&ast, root_node)?;
         if self.debug_options.dump_bytecode {
             eprintln!("Mica - global environment:");
@@ -388,8 +450,8 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn create_value(&self, from: impl IntoValue) -> Value {
-        from.into_value_with_library(&self.library)
+    pub fn create_value(&mut self, from: impl IntoValue) -> Value {
+        from.into_value_with_engine_state(&self.library, &mut self.gc)
     }
 
     /// Returns the unique global ID for the global with the given name, or an error if there
@@ -438,7 +500,10 @@ impl Engine {
     /// ```
     pub fn set(&mut self, id: impl GlobalName, value: impl IntoValue) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into_value_with_library(&self.library).to_raw(&mut self.gc));
+        self.globals.set(
+            id.0,
+            value.into_value_with_engine_state(&self.library, &mut self.gc).to_raw(&mut self.gc),
+        );
         Ok(())
     }
 

@@ -1,0 +1,13 @@
+# It should be possible to call a closure stored in a field using one of two syntaxes.
+
+let calls = [false, false]
+let rec = {
+    closure: func (x) = do
+        calls.set(x, true)
+    end,
+}
+
+(rec.closure)(0)
+rec.closure()(1)
+
+assert(calls == [true, true], calls)

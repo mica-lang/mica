@@ -1,0 +1,9 @@
+# An empty tuple is equal to itself, but no other tuple.
+
+# One instance of the unit tuple is equal to itself.
+let unit = ()
+assert(unit == unit)
+
+# Two instances of the unit tuple are equal to itself.
+let unit2 = ()
+assert(unit2 == unit)

@@ -73,7 +73,7 @@ impl<'e> CodeGenerator<'e> {
         let parameter_list = ast.children(parameters).unwrap();
 
         let mut generator =
-            CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env, self.builtin_traits);
+            CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env, self.library, self.gc);
         // NOTE: Hopefully the allocation from this mem::take gets optimized out.
         generator.locals.parent = Some(mem::take(&mut self.locals));
         if call_conv.has_field_access() {
@@ -105,6 +105,7 @@ impl<'e> CodeGenerator<'e> {
         // In constructors, we have to create `self` explicitly.
         let create_struct = if call_conv.is_constructor() {
             generator.generate_variable_load(receiver);
+            // Since we don't know how many fields there will be, we first emit a `Nop`.
             let instruction = generator.chunk.emit(Opcode::Nop);
             let receiver = generator
                 .create_variable("self", VariableAllocation::Allocate)
@@ -128,8 +129,8 @@ impl<'e> CodeGenerator<'e> {
                 ast.error(ast.node_pair(parameters).0, LanguageErrorKind::TooManyFields)
             })?;
             generator.chunk.patch(create_struct, (Opcode::CreateStruct, field_count));
-            // We also have to discard whatever was at the top of the stack at the moment and
-            // return the struct we constructed.
+            // We also have to discard whatever was at the top of the stack at the moment (ie. the
+            // result of the function's body) and instead return the struct.
             generator.chunk.emit(Opcode::Discard);
             let receiver = generator.struct_data.as_ref().unwrap().receiver.unwrap();
             generator.generate_variable_load(receiver);

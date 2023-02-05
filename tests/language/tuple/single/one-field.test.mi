@@ -1,0 +1,6 @@
+# A single has exactly one field, and it is _0.
+
+let s = (1,)
+let t = (2,)
+assert(s._0 == 1)
+assert(t._0 == 2)

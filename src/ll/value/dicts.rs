@@ -1,6 +1,7 @@
 //! Implementation of the `Dict` type based on hashbrown.
 
 use std::{
+    borrow::Cow,
     cell::UnsafeCell,
     cmp::Ordering,
     collections::hash_map::RandomState,
@@ -187,8 +188,8 @@ impl UserData for Dict {
         }
     }
 
-    fn type_name(&self) -> &str {
-        "Dict"
+    fn type_name(&self) -> Cow<'_, str> {
+        Cow::Borrowed("Dict")
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

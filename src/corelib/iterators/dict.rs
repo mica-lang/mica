@@ -2,7 +2,6 @@ use hashbrown::raw::Bucket;
 
 use crate::{
     builtin_traits::iterator,
-    corelib::pair::Pair,
     ll::value::{Dict, RawValue},
     Engine, Error, TypeBuilder, UserData,
 };
@@ -40,10 +39,10 @@ impl DictIter {
         Ok(Self::checked_next(self.dict, &mut self.iter.clone(), self.len)?.is_some())
     }
 
-    fn next(&mut self) -> Result<Option<Pair>, LenChangedDuringIteration> {
+    fn next(&mut self) -> Result<Option<(RawValue, RawValue)>, LenChangedDuringIteration> {
         if let Some(bucket) = Self::checked_next(self.dict, &mut self.iter, self.len)? {
             let (key, value) = unsafe { bucket.read() };
-            Ok(Some(Pair { a: key, b: value }))
+            Ok(Some((key, value)))
         } else {
             Ok(None)
         }

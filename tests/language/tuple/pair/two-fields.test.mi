@@ -1,0 +1,8 @@
+# A pair has exactly two fields - _0 and _1.
+
+let s = (1, 2)
+let t = (2, 3)
+assert(s._0 == 1)
+assert(s._1 == 2)
+assert(t._0 == 2)
+assert(t._1 == 3)

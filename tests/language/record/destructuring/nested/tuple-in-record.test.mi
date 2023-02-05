@@ -1,0 +1,6 @@
+# It should be possible to nest tuple patterns inside record patterns.
+
+let { inner: (x, y, z) } = { inner: (1, 2, 3) }
+assert(x == 1)
+assert(y == 2)
+assert(z == 3)

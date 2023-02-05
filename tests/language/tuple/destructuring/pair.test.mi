@@ -1,0 +1,5 @@
+# Test that a pair can be destructured.
+
+let (a, b) = (1, 2)
+assert(a == 1)
+assert(b == 2)

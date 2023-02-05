@@ -137,6 +137,161 @@ let s =
 assert(s == "Hello,\n world!")
 ```
 
+### Compound literals
+
+These literals are used to initialize standard data types, which store other values inside of them
+(hence the name *compound.*)
+
+#### Tuples
+
+Tuples are the simplest compound data type in Mica. A tuple binds any number of values together into
+an ordered sequence.
+
+```mica
+let triple = (1, 2, 3)
+```
+
+The single-element tuple is spelled like `(x,)`, with a comma to disambiguate it from grouping
+parentheses.
+
+Tuple elements can be accessed using `_n`, where `n` is the index of the value you're trying to
+access, starting at 0.
+
+```mica
+assert(triple._0 == 1)
+```
+
+Trying to access values outside these boundaries is an error.
+
+Tuples are immutable; once a tuple is created, its elements cannot be modified.
+
+The empty tuple `()` is called the _unit_ tuple. Its purpose can be considered somewhat similar to
+`nil`, although it has a difference in semantics: `nil` is falsy, but `()` is truthy.
+
+```mica
+assert(!!nil == false)
+assert(!!() == true)
+```
+
+Tuples can be [pattern-matched](#pattern-matching) in [`let` expressions](#variables).
+
+```mica
+# Destructure the tuple into its elements.
+let (x, y, z) = (1, 2, 3)
+assert(x == 1 and y == 2 and z == 3)
+```
+
+The matched value must be a tuple and the tuple must have exactly as many values as the pattern;
+otherwise an error is thrown.
+
+Tuples possess by-value semantics. They are compared element-wise:
+
+```mica
+assert((1, 2) == (1, 2))
+assert((2, 2) != (1, 2))
+assert((1, 2, 3) != (1, 2))
+```
+
+They can also be compared lexicographically using comparison operators, which makes them useful
+for representing things like version numbers.
+
+```mica
+assert((0, 1, 0) < (0, 2, 0))
+```
+
+#### Records
+
+Records are another simple data type; their primary purpose is aggregating plain old data into
+fields. Although records share many similarities with [dicts](#dicts), they offer much more
+convenient data access and have a much more efficient in-memory structure (they're implemented as
+flat arrays instead of hash maps.)
+
+Records are created using braces `{}`, and contain comma-separated field-value pairs.
+
+```mica
+let constants = {
+    pi: 3.141592654,
+    sqrt2: 1.414213562,
+}
+```
+
+Note that record fields are unordered; the two records `{ x: 1, y: 2 }` and `{ y: 1, x: 2 }` are
+considered to have the same type.
+
+Records can also be initialized using existing variables by omitting the `: value` part.
+
+```mica
+let pi = 3.141592654
+let sqrt2 = 1.414213562
+let constants = { pi, sqrt2 }
+```
+
+Once constructed, record fields can be accessed using familiar `x.y` syntax.
+
+```mica
+let pi = 3.141592654
+let constants = { pi }
+assert(constants.pi == pi)
+```
+
+Just like tuples, records are immutable - the values stored in them cannot be swapped out for
+something else after construction.
+
+Similar to tuples, records can be [pattern-matched](#pattern-matching) in
+[`let` expressions](#variables).
+
+```mica
+let constants = { pi: 3.141592654, sqrt2: 1.414213562 }
+let { pi, sqrt2 } = constants
+```
+
+It is possible to rename the variable that stores the value, or match on it further.
+
+```mica
+# Some people like spelling their constants in SCREAMING_SNAKE_CASE.
+let constants = { pi: 3.141592654, sqrt2: 1.414213562 }
+let { pi: PI, sqrt2: SQRT2 } = constants
+assert(PI == constants.pi and SQRT2 == constants.sqrt2)
+
+# Here we match against a tuple stored in the `version` field.
+let crate = { name: "mica", version: (0, 8, 0) }
+let { name, version: (major, minor, patch) } = crate
+assert(name == "mica")
+assert((major, minor, patch) == (0, 8, 0))
+```
+
+If the scrutinee is not a record or the record does not possess exactly the same set of fields
+as the pattern, an error is thrown.
+
+This error can be suppressed to only extract a subset of the fields by using the _rest_ token `..`.
+This token makes the pattern _non-exhaustive_, which means that the matched record may contain
+other fields not required by the pattern.
+
+```mica
+let constants = { pi: 3.141592654, sqrt2: 1.414213562 }
+let { pi, .. } = constants
+```
+
+This syntax is in fact equivalent to just extracting the specified fields out of the record and
+assigning them to variables.
+
+```mica
+# The above is the same as:
+let constants = { pi: 3.141592654, sqrt2: 1.414213562 }
+let pi = constants.pi
+```
+
+Like tuples, records have value semantics, which means that they're compared field by field.
+
+```mica
+assert({ x: 1, y: 2 } == { x: 1, y: 2 })
+assert({ x: 1, y: 2, z: 3 } != { x: 1, y: 2 })
+assert({ x: 2, y: 2 } != { x: 1, y: 2 })
+```
+
+Unlike tuples though records are not ordered, which means they cannot be compared using `<`, `>`,
+`<=`, and `>=`.
+
 #### Lists
 
 Lists are a data type for storing values in a sequence. Their literals open and close with square
@@ -422,13 +577,15 @@ let s = finalize(s)
 print(s)
 ```
 
-Variables are assigned using the `=` operator:
+Variables are assigned using the `=` operator.
+
 ```mica
 > x = 1
 < 1
 ```
 
-Reading from an undefined variable is an error:
+Reading from an undefined variable is an error.
+
 ```mica
 > swoosh
 (repl):1:1: error: variable 'swoosh' does not exist
@@ -461,6 +618,15 @@ end
 > my_variable
 (repl):1:1: error: variable 'my_variable' does not exist
 ```
+
+#### Pattern matching
+
+The left-hand side of `let` does not accept only variable names; it actually accepts _patterns_,
+which describe the way a value should be taken apart into pieces.
+
+The simplest pattern - an identifier - simply binds the matching _scrutinee_ (the right-hand side of
+`let`) to a variable with the same name, but more complex patterns exist; see [tuples](#tuples) and
+[records](#records).
 
 ### `if` expressions
 
@@ -571,6 +737,20 @@ do
             # body
         end
     end
+end
+```
+
+Because the `for` loop `binding` desugars to a `let`, it may also be a pattern. See iterating over
+dicts as an example:
+
+```mica
+let metadata = [
+    "track_name": "John Thomas On The Inside Is Nothing But Foam",
+    "artist": "Telefon Tel Aviv",
+    "album": "Fahrenheit Fair Enough",
+]
+for (key, value) in metadata.iter do
+    print(key, value)
 end
 ```
 

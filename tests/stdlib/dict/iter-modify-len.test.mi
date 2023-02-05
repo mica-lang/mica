@@ -5,6 +5,6 @@
 # @error     {file}:{:LINE}:1  <main>
 
 let dict = ["a": 1, "b": 2, "c": 3]
-for pair in dict.iter do  # @line LINE
-    dict.remove(pair.key)
+for (key, value) in dict.iter do  # @line LINE
+    dict.remove(key)
 end

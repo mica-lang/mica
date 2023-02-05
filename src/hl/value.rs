@@ -60,9 +60,9 @@ pub enum Value {
     ///
     /// Tuples are opaque to the Rust API and must be converted into a typed tuple `(T, U, ..)`.
     Tuple(Hidden<Box<dyn value::UserData>>),
-    /// A tuple.
+    /// A record.
     ///
-    /// Tuples are opaque to the Rust API, no conversion function currently exists for them.
+    /// Recprds are opaque to the Rust API, no conversion function currently exists for them.
     Record(Hidden<Box<dyn value::UserData>>),
     /// Arbitrarily typed user data.
     UserData(Gc<Box<dyn value::UserData>>),

@@ -443,8 +443,8 @@ impl Engine {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn create_value(&self, from: impl IntoValue) -> Value {
-        from.into_value_with_library(&self.library)
+    pub fn create_value(&mut self, from: impl IntoValue) -> Value {
+        from.into_value_with_engine_state(&self.library, &mut self.gc)
     }
 
     /// Returns the unique global ID for the global with the given name, or an error if there
@@ -493,7 +493,10 @@ impl Engine {
     /// ```
     pub fn set(&mut self, id: impl GlobalName, value: impl IntoValue) -> Result<(), Error> {
         let id = id.to_global_id(&mut self.env)?;
-        self.globals.set(id.0, value.into_value_with_library(&self.library).to_raw(&mut self.gc));
+        self.globals.set(
+            id.0,
+            value.into_value_with_engine_state(&self.library, &mut self.gc).to_raw(&mut self.gc),
+        );
         Ok(())
     }
 

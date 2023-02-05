@@ -24,7 +24,7 @@ where
             let arguments = Arguments::new(args, library);
             let result = self();
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -43,7 +43,9 @@ where
             let arguments = Arguments::new(args, library);
             let result = self();
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -63,7 +65,7 @@ where
 
             let result = self(arg_self);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -84,7 +86,9 @@ where
 
             let result = self(arg_self);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -108,7 +112,7 @@ where
 
             let result = self(arg_self);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -132,7 +136,7 @@ where
 
             let result = self(arg_self);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -157,7 +161,9 @@ where
 
             let result = self(arg_self);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -182,7 +188,9 @@ where
 
             let result = self(arg_self);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -203,7 +211,7 @@ where
 
             let result = self(arg_0);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -225,7 +233,9 @@ where
 
             let result = self(arg_0);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -247,7 +257,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -270,7 +280,9 @@ where
 
             let result = self(arg_self, arg_0);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -296,7 +308,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -323,7 +335,7 @@ where
 
             let result = self(arg_self, arg_0);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -350,7 +362,9 @@ where
 
             let result = self(arg_self, arg_0);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -377,7 +391,9 @@ where
 
             let result = self(arg_self, arg_0);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -400,7 +416,7 @@ where
 
             let result = self(arg_0, arg_1);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -424,7 +440,9 @@ where
 
             let result = self(arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -448,7 +466,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -473,7 +491,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -502,7 +522,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -531,7 +551,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -561,7 +581,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -591,7 +613,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -616,7 +640,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -642,7 +666,9 @@ where
 
             let result = self(arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -669,7 +695,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -697,7 +723,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -728,7 +756,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -759,7 +787,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -791,7 +819,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -823,7 +853,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -850,7 +882,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -878,7 +910,9 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -907,7 +941,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -937,7 +971,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -971,7 +1007,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1005,7 +1041,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1039,7 +1075,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1074,7 +1112,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1103,7 +1143,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1133,7 +1173,9 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1164,7 +1206,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1196,7 +1238,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1232,7 +1276,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1268,7 +1312,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1305,7 +1349,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1342,7 +1388,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1373,7 +1421,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1406,7 +1454,9 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1439,7 +1489,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1473,7 +1523,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1511,7 +1563,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1549,7 +1601,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1588,7 +1640,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1627,7 +1681,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1661,7 +1717,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1696,7 +1752,9 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1731,7 +1789,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1767,7 +1825,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1807,7 +1867,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1847,7 +1907,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -1888,7 +1948,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1929,7 +1991,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -1965,7 +2029,7 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -2002,7 +2066,9 @@ where
 
             let result = self(arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -2039,7 +2105,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -2077,7 +2143,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -2122,7 +2190,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -2167,7 +2235,7 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            Ok(result.into_value_with_library(library).to_raw(gc))
+            Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
     }
 }
@@ -2210,7 +2278,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }
@@ -2256,7 +2326,9 @@ where
 
             let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
 
-            wrap_in_language_error(result.map(|v| v.into_value_with_library(library).to_raw(gc)))
+            wrap_in_language_error(
+                result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
+            )
         })
     }
 }

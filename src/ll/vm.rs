@@ -592,7 +592,7 @@ impl Fiber {
                     unsafe { gc.auto_collect(self.roots(globals)) };
                     let len = usize::from(operand);
                     let fields = self.stack.drain(self.stack.len() - len..).collect();
-                    let tuple: Box<dyn UserData> = Box::new(Tuple { fields });
+                    let tuple: Box<dyn UserData> = Box::new(Tuple::new(fields));
                     let tuple = gc.allocate(tuple);
                     self.push(RawValue::from(tuple));
                 }

@@ -55,7 +55,7 @@ pub(crate) fn define(builder: TypeBuilder<Vec<RawValue>>) -> TypeBuilder<Vec<Raw
             RawFunctionKind::Foreign(Box::new(|library, gc, args| {
                 let arguments = Arguments::new(args, library);
                 let iter = unsafe { ListIter::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
 }

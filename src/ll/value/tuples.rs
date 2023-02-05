@@ -21,6 +21,13 @@ pub struct Tuple {
     pub fields: Vec<RawValue>,
 }
 
+impl Tuple {
+    /// Shorthand constructor for creating a tuple.
+    pub fn new(fields: Vec<RawValue>) -> Self {
+        Self { fields }
+    }
+}
+
 impl fmt::Debug for Tuple {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("(")?;

@@ -3,6 +3,7 @@ use std::fmt::Display;
 mod functions;
 mod stress;
 mod traits;
+mod value;
 
 pub trait RevealResultExt<T> {
     /// Basically the same as `unwrap()` but `Display`s the error instead of `Debug`ging it.

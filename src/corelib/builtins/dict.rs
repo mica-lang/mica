@@ -19,7 +19,7 @@ pub(crate) fn define(builder: TypeBuilder<Dict>) -> TypeBuilder<Dict> {
             RawFunctionKind::Foreign(Box::new(|library, gc, args| {
                 let arguments = Arguments::new(args, library);
                 let iter = unsafe { DictIter::new(*arguments.raw_self()) };
-                Ok(iter.into_value_with_library(library).to_raw(gc))
+                Ok(iter.into_value_with_engine_state(library, gc).to_raw(gc))
             })),
         )
 }

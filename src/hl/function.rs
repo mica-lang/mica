@@ -268,7 +268,7 @@ where
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |library, gc, args| {
             self(Arguments::new(args, library))
-                .map(|value| value.into_value_with_library(library).to_raw(gc))
+                .map(|value| value.into_value_with_engine_state(library, gc).to_raw(gc))
                 .map_err(|error| LanguageErrorKind::User(Box::new(error)))
         })
     }
@@ -285,7 +285,9 @@ where
 
     fn into_raw_foreign_function(self) -> RawForeignFunction {
         Box::new(move |library, gc, args| {
-            Ok(self(Arguments::new(args, library)).into_value_with_library(library).to_raw(gc))
+            Ok(self(Arguments::new(args, library))
+                .into_value_with_engine_state(library, gc)
+                .to_raw(gc))
         })
     }
 }

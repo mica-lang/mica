@@ -1,0 +1,4 @@
+# It should be possible to match against records inside records.
+
+let { inner: { x } } = { inner: { x: 1 } }
+assert(x == 1)

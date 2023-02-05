@@ -1,0 +1,5 @@
+# Renamed fields should not bind the original name in addition to the renamed name.
+# @error {file}:{:LINE}:1: error: variable 'x' does not exist
+
+let { x: meow } = { x: 1 }
+x  # @line LINE

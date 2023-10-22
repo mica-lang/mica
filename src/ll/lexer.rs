@@ -453,6 +453,8 @@ impl Lexer {
             "constructor" => TokenKind::Constructor,
             "static" => TokenKind::Static,
 
+            "_" => TokenKind::Underscore,
+
             _ => return None,
         })
     }
@@ -477,8 +479,6 @@ impl Lexer {
                 let identifier = self.identifier();
                 Ok(if let Some(keyword) = Self::keyword(identifier) {
                     self.token(keyword)
-                } else if identifier == "_" {
-                    self.token(TokenKind::Underscore)
                 } else {
                     let identifier = Rc::from(identifier);
                     self.token(TokenKind::Identifier(identifier))

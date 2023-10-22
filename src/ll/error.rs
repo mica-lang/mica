@@ -164,6 +164,7 @@ pub enum LanguageErrorKind {
     DuplicateRecordField(Rc<str>),
     TooManyRecords,
     RestInRecordConstructor,
+    CannotAccessDiscardPattern,
 
     // Runtime
     TypeError { expected: Cow<'static, str>, got: Cow<'static, str> },
@@ -296,6 +297,9 @@ impl std::fmt::Display for LanguageErrorKind {
                     write!(f, "    - {signature}")?;
                 }
                 Ok(())
+            }
+            Self::CannotAccessDiscardPattern => {
+                writeln!(f, "cannot use pattern '_' to access a value")
             }
 
             Self::User(error) => write!(f, "{error}"),

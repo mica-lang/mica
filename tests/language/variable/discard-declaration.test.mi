@@ -1,0 +1,3 @@
+# Declare a discarded variable
+
+let _ = "a string"

@@ -226,6 +226,9 @@ pub enum NodeKind {
     /// An identifier. Must contain string data.
     Identifier,
 
+    /// The discard pattern `_`
+    DiscardPattern,
+
     /// A parenthesized expression.
     Paren,
 

@@ -299,7 +299,7 @@ impl std::fmt::Display for LanguageErrorKind {
                 Ok(())
             }
             Self::CannotAccessDiscardPattern => {
-                writeln!(f, "cannot use pattern '_' to access a value")
+                writeln!(f, "'_' is a used for discarding values in variable declarations and cannot be used in expressions")
             }
 
             Self::User(error) => write!(f, "{error}"),

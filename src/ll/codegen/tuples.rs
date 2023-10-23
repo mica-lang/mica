@@ -104,7 +104,7 @@ impl<'e> CodeGenerator<'e> {
             self.chunk.emit(Opcode::DestructureRecordNonExhaustive);
 
             // Skip the last element, which is guaranteed to be Rest.
-            for &pair in &pairs[..pairs.len() - 1] {
+            for &pair in pairs.iter().rev().skip(1) {
                 let (key, value) = ast.node_pair(pair);
 
                 let signature = MethodSignature::new(
@@ -138,7 +138,7 @@ impl<'e> CodeGenerator<'e> {
                 self.chunk.emit(Opcode::Duplicate);
             }
             self.chunk.emit((Opcode::DestructureRecord, record_type_index.to_opr24()));
-            for &pair in pairs {
+            for &pair in pairs.iter().rev() {
                 let (key, value) = ast.node_pair(pair);
                 destructure_member(self, ast, key, value)?;
             }

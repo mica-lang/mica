@@ -1,0 +1,6 @@
+# It's possible to make a pattern non-exhaustive by using a .. element at the end, and access multiple elements.
+
+let { sender, receiver, .. } = { sender: "Alice", receiver: "Bob", amount: 3.50 }
+
+assert(sender == "Alice")
+assert(receiver == "Bob")

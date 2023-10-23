@@ -1,3 +1,6 @@
 # Record destructuring, like tuple destructuring, must be exhaustive.
 
 let { x, y } = { x: 1, y: 2 }
+
+assert(x == 1)
+assert(y == 2)

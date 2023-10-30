@@ -1,0 +1,9 @@
+# Tests that field order does not matter when destructuring records.
+
+let { y, x } = { x: 1, y: 2 }
+assert(x == 1)
+assert(y == 2)
+
+let { y, x } = { y: 2, x: 1 }
+assert(x == 1)
+assert(y == 2)

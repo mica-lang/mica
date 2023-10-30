@@ -115,10 +115,11 @@ impl<'e> CodeGenerator<'e> {
                 self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
             }
         } else {
-            let identifier = make_record_identifier(pairs.iter().map(|&pair| {
-                let (key, _) = ast.node_pair(pair);
-                ast.string(key).unwrap().deref()
-            }));
+            let mut fields: Vec<_> = pairs.iter().map(|&pair| ast.node_pair(pair)).collect();
+            fields.sort_by_key(|&(key, _)| ast.string(key));
+            let identifier = make_record_identifier(
+                fields.iter().map(|&(key, _)| ast.string(key).unwrap().deref()),
+            );
             let record_type_index = self
                 .library
                 .get_or_generate_record(self.env, self.gc, &identifier)
@@ -129,8 +130,7 @@ impl<'e> CodeGenerator<'e> {
                 self.chunk.emit(Opcode::Duplicate);
             }
             self.chunk.emit((Opcode::DestructureRecord, record_type_index.to_opr24()));
-            for &pair in pairs.iter().rev() {
-                let (key, value) = ast.node_pair(pair);
+            for &(key, value) in fields.iter().rev() {
                 let pattern = if value == NodeId::EMPTY { key } else { value };
                 self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
             }

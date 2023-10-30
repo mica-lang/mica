@@ -20,3 +20,19 @@ jobs:
         -
             name: Run Language and API tests
             run: cargo test --release -- --include-ignored
+
+    clippy:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v2
+        -
+            name: Clippy
+            run: cargo clippy
+
+    rustfmt:
+        runs-on: ubuntu-latest
+        steps:
+        - uses: actions/checkout@v2
+        -
+            name: rustfmt
+            run: cargo fmt --check --all

@@ -1,0 +1,5 @@
+# Two records with different field order are the same.
+
+let a = { x: 1, y: 2 }
+let b = { y: 2, x: 1 }
+assert(a == b)

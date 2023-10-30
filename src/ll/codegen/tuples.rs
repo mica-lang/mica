@@ -97,7 +97,7 @@ impl<'e> CodeGenerator<'e> {
             value: NodeId,
         ) -> Result<(), LanguageError> {
             let pattern = if value == NodeId::EMPTY { key } else { value };
-            if ast.kind(pattern) == NodeKind::DiscardPattern {
+            if ast.kind(pattern) == NodeKind::Underscore {
                 generator.chunk.emit(Opcode::Discard);
                 Ok(())
             } else {

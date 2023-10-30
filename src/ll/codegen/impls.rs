@@ -47,7 +47,10 @@ impl<'e> CodeGenerator<'e> {
             self.generate_impl_item(ast, node, &mut state, true)?;
         }
 
-        let proto_id = self.env.create_prototype(proto).map_err(|kind| ast.error(node, kind))?;
+        let proto_id = self
+            .env
+            .create_prototype(proto)
+            .map_err(|kind| ast.error(node, kind))?;
         self.chunk.emit((Opcode::Implement, proto_id.to_opr24()));
 
         self.struct_data = None;
@@ -86,7 +89,10 @@ impl<'e> CodeGenerator<'e> {
                 let function = self.generate_function(
                     ast,
                     node,
-                    GenerateFunctionOptions { name: Rc::clone(&name), call_conv },
+                    GenerateFunctionOptions {
+                        name: Rc::clone(&name),
+                        call_conv,
+                    },
                 )?;
 
                 let parameter_count =
@@ -95,7 +101,12 @@ impl<'e> CodeGenerator<'e> {
                 if let Some(trait_index) = state.implemented_trait_index {
                     // For trait instance methods, method ID resolution is performed at runtime.
                     let key = (Rc::clone(&name), parameter_count, trait_index);
-                    if state.proto.trait_instance.insert(key, function.id).is_some() {
+                    if state
+                        .proto
+                        .trait_instance
+                        .insert(key, function.id)
+                        .is_some()
+                    {
                         return Err(ast.error(
                             name_node,
                             LanguageErrorKind::MethodAlreadyImplemented(RenderedSignature {
@@ -141,8 +152,10 @@ impl<'e> CodeGenerator<'e> {
                 let (trait_expr, _) = ast.node_pair(node);
                 let as_items = ast.children(node).unwrap();
                 self.generate_node(ast, trait_expr, Expression::Used)?;
-                let trait_index =
-                    state.proto.implement_next_trait().map_err(|e| ast.error(node, e))?;
+                let trait_index = state
+                    .proto
+                    .implement_next_trait()
+                    .map_err(|e| ast.error(node, e))?;
                 let mut state = ImplGenerationState {
                     proto: state.proto,
                     implemented_trait_index: Some(trait_index),

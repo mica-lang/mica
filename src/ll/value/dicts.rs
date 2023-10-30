@@ -73,10 +73,10 @@ impl Dict {
     /// Removes the value at the given key and returns it (or `nil` if there was no value).
     pub fn remove(&self, key: RawValue) -> RawValue {
         let inner = unsafe { &mut *self.inner.get() };
-        match inner
-            .table
-            .remove_entry(key.hash(&mut inner.state.build_hasher()), equivalent_key(key))
-        {
+        match inner.table.remove_entry(
+            key.hash(&mut inner.state.build_hasher()),
+            equivalent_key(key),
+        ) {
             Some((_, v)) => v,
             None => RawValue::from(()),
         }
@@ -89,7 +89,10 @@ impl Dict {
             None
         } else {
             let hash = key.hash(&mut inner.state.build_hasher());
-            inner.table.get(hash, equivalent_key(key)).map(|&(_key, value)| value)
+            inner
+                .table
+                .get(hash, equivalent_key(key))
+                .map(|&(_key, value)| value)
         }
     }
 
@@ -121,7 +124,9 @@ impl Dict {
 
 impl Clone for Dict {
     fn clone(&self) -> Self {
-        Self { inner: UnsafeCell::new((unsafe { &*self.inner.get() }).clone()) }
+        Self {
+            inner: UnsafeCell::new((unsafe { &*self.inner.get() }).clone()),
+        }
     }
 }
 

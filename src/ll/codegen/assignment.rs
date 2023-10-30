@@ -93,14 +93,16 @@ impl<'e> CodeGenerator<'e> {
         match ast.kind(target) {
             NodeKind::Identifier => {
                 let name = ast.string(target).unwrap();
-                let variable = if let Some(slot) =
-                    self.lookup_variable(name).map_err(|kind| ast.error(target, kind))?
+                let variable = if let Some(slot) = self
+                    .lookup_variable(name)
+                    .map_err(|kind| ast.error(target, kind))?
                 {
                     slot
                 } else {
-                    return Err(
-                        ast.error(target, LanguageErrorKind::VariableDoesNotExist(Rc::clone(name)))
-                    );
+                    return Err(ast.error(
+                        target,
+                        LanguageErrorKind::VariableDoesNotExist(Rc::clone(name)),
+                    ));
                 };
                 match result {
                     Expression::Used => self.generate_variable_assign(variable),
@@ -117,7 +119,10 @@ impl<'e> CodeGenerator<'e> {
                             .map_err(|kind| ast.error(node, kind))?
                     } else {
                         struct_data.get_field(name).ok_or_else(|| {
-                            ast.error(target, LanguageErrorKind::FieldDoesNotExist(Rc::clone(name)))
+                            ast.error(
+                                target,
+                                LanguageErrorKind::FieldDoesNotExist(Rc::clone(name)),
+                            )
                         })?
                     };
                     // Unwrapping is OK here because `receiver` is assigned at the start of each

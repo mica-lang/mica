@@ -10,7 +10,11 @@ pub(crate) struct StringRSplit {
 
 impl StringRSplit {
     pub unsafe fn new(s: RawValue, separator: Gc<String>) -> Self {
-        Self { string: s, separator, index: unsafe { s.get_raw_string_unchecked().get().len() } }
+        Self {
+            string: s,
+            separator,
+            index: unsafe { s.get_raw_string_unchecked().get().len() },
+        }
     }
 
     fn has_next(&self) -> bool {

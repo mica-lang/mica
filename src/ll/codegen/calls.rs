@@ -86,7 +86,8 @@ impl<'e> CodeGenerator<'e> {
             .env
             .get_or_create_method_index(&signature)
             .map_err(|kind| ast.error(node, kind))?;
-        self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
+        self.chunk
+            .emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
 
         Ok(ExpressionResult::Present)
     }

@@ -28,7 +28,8 @@ impl<'e> CodeGenerator<'e> {
             Opr24::try_from(elements.len())
                 .map_err(|_| ast.error(node, LanguageErrorKind::TupleHasTooManyElements))?,
         ));
-        self.library.generate_tuple(self.env, self.gc, elements.len());
+        self.library
+            .generate_tuple(self.env, self.gc, elements.len());
         Ok(ExpressionResult::Present)
     }
 
@@ -45,8 +46,10 @@ impl<'e> CodeGenerator<'e> {
             return Err(ast.error(node, LanguageErrorKind::RecordHasTooManyFields));
         }
 
-        let mut fields: Vec<_> =
-            pairs.iter().map(|&pair| ast.string(ast.node_pair(pair).0).unwrap()).collect();
+        let mut fields: Vec<_> = pairs
+            .iter()
+            .map(|&pair| ast.string(ast.node_pair(pair).0).unwrap())
+            .collect();
         fields.sort();
 
         let mut field_order = vec![];
@@ -69,7 +72,8 @@ impl<'e> CodeGenerator<'e> {
             .get_or_generate_record(self.env, self.gc, &identifier)
             .map_err(|_| ast.error(node, LanguageErrorKind::TooManyRecords))?;
 
-        self.chunk.emit((Opcode::CreateRecord, record_type_index.to_opr24()));
+        self.chunk
+            .emit((Opcode::CreateRecord, record_type_index.to_opr24()));
         for field_index in field_order {
             self.chunk.emit_u32(field_index);
         }
@@ -109,7 +113,8 @@ impl<'e> CodeGenerator<'e> {
                 // doing things without complicating the implementation too much.
                 // We can swap it out for something more performant if it becomes too slow.
                 self.chunk.emit(Opcode::Duplicate);
-                self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
+                self.chunk
+                    .emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
 
                 let pattern = if value == NodeId::EMPTY { key } else { value };
                 self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
@@ -118,7 +123,9 @@ impl<'e> CodeGenerator<'e> {
             let mut fields: Vec<_> = pairs.iter().map(|&pair| ast.node_pair(pair)).collect();
             fields.sort_by_key(|&(key, _)| ast.string(key));
             let identifier = make_record_identifier(
-                fields.iter().map(|&(key, _)| ast.string(key).unwrap().deref()),
+                fields
+                    .iter()
+                    .map(|&(key, _)| ast.string(key).unwrap().deref()),
             );
             let record_type_index = self
                 .library
@@ -129,7 +136,8 @@ impl<'e> CodeGenerator<'e> {
             if result == Expression::Used {
                 self.chunk.emit(Opcode::Duplicate);
             }
-            self.chunk.emit((Opcode::DestructureRecord, record_type_index.to_opr24()));
+            self.chunk
+                .emit((Opcode::DestructureRecord, record_type_index.to_opr24()));
             for &(key, value) in fields.iter().rev() {
                 let pattern = if value == NodeId::EMPTY { key } else { value };
                 self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;

@@ -19,7 +19,9 @@ enum Command {
 fn main() {
     let subscriber = tracing_subscriber::registry()
         .with(
-            EnvFilter::builder().with_default_directive(LevelFilter::DEBUG.into()).from_env_lossy(),
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::DEBUG.into())
+                .from_env_lossy(),
         )
         .with(tracing_subscriber::fmt::layer().without_time());
     tracing::subscriber::set_global_default(subscriber)

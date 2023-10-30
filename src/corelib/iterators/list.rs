@@ -13,7 +13,11 @@ pub(crate) struct ListIter {
 impl ListIter {
     pub(crate) unsafe fn new(list: RawValue) -> Self {
         let slice = unsafe { list.downcast_user_data_unchecked::<List>().as_slice() };
-        ListIter { list, i: 0, len: slice.len() }
+        ListIter {
+            list,
+            i: 0,
+            len: slice.len(),
+        }
     }
 
     fn has_next(&self) -> bool {
@@ -25,7 +29,10 @@ impl ListIter {
             let list = self.list.downcast_user_data_unchecked::<List>();
             let slice = list.as_slice();
             if slice.len() != self.len {
-                return Err(LenChangedDuringIteration { was: self.len, became: slice.len() });
+                return Err(LenChangedDuringIteration {
+                    was: self.len,
+                    became: slice.len(),
+                });
             }
             if let Some(v) = slice.get(self.i) {
                 self.i += 1;
@@ -51,7 +58,11 @@ struct LenChangedDuringIteration {
 
 impl std::fmt::Display for LenChangedDuringIteration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "list length changed during iteration (was {}, became {})", self.was, self.became)
+        write!(
+            f,
+            "list length changed during iteration (was {}, became {})",
+            self.was, self.became
+        )
     }
 }
 

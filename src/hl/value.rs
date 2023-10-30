@@ -344,10 +344,13 @@ where
     type EngineUse = UsesEngine;
 
     fn into_value(self, (library, _): (&Library, &mut Memory)) -> Value {
-        let dtable = library.get_user_dtable::<T>().map(Gc::clone).unwrap_or_else(|| {
-            let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
-            Gc::new(ad_hoc_dtable)
-        });
+        let dtable = library
+            .get_user_dtable::<T>()
+            .map(Gc::clone)
+            .unwrap_or_else(|| {
+                let ad_hoc_dtable = DispatchTable::new_for_instance(type_name::<T>());
+                Gc::new(ad_hoc_dtable)
+            });
         let object = Object::new(Gc::as_raw(&dtable), self);
         Value::UserData(Gc::new(Box::new(object)))
     }
@@ -363,7 +366,10 @@ where
 }
 
 fn type_mismatch(expected: impl Into<Cow<'static, str>>, got: &Value) -> Error {
-    Error::TypeMismatch { expected: expected.into(), got: got.type_name().to_string().into() }
+    Error::TypeMismatch {
+        expected: expected.into(),
+        got: got.type_name().to_string().into(),
+    }
 }
 
 impl TryFromValue for Value {
@@ -454,13 +460,18 @@ where
     fn try_from_value(value: &Value, library: &Library) -> Result<Self, Error> {
         match value {
             Value::Nil => Ok(None),
-            _ => Ok(Some(T::try_from_value(value, library).map_err(|error| {
-                if let Error::TypeMismatch { expected, got } = error {
-                    Error::TypeMismatch { expected: format!("{expected} or Nil").into(), got }
-                } else {
-                    unreachable!()
-                }
-            })?)),
+            _ => Ok(Some(T::try_from_value(value, library).map_err(
+                |error| {
+                    if let Error::TypeMismatch { expected, got } = error {
+                        Error::TypeMismatch {
+                            expected: format!("{expected} or Nil").into(),
+                            got,
+                        }
+                    } else {
+                        unreachable!()
+                    }
+                },
+            )?)),
         }
     }
 }

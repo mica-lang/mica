@@ -107,7 +107,10 @@ impl RawValue {
     }
 
     fn type_error(&self, expected: impl Into<Cow<'static, str>>) -> LanguageErrorKind {
-        LanguageErrorKind::TypeError { expected: expected.into(), got: self.type_name() }
+        LanguageErrorKind::TypeError {
+            expected: expected.into(),
+            got: self.type_name(),
+        }
     }
 
     /// Returns a boolean value without performing any checks.
@@ -174,7 +177,12 @@ impl RawValue {
     where
         T: UserData,
     {
-        if let Some(value) = self.get_raw_user_data_unchecked().get().as_any().downcast_ref::<T>() {
+        if let Some(value) = self
+            .get_raw_user_data_unchecked()
+            .get()
+            .as_any()
+            .downcast_ref::<T>()
+        {
             value
         } else {
             unreachable_unchecked()
@@ -285,7 +293,10 @@ impl RawValue {
     /// Returns an error if the types of the two values are not the same.
     pub fn try_partial_cmp(&self, other: &Self) -> Result<Option<Ordering>, LanguageErrorKind> {
         if self.0.kind() != other.0.kind() {
-            Err(LanguageErrorKind::TypeError { expected: self.type_name(), got: other.type_name() })
+            Err(LanguageErrorKind::TypeError {
+                expected: self.type_name(),
+                got: other.type_name(),
+            })
         } else {
             match self.0.kind() {
                 ValueKind::Nil => Ok(Some(Ordering::Equal)),
@@ -387,7 +398,11 @@ impl fmt::Debug for RawValue {
                     write!(f, "{:?}", self.0.get_raw_string_unchecked().get().deref())
                 }
                 ValueKind::Function => {
-                    write!(f, "<func {:?}>", self.0.get_raw_function_unchecked().get_raw())
+                    write!(
+                        f,
+                        "<func {:?}>",
+                        self.0.get_raw_function_unchecked().get_raw()
+                    )
                 }
                 ValueKind::Struct => dtable(f, self.0.get_raw_struct_unchecked().get().dtable()),
                 ValueKind::Trait => dtable(f, self.0.get_raw_trait_unchecked().get().dtable()),

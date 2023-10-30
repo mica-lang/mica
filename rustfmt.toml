@@ -1,8 +1,0 @@
-use_small_heuristics = "Max"
-
-wrap_comments = true
-comment_width = 100
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
-format_macro_matchers = true
-format_macro_bodies = true

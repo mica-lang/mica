@@ -108,7 +108,9 @@ fn generate_for_params(
             variant: "InfallibleRawSelf",
             function_param_user_types: &["RawSelf<'_>"],
             parameter_count_definition: METHOD_PARAMETER_COUNT,
-            self_mode: SelfMode::Enabled { setup_code: SETUP_RAW_SELF },
+            self_mode: SelfMode::Enabled {
+                setup_code: SETUP_RAW_SELF,
+            },
             ..infallible_options
         },
     )?;
@@ -118,7 +120,9 @@ fn generate_for_params(
             variant: "FallibleRawSelf",
             function_param_user_types: &["RawSelf<'_>"],
             parameter_count_definition: METHOD_PARAMETER_COUNT,
-            self_mode: SelfMode::Enabled { setup_code: SETUP_RAW_SELF },
+            self_mode: SelfMode::Enabled {
+                setup_code: SETUP_RAW_SELF,
+            },
             ..fallible_options
         },
     )?;
@@ -145,7 +149,9 @@ fn generate_for_params(
             parameter_count_definition: METHOD_PARAMETER_COUNT,
             user_generic_params: &["Ret", "Recv"],
             user_generic_bounds: &[BOUND_RET, BOUND_SELF],
-            self_mode: SelfMode::Enabled { setup_code: SETUP_SELF },
+            self_mode: SelfMode::Enabled {
+                setup_code: SETUP_SELF,
+            },
             ..infallible_options
         },
     )?;
@@ -158,7 +164,9 @@ fn generate_for_params(
             parameter_count_definition: METHOD_PARAMETER_COUNT,
             user_generic_params: &["Ret", "Recv"],
             user_generic_bounds: &[BOUND_RET, BOUND_MUT_SELF],
-            self_mode: SelfMode::Enabled { setup_code: SETUP_MUT_SELF },
+            self_mode: SelfMode::Enabled {
+                setup_code: SETUP_MUT_SELF,
+            },
             ..infallible_options
         },
     )?;
@@ -171,7 +179,9 @@ fn generate_for_params(
             parameter_count_definition: METHOD_PARAMETER_COUNT,
             user_generic_params: &["Ret", "Err", "Recv"],
             user_generic_bounds: &[BOUND_RET, BOUND_ERR, BOUND_SELF],
-            self_mode: SelfMode::Enabled { setup_code: SETUP_SELF },
+            self_mode: SelfMode::Enabled {
+                setup_code: SETUP_SELF,
+            },
             ..fallible_options
         },
     )?;
@@ -184,7 +194,9 @@ fn generate_for_params(
             parameter_count_definition: METHOD_PARAMETER_COUNT,
             user_generic_params: &["Ret", "Err", "Recv"],
             user_generic_bounds: &[BOUND_RET, BOUND_ERR, BOUND_MUT_SELF],
-            self_mode: SelfMode::Enabled { setup_code: SETUP_MUT_SELF },
+            self_mode: SelfMode::Enabled {
+                setup_code: SETUP_MUT_SELF,
+            },
             ..fallible_options
         },
     )?;
@@ -243,7 +255,11 @@ fn generate_variant(
         user_generic_bounds
             .iter()
             .map(|str| str.to_string())
-            .chain(function_param_value_types.iter().map(|p| format!("{p}: TryFromValue")))
+            .chain(
+                function_param_value_types
+                    .iter()
+                    .map(|p| format!("{p}: TryFromValue")),
+            )
             .map(|bound| format!("{bound} + 'static")),
     );
 
@@ -254,8 +270,11 @@ fn generate_variant(
         into_raw_foreign_function.push_str(setup_code);
     }
 
-    let variable_list: Vec<_> =
-        function_param_value_types.iter().enumerate().map(|(i, _)| format!("arg_{i}")).collect();
+    let variable_list: Vec<_> = function_param_value_types
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("arg_{i}"))
+        .collect();
     for (i, variable) in variable_list.iter().enumerate() {
         writeln!(
             into_raw_foreign_function,

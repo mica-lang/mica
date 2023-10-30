@@ -18,7 +18,10 @@ impl<'e> CodeGenerator<'e> {
     /// Pushes a new breakable block.
     pub(super) fn push_breakable_block(&mut self) {
         let start = self.chunk.emit(Opcode::Nop);
-        self.breakable_blocks.push(BreakableBlock { breaks: Vec::new(), start });
+        self.breakable_blocks.push(BreakableBlock {
+            breaks: Vec::new(),
+            start,
+        });
     }
 
     /// Pops the topmost breakable block.
@@ -29,7 +32,8 @@ impl<'e> CodeGenerator<'e> {
             for jump in block.breaks {
                 // Unwrapping is safe here because if the loop is too large the error was caught
                 // already before `pop_breakable_block` was called.
-                self.chunk.patch(jump, Opcode::jump_forward(jump, self.chunk.len()).unwrap());
+                self.chunk
+                    .patch(jump, Opcode::jump_forward(jump, self.chunk.len()).unwrap());
             }
             self.chunk.emit((Opcode::ExitBreakableBlock, 1));
         }
@@ -244,7 +248,10 @@ impl<'e> CodeGenerator<'e> {
                 generator.generate_variable_load(iterator_var);
                 generator.chunk.emit((
                     Opcode::CallMethod,
-                    Opr24::pack((generator.library.builtin_traits.iterator_has_next.to_u16(), 1)),
+                    Opr24::pack((
+                        generator.library.builtin_traits.iterator_has_next.to_u16(),
+                        1,
+                    )),
                 ));
                 Ok(())
             },

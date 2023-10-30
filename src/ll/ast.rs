@@ -37,8 +37,12 @@ enum NodeData {
 impl Ast {
     /// Creates a new, empty syntax tree. The module name is used for error messages.
     pub fn new(module_name: Rc<str>) -> Self {
-        let mut ast =
-            Self { module_name, nodes: Vec::new(), locations: Vec::new(), data: Vec::new() };
+        let mut ast = Self {
+            module_name,
+            nodes: Vec::new(),
+            locations: Vec::new(),
+            data: Vec::new(),
+        };
         let _empty = ast.create_node(NodeKind::Empty, ());
         ast
     }
@@ -357,7 +361,11 @@ impl fmt::Debug for DumpAst<'_> {
             if let Some(s) = ast.string(node) {
                 write!(f, "{s:?}")?;
             }
-            if ast.children(node).map(|children| children.is_empty()).unwrap_or(false) {
+            if ast
+                .children(node)
+                .map(|children| children.is_empty())
+                .unwrap_or(false)
+            {
                 write!(f, " (children empty)")?;
             }
             writeln!(f)?;

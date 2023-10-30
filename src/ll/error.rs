@@ -13,7 +13,11 @@ pub struct Location {
 impl Location {
     /// The "uninitialized" location, used as a placeholder for proper locations in case there's a
     /// bug in codegen.
-    pub const UNINIT: Self = Self { byte: 0, line: 0, column: 0 };
+    pub const UNINIT: Self = Self {
+        byte: 0,
+        line: 0,
+        column: 0,
+    };
 
     /// Returns whether this location is the uninitialized location.
     pub fn is_uninit(&self) -> bool {
@@ -24,7 +28,11 @@ impl Location {
 /// The default location points to the first column on the first line.
 impl Default for Location {
     fn default() -> Self {
-        Self { byte: 0, line: 1, column: 1 }
+        Self {
+            byte: 0,
+            line: 1,
+            column: 1,
+        }
     }
 }
 
@@ -53,7 +61,11 @@ impl RenderedSignature {
     pub const INVALID_NAME: &'static str = "";
 
     pub fn invalid() -> Self {
-        Self { name: Rc::from(Self::INVALID_NAME), parameter_count: 0, trait_name: None }
+        Self {
+            name: Rc::from(Self::INVALID_NAME),
+            parameter_count: 0,
+            trait_name: None,
+        }
     }
 
     pub fn is_invalid(&self) -> bool {
@@ -167,12 +179,24 @@ pub enum LanguageErrorKind {
     CannotAccessDiscardPattern,
 
     // Runtime
-    TypeError { expected: Cow<'static, str>, got: Cow<'static, str> },
-    MethodDoesNotExist { type_name: Rc<str>, signature: RenderedSignature },
+    TypeError {
+        expected: Cow<'static, str>,
+        got: Cow<'static, str>,
+    },
+    MethodDoesNotExist {
+        type_name: Rc<str>,
+        signature: RenderedSignature,
+    },
     StructAlreadyImplemented,
     UserDataAlreadyBorrowed,
-    DoubleMethodImplementation { type_name: Rc<str>, signature: RenderedSignature },
-    MethodsUnimplemented { type_name: Rc<str>, methods: Vec<RenderedSignature> },
+    DoubleMethodImplementation {
+        type_name: Rc<str>,
+        signature: RenderedSignature,
+    },
+    MethodsUnimplemented {
+        type_name: Rc<str>,
+        methods: Vec<RenderedSignature>,
+    },
 
     User(Box<dyn std::error::Error>),
 }
@@ -322,9 +346,16 @@ pub struct StackTraceEntry {
 #[derive(Debug)]
 pub enum LanguageError {
     /// A compile-time error.
-    Compile { kind: LanguageErrorKind, module_name: Rc<str>, location: Location },
+    Compile {
+        kind: LanguageErrorKind,
+        module_name: Rc<str>,
+        location: Location,
+    },
     /// A runtime error.
-    Runtime { kind: LanguageErrorKind, call_stack: Vec<StackTraceEntry> },
+    Runtime {
+        kind: LanguageErrorKind,
+        call_stack: Vec<StackTraceEntry>,
+    },
 }
 
 impl std::fmt::Display for LanguageError {
@@ -343,7 +374,11 @@ impl std::fmt::Display for LanguageError {
         }
 
         match self {
-            LanguageError::Compile { kind, module_name, location } => {
+            LanguageError::Compile {
+                kind,
+                module_name,
+                location,
+            } => {
                 write!(f, "{module_name}:{location}: error: {kind}")
             }
             LanguageError::Runtime { kind, call_stack } => {
@@ -351,7 +386,11 @@ impl std::fmt::Display for LanguageError {
                 write!(f, "stack traceback (most recent call first):")?;
                 let file_location_width = call_stack
                     .iter()
-                    .map(|entry| FileLocation(&entry.module_name, entry.location).to_string().len())
+                    .map(|entry| {
+                        FileLocation(&entry.module_name, entry.location)
+                            .to_string()
+                            .len()
+                    })
                     .max()
                     .unwrap_or(20);
                 for entry in call_stack.iter().rev() {

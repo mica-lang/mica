@@ -17,7 +17,11 @@ impl Opr24 {
     pub fn new(x: u32) -> Result<Self, Opr24OutOfRange> {
         if x < Self::MAX {
             Ok(Self {
-                bytes: [(x & 0xFF) as u8, ((x >> 8) & 0xFF) as u8, ((x >> 16) & 0xFF) as u8],
+                bytes: [
+                    (x & 0xFF) as u8,
+                    ((x >> 8) & 0xFF) as u8,
+                    ((x >> 16) & 0xFF) as u8,
+                ],
             })
         } else {
             Err(Opr24OutOfRange(()))
@@ -43,7 +47,9 @@ impl Opr24 {
 
 impl From<u8> for Opr24 {
     fn from(value: u8) -> Self {
-        Self { bytes: [value, 0, 0] }
+        Self {
+            bytes: [value, 0, 0],
+        }
     }
 }
 

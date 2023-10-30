@@ -2103,7 +2103,9 @@ where
             let arg_6 = wrap_in_language_error(arguments.get(6))?;
             let arg_7 = wrap_in_language_error(arguments.get(7))?;
 
-            let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
+            let result = self(
+                arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7,
+            );
 
             Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
@@ -2141,7 +2143,9 @@ where
             let arg_6 = wrap_in_language_error(arguments.get(6))?;
             let arg_7 = wrap_in_language_error(arguments.get(7))?;
 
-            let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
+            let result = self(
+                arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7,
+            );
 
             wrap_in_language_error(
                 result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
@@ -2188,7 +2192,9 @@ where
             let arg_6 = wrap_in_language_error(arguments.get(6))?;
             let arg_7 = wrap_in_language_error(arguments.get(7))?;
 
-            let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
+            let result = self(
+                arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7,
+            );
 
             Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
@@ -2233,7 +2239,9 @@ where
             let arg_6 = wrap_in_language_error(arguments.get(6))?;
             let arg_7 = wrap_in_language_error(arguments.get(7))?;
 
-            let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
+            let result = self(
+                arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7,
+            );
 
             Ok(result.into_value_with_engine_state(library, gc).to_raw(gc))
         })
@@ -2276,7 +2284,9 @@ where
             let arg_6 = wrap_in_language_error(arguments.get(6))?;
             let arg_7 = wrap_in_language_error(arguments.get(7))?;
 
-            let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
+            let result = self(
+                arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7,
+            );
 
             wrap_in_language_error(
                 result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),
@@ -2324,7 +2334,9 @@ where
             let arg_6 = wrap_in_language_error(arguments.get(6))?;
             let arg_7 = wrap_in_language_error(arguments.get(7))?;
 
-            let result = self(arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7);
+            let result = self(
+                arg_self, arg_0, arg_1, arg_2, arg_3, arg_4, arg_5, arg_6, arg_7,
+            );
 
             wrap_in_language_error(
                 result.map(|v| v.into_value_with_engine_state(library, gc).to_raw(gc)),

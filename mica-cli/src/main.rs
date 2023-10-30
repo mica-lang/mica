@@ -88,7 +88,10 @@ fn interpret<'e>(
 fn engine(options: &EngineOptions) -> Engine {
     Engine::with_debug_options(
         mica::corelib::Lib,
-        mica::DebugOptions { dump_ast: options.dump_ast, dump_bytecode: options.dump_bytecode },
+        mica::DebugOptions {
+            dump_ast: options.dump_ast,
+            dump_bytecode: options.dump_bytecode,
+        },
     )
 }
 

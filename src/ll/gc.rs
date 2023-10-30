@@ -23,7 +23,10 @@ pub enum AutoStrategy {
     AlwaysRun,
     /// Run the GC if its `allocated_bytes` exceeds `next_run`, and grow `next_run` to
     /// `allocated_bytes * growth_factor / 256` after collection.
-    Ceiling { next_run: usize, growth_factor: usize },
+    Ceiling {
+        next_run: usize,
+        growth_factor: usize,
+    },
 }
 
 impl AutoStrategy {
@@ -39,7 +42,10 @@ impl AutoStrategy {
     /// Returns an updated version of the strategy after a successful collection.
     fn update(self, gc: &Memory) -> Self {
         if let Self::Ceiling { growth_factor, .. } = self {
-            Self::Ceiling { next_run: gc.allocated_bytes * growth_factor / 256, growth_factor }
+            Self::Ceiling {
+                next_run: gc.allocated_bytes * growth_factor / 256,
+                growth_factor,
+            }
         } else {
             self
         }
@@ -211,7 +217,10 @@ impl Memory {
     pub(crate) unsafe fn auto_collect(&mut self, roots: impl Iterator<Item = RawValue>) {
         #[cfg(feature = "trace-gc")]
         {
-            println!("gc | auto_collect called with strategy {:?}", self.auto_strategy);
+            println!(
+                "gc | auto_collect called with strategy {:?}",
+                self.auto_strategy
+            );
         }
         if self.auto_strategy.satisfied(self) {
             #[cfg(feature = "trace-gc")]
@@ -337,7 +346,11 @@ impl<T> GcMem<T> {
         unsafe { ptr::write(allocation, mem) }
         #[cfg(feature = "trace-gc")]
         {
-            println!("gcmem | allocated {:p}, T: {}", allocation, std::any::type_name::<T>());
+            println!(
+                "gcmem | allocated {:p}, T: {}",
+                allocation,
+                std::any::type_name::<T>()
+            );
         }
         GcRaw(allocation as *const _)
     }

@@ -49,8 +49,9 @@ fn error(arguments: Arguments) -> Result<(), UserError> {
 
 fn assert(condition: Value, message: Option<Value>) -> Result<Value, Error> {
     if condition.is_falsy() {
-        let message =
-            message.map(|value| value.to_string()).unwrap_or_else(|| "assertion failed".to_owned());
+        let message = message
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "assertion failed".to_owned());
         Err(message).mica()
     } else {
         Ok(condition)

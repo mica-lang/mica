@@ -53,10 +53,10 @@ pub enum TokenKind {
     LessEqual,    // <=
     GreaterEqual, // >=
 
-    Assign, // =
-    Dot,    // .
-    Colon,  // :
-    At,     // @
+    Assign,     // =
+    Dot,        // .
+    Colon,      // :
+    At,         // @
     Underscore, // _
 
     LeftParen,    // (

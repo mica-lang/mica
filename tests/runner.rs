@@ -446,6 +446,10 @@ struct Arguments {
     /// Include tests marked with `@ignore`.
     #[clap(long)]
     include_ignored: bool,
+
+    /// Single-threaded mode; prevents tests from running in parallel.
+    #[clap(long)]
+    single_threaded: bool,
 }
 
 fn main() -> ExitCode {
@@ -455,8 +459,11 @@ fn main() -> ExitCode {
 
     let tests = collect_all_tests("tests");
     let start_time = Instant::now();
-    let outcomes: Vec<_> =
-        tests.par_iter().map(|test| (test.run(args.include_ignored), test)).collect();
+    let outcomes: Vec<_> = if args.single_threaded {
+        tests.iter().map(|test| (test.run(args.include_ignored), test)).collect()
+    } else {
+        tests.par_iter().map(|test| (test.run(args.include_ignored), test)).collect()
+    };
     let end_time = Instant::now();
 
     let total = outcomes.len();

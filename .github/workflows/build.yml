@@ -37,5 +37,5 @@ jobs:
             name: rustfmt
             run: |
                 rustup install nightly-2023-10-06
-                rustup default nightly-2023-10-06
+                rustup component add --toolchain nightly-2023-10-06 cargo-fmt
                 cargo +nightly-2023-10-06 fmt --check --all

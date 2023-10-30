@@ -89,7 +89,7 @@ impl<'e> CodeGenerator<'e> {
             NodeKind::String => self.generate_string(ast, node),
 
             NodeKind::Identifier => self.generate_variable(ast, node)?,
-            NodeKind::DiscardPattern => {
+            NodeKind::Underscore => {
                 return Err(ast.error(node, LanguageErrorKind::CannotAccessDiscardPattern))
             }
 

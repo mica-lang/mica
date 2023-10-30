@@ -90,11 +90,21 @@ impl<'e> CodeGenerator<'e> {
         let is_non_exhaustive =
             !pairs.is_empty() && ast.kind(*pairs.last().unwrap()) == NodeKind::Rest;
 
+        fn destructure_member(generator: &mut CodeGenerator, ast: &Ast, key: NodeId, value: NodeId) -> Result<(), LanguageError> {
+            let pattern = if value == NodeId::EMPTY { key } else { value };
+            if ast.kind(pattern) == NodeKind::DiscardPattern {
+                generator.chunk.emit(Opcode::Discard);
+                Ok(())
+            } else {
+                generator.generate_pattern_destructuring(ast, pattern, Expression::Discarded)
+            }
+        }
+
         if is_non_exhaustive {
             self.chunk.emit(Opcode::DestructureRecordNonExhaustive);
 
             // Skip the last element, which is guaranteed to be Rest.
-            for &pair in &pairs[..pairs.len() - 1] {
+            for &pair in pairs.iter().rev().skip(1) {
                 let (key, value) = ast.node_pair(pair);
 
                 let signature = MethodSignature::new(
@@ -111,8 +121,7 @@ impl<'e> CodeGenerator<'e> {
                 self.chunk.emit(Opcode::Duplicate);
                 self.chunk.emit((Opcode::CallMethod, Opr24::pack((method_index.to_u16(), 1))));
 
-                let pattern = if value == NodeId::EMPTY { key } else { value };
-                self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
+                destructure_member(self, ast, key, value)?;
             }
         } else {
             let identifier = make_record_identifier(pairs.iter().map(|&pair| {
@@ -129,10 +138,9 @@ impl<'e> CodeGenerator<'e> {
                 self.chunk.emit(Opcode::Duplicate);
             }
             self.chunk.emit((Opcode::DestructureRecord, record_type_index.to_opr24()));
-            for &pair in pairs {
+            for &pair in pairs.iter().rev() {
                 let (key, value) = ast.node_pair(pair);
-                let pattern = if value == NodeId::EMPTY { key } else { value };
-                self.generate_pattern_destructuring(ast, pattern, Expression::Discarded)?;
+                destructure_member(self, ast, key, value)?;
             }
         }
 

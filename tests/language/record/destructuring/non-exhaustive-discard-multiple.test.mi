@@ -1,0 +1,5 @@
+# It's possible to make a pattern non-exhaustive by using a .. element at the end, and discard multiple elements.
+
+let { place, .. } = { place: "earth", mass: 2, inhabitants: nil, water: 2}
+
+assert(place == "earth")

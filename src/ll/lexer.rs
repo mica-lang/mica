@@ -57,6 +57,7 @@ pub enum TokenKind {
     Dot,    // .
     Colon,  // :
     At,     // @
+    Underscore, // _
 
     LeftParen,    // (
     RightParen,   // )
@@ -451,6 +452,8 @@ impl Lexer {
             "as" => TokenKind::As,
             "constructor" => TokenKind::Constructor,
             "static" => TokenKind::Static,
+
+            "_" => TokenKind::Underscore,
 
             _ => return None,
         })

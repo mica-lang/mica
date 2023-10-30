@@ -559,6 +559,7 @@ impl Parser {
             TokenKind::String(_) => Ok(self.parse_string(token)),
             TokenKind::LongString(_) => self.parse_long_string(token),
             TokenKind::Identifier(_) => self.parse_identifier(token),
+            TokenKind::Underscore => Ok(self.parse_unit(token, NodeKind::DiscardPattern)),
 
             TokenKind::Minus => self.unary_operator(token, NodeKind::Negate),
             TokenKind::Bang => self.unary_operator(token, NodeKind::Not),

@@ -625,8 +625,9 @@ The left-hand side of `let` does not accept only variable names; it actually acc
 which describe the way a value should be taken apart into pieces.
 
 The simplest pattern - an identifier - simply binds the matching _scrutinee_ (the right-hand side of
-`let`) to a variable with the same name, but more complex patterns exist; see [tuples](#tuples) and
-[records](#records).
+`let`) to a variable with the same name. Alternatively, the discard pattern (`_`) can be used to discard
+any unneeded values, without having to assign them a name. For the specifics, see [tuples](#tuples)
+and [records](#records).
 
 ### `if` expressions
 

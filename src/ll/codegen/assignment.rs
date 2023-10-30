@@ -46,9 +46,14 @@ impl<'e> CodeGenerator<'e> {
                 // Iterate through the fields in reverse, since going from the top of the stack
                 // that's the order we want to destructure our variables in.
                 for &field in fields.iter().rev() {
-                    self.generate_pattern_destructuring(ast, field, Expression::Discarded)?;
+                    if ast.kind(field) == NodeKind::DiscardPattern {
+                        self.chunk.emit(Opcode::Discard);
+                    } else {
+                        self.generate_pattern_destructuring(ast, field, Expression::Discarded)?;
+                    }
                 }
             }
+            NodeKind::DiscardPattern => {}
             NodeKind::Record => self.generate_record_destructuring(ast, node, result)?,
             _ => return Err(ast.error(node, LanguageErrorKind::InvalidPattern)),
         }

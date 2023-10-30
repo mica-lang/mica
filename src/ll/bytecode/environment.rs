@@ -59,7 +59,11 @@ pub struct MethodSignature {
 impl MethodSignature {
     /// Creates a new method signature for a method that does not belong to a trait.
     pub fn new(name: Rc<str>, parameter_count: MethodParameterCount) -> Self {
-        Self { name, parameter_count, trait_id: None }
+        Self {
+            name,
+            parameter_count,
+            trait_id: None,
+        }
     }
 
     /// Renders this signature into one that can be formatted.
@@ -240,7 +244,11 @@ impl Environment {
     /// `unsafe`.
     pub(crate) unsafe fn get_prototype_unchecked(&self, id: PrototypeIndex) -> &Prototype {
         let PrototypeIndex(id) = id;
-        let proto = self.prototypes.get_unchecked(usize::from(id)).as_ref().unwrap_unchecked();
+        let proto = self
+            .prototypes
+            .get_unchecked(usize::from(id))
+            .as_ref()
+            .unwrap_unchecked();
         proto
     }
 
@@ -249,7 +257,11 @@ impl Environment {
         let slot_index = self.traits.len();
         let slot = Opr24::try_from(slot_index).map_err(|_| LanguageErrorKind::TooManyTraits)?;
         let slot = TraitIndex(slot);
-        self.traits.push(TraitPrototype { name, required: HashSet::new(), shims: vec![] });
+        self.traits.push(TraitPrototype {
+            name,
+            required: HashSet::new(),
+            shims: vec![],
+        });
         Ok(slot)
     }
 

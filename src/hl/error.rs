@@ -82,7 +82,11 @@ impl fmt::Display for Error {
             Self::ArgumentCount { expected, got } => {
                 write!(f, "{expected} arguments expected but got {got}")
             }
-            Self::ArgumentTypeMismatch { index, expected, got } => {
+            Self::ArgumentTypeMismatch {
+                index,
+                expected,
+                got,
+            } => {
                 write!(
                     f,
                     "type mismatch at argument {}, expected {expected} but got {got}",

@@ -65,7 +65,10 @@ impl Library {
             self.builtin_dtables.tuples.resize(size + 1, None);
         }
         self.builtin_dtables.tuples[size] =
-            Some(self.builtin_dtable_generator.generate_tuple(env, gc, &self.builtin_traits, size));
+            Some(
+                self.builtin_dtable_generator
+                    .generate_tuple(env, gc, &self.builtin_traits, size),
+            );
     }
 
     /// Returns the record type index of the record with the given identifier, generating it if it's
@@ -101,7 +104,9 @@ impl Library {
                 },
                 index,
             }));
-            self.builtin_dtables.records_by_identifier.insert(Rc::clone(identifier), index);
+            self.builtin_dtables
+                .records_by_identifier
+                .insert(Rc::clone(identifier), index);
             Ok(index)
         }
     }
@@ -197,13 +202,21 @@ impl BuiltinTraits {
     /// Tries to register built-in traits in the given environment.
     fn try_register_in(env: &mut Environment) -> Result<Self, LanguageErrorKind> {
         let mut builder = TraitBuilder::new(env, None, Rc::from("Iterator"))?;
-        let iterator_has_next = builder
-            .add_method(Rc::from("has_next"), MethodParameterCount::from_count_with_self(1))?;
-        let iterator_next =
-            builder.add_method(Rc::from("next"), MethodParameterCount::from_count_with_self(1))?;
+        let iterator_has_next = builder.add_method(
+            Rc::from("has_next"),
+            MethodParameterCount::from_count_with_self(1),
+        )?;
+        let iterator_next = builder.add_method(
+            Rc::from("next"),
+            MethodParameterCount::from_count_with_self(1),
+        )?;
         let (iterator, _) = builder.build();
 
-        Ok(Self { iterator, iterator_has_next, iterator_next })
+        Ok(Self {
+            iterator,
+            iterator_has_next,
+            iterator_next,
+        })
     }
 
     /// Registers built-in traits in the given environment.

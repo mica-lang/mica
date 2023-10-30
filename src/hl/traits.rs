@@ -76,13 +76,16 @@ impl<'e> TraitBuilder<'e> {
     pub fn add_function(&mut self, name: &str, arity: u8) -> Result<MethodId, Error> {
         let arity = MethodParameterCount::from_count_without_self(arity)
             .map_err(|_| Error::TooManyParametersInTraitMethod)?;
-        self.inner.add_method(Rc::from(name), arity).map(MethodId).map_err(|e| match e {
-            LanguageErrorKind::TooManyTraits => Error::TooManyTraits,
-            LanguageErrorKind::TooManyFunctions => Error::TooManyFunctions,
-            LanguageErrorKind::TooManyMethods => Error::TooManyMethods,
-            LanguageErrorKind::TooManyParameters => Error::TooManyParametersInTraitMethod,
-            _ => unreachable!(),
-        })
+        self.inner
+            .add_method(Rc::from(name), arity)
+            .map(MethodId)
+            .map_err(|e| match e {
+                LanguageErrorKind::TooManyTraits => Error::TooManyTraits,
+                LanguageErrorKind::TooManyFunctions => Error::TooManyFunctions,
+                LanguageErrorKind::TooManyMethods => Error::TooManyMethods,
+                LanguageErrorKind::TooManyParameters => Error::TooManyParametersInTraitMethod,
+                _ => unreachable!(),
+            })
     }
 
     /// Finishes building the trait and wraps it into a value.

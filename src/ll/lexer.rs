@@ -92,7 +92,12 @@ impl Lexer {
 
     /// Creates a new lexer.
     pub fn new(module_name: Rc<str>, input: String) -> Self {
-        Self { module_name, input, location: Default::default(), token_start: Default::default() }
+        Self {
+            module_name,
+            input,
+            location: Default::default(),
+            token_start: Default::default(),
+        }
     }
 
     /// Emits an error.
@@ -102,17 +107,27 @@ impl Lexer {
 
     /// Emits an error at a specific location.
     fn error_at(&self, location: Location, kind: LanguageErrorKind) -> LanguageError {
-        LanguageError::Compile { module_name: Rc::clone(&self.module_name), kind, location }
+        LanguageError::Compile {
+            module_name: Rc::clone(&self.module_name),
+            kind,
+            location,
+        }
     }
 
     /// Emits a token at the `token_start` location.
     fn token(&self, kind: TokenKind) -> Token {
-        Token { kind, location: self.token_start }
+        Token {
+            kind,
+            location: self.token_start,
+        }
     }
 
     /// Returns the character at the current position.
     fn get(&self) -> char {
-        self.input[self.location.byte..].chars().next().unwrap_or(Self::EOF)
+        self.input[self.location.byte..]
+            .chars()
+            .next()
+            .unwrap_or(Self::EOF)
     }
 
     /// Advances the current position by a character.

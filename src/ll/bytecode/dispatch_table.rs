@@ -40,7 +40,12 @@ impl DispatchTable {
 
     /// Returns a reference to the method at the given index.
     pub fn get_method(&self, index: MethodIndex) -> Option<GcRaw<Closure>> {
-        self.methods.get(index.to_usize()).into_iter().flatten().copied().next()
+        self.methods
+            .get(index.to_usize())
+            .into_iter()
+            .flatten()
+            .copied()
+            .next()
     }
 
     /// Adds a method into the dispatch table.

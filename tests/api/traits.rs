@@ -13,15 +13,22 @@ fn exposing_traits_from_rust() {
     engine.set("GameLoop", game_loop_trait).reveal();
 
     let game: Value = engine
-        .start("test.mi", include_str!("traits/exposing_traits_from_rust.mi"))
+        .start(
+            "test.mi",
+            include_str!("traits/exposing_traits_from_rust.mi"),
+        )
         .reveal()
         .trampoline()
         .reveal();
 
-    let _: Value = engine.call_method(game.clone(), m_draw, [Value::new(0.1666)]).reveal();
+    let _: Value = engine
+        .call_method(game.clone(), m_draw, [Value::new(0.1666)])
+        .reveal();
     let _: Value = engine.call_method(game.clone(), m_update, []).reveal();
 
-    let did_draw: bool = engine.call_method(game.clone(), ("did_draw", 0), []).reveal();
+    let did_draw: bool = engine
+        .call_method(game.clone(), ("did_draw", 0), [])
+        .reveal();
     let did_update: bool = engine.call_method(game, ("did_update", 0), []).reveal();
 
     assert!(did_draw);
@@ -39,7 +46,10 @@ fn binding_type_that_implements_builtin_traits() {
 
     impl CountUp {
         fn new(from: usize, to: usize) -> Self {
-            Self { current: from, max: to }
+            Self {
+                current: from,
+                max: to,
+            }
         }
 
         fn has_next(&self) -> bool {
@@ -65,7 +75,10 @@ fn binding_type_that_implements_builtin_traits() {
         .reveal();
 
     let result: usize = engine
-        .start("test.mi", include_str!("traits/binding_type_that_implements_builtin_traits.mi"))
+        .start(
+            "test.mi",
+            include_str!("traits/binding_type_that_implements_builtin_traits.mi"),
+        )
         .reveal()
         .trampoline()
         .reveal();

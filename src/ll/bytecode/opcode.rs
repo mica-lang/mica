@@ -209,7 +209,12 @@ pub trait EncodeInstruction {
 
 impl EncodeInstruction for (Opcode, Opr24) {
     fn encode_instruction(&self) -> [u8; Opcode::INSTRUCTION_SIZE] {
-        [self.0 as u8, self.1.bytes[0], self.1.bytes[1], self.1.bytes[2]]
+        [
+            self.0 as u8,
+            self.1.bytes[0],
+            self.1.bytes[1],
+            self.1.bytes[2],
+        ]
     }
 }
 

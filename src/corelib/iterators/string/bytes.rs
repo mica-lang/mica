@@ -7,7 +7,10 @@ pub(crate) struct StringBytes {
 
 impl StringBytes {
     pub unsafe fn new(s: RawValue) -> Self {
-        Self { string: s, index: 0 }
+        Self {
+            string: s,
+            index: 0,
+        }
     }
 
     fn has_next(&self) -> bool {

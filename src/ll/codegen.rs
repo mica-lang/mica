@@ -62,7 +62,11 @@ impl<'e> CodeGenerator<'e> {
                 self.generate_node(
                     ast,
                     node,
-                    if i != nodes.len() - 1 { Expression::Discarded } else { Expression::Used },
+                    if i != nodes.len() - 1 {
+                        Expression::Discarded
+                    } else {
+                        Expression::Used
+                    },
                 )?;
             }
         }

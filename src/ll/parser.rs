@@ -17,7 +17,10 @@ pub struct Parser {
 impl Parser {
     /// Constructs a new parser from a lexer.
     pub fn new(lexer: Lexer) -> Self {
-        Self { ast: Ast::new(Rc::clone(&lexer.module_name)), lexer }
+        Self {
+            ast: Ast::new(Rc::clone(&lexer.module_name)),
+            lexer,
+        }
     }
 
     /// Constructs a compilation error located at the given token.
@@ -47,7 +50,11 @@ impl Parser {
     /// token. Otherwise returns `None`.
     fn try_next(&mut self, kind: TokenKind) -> Result<Option<Token>, LanguageError> {
         let next_token = self.lexer.peek_token()?;
-        Ok(if next_token.kind == kind { Some(self.lexer.next_token()?) } else { None })
+        Ok(if next_token.kind == kind {
+            Some(self.lexer.next_token()?)
+        } else {
+            None
+        })
     }
 
     /// Returns the precedence level of the given token kind.
@@ -80,7 +87,10 @@ impl Parser {
     /// Parses a "unit literal". This is used for all literals that are uniquely identified by a
     /// single token's kind (such as `nil`.)
     fn parse_unit(&mut self, token: Token, kind: NodeKind) -> NodeId {
-        self.ast.build_node(kind, ()).with_location(token.location).done()
+        self.ast
+            .build_node(kind, ())
+            .with_location(token.location)
+            .done()
     }
 
     /// Parses a number literal.
@@ -150,7 +160,11 @@ impl Parser {
     /// Parses a unary operator.
     fn unary_operator(&mut self, token: Token, kind: NodeKind) -> Result<NodeId, LanguageError> {
         let right = self.parse_expression(Self::precedence(&TokenKind::Star))?;
-        Ok(self.ast.build_node(kind, right).with_location(token.location).done())
+        Ok(self
+            .ast
+            .build_node(kind, right)
+            .with_location(token.location)
+            .done())
     }
 
     /// Parses a terminated block. Typically blocks are terminated with `end`.
@@ -187,7 +201,10 @@ impl Parser {
             }
             dest.push(next(self)?);
             match self.lexer.next_token()? {
-                Token { kind: TokenKind::Comma, .. } => (),
+                Token {
+                    kind: TokenKind::Comma,
+                    ..
+                } => (),
                 t if is_end(&t.kind) => return Ok(t),
                 token => return Err(self.error(&token, LanguageErrorKind::CommaExpected)),
             }
@@ -219,7 +236,11 @@ impl Parser {
         match self.lexer.next_token()?.kind {
             TokenKind::RightParen => {
                 let location = self.ast.location(inner);
-                Ok(self.ast.build_node(NodeKind::Paren, inner).with_location(location).done())
+                Ok(self
+                    .ast
+                    .build_node(NodeKind::Paren, inner)
+                    .with_location(location)
+                    .done())
             }
             TokenKind::Comma => {
                 let mut elements = vec![inner];
@@ -315,12 +336,18 @@ impl Parser {
                     NodeId::EMPTY
                 };
                 let location = p.ast.location(key);
-                Ok(p.ast.build_node(NodeKind::Pair, (key, value)).with_location(location).done())
+                Ok(p.ast
+                    .build_node(NodeKind::Pair, (key, value))
+                    .with_location(location)
+                    .done())
             },
         )?;
         if let TokenKind::DotDot = &end_token.kind {
             fields.push(
-                self.ast.build_node(NodeKind::Rest, ()).with_location(end_token.location).done(),
+                self.ast
+                    .build_node(NodeKind::Rest, ())
+                    .with_location(end_token.location)
+                    .done(),
             );
             let _right_brace = self.expect(TokenKind::RightBrace, |_| {
                 LanguageErrorKind::RestMustBeFollowedByRightBrace
@@ -336,7 +363,11 @@ impl Parser {
 
     fn parse_let_expression(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let right = self.parse_expression(0)?;
-        Ok(self.ast.build_node(NodeKind::Let, right).with_location(token.location).done())
+        Ok(self
+            .ast
+            .build_node(NodeKind::Let, right)
+            .with_location(token.location)
+            .done())
     }
 
     /// Parses a `do` block.
@@ -371,9 +402,13 @@ impl Parser {
             })?;
             branches.push(
                 if let Some(condition) = condition {
-                    self.ast.build_node(NodeKind::IfBranch, condition).with_children(branch)
+                    self.ast
+                        .build_node(NodeKind::IfBranch, condition)
+                        .with_children(branch)
                 } else {
-                    self.ast.build_node(NodeKind::ElseBranch, ()).with_children(branch)
+                    self.ast
+                        .build_node(NodeKind::ElseBranch, ())
+                        .with_children(branch)
                 }
                 .with_location(do_token.location)
                 .done(),
@@ -421,8 +456,9 @@ impl Parser {
     /// Parses a `for` expression.
     fn parse_for_expression(&mut self, token: Token) -> Result<NodeId, LanguageError> {
         let binding = self.parse_expression(0)?;
-        let _in_token =
-            self.expect(TokenKind::In, |_| LanguageErrorKind::InExpectedAfterForBinding)?;
+        let _in_token = self.expect(TokenKind::In, |_| {
+            LanguageErrorKind::InExpectedAfterForBinding
+        })?;
         let iterator = self.parse_expression(0)?;
         let do_token = self.expect(TokenKind::Do, |_| LanguageErrorKind::MissingDo)?;
         let mut body = Vec::new();
@@ -449,8 +485,9 @@ impl Parser {
             NodeId::EMPTY
         };
 
-        let left_paren =
-            self.expect(TokenKind::LeftParen, |_| LanguageErrorKind::LeftParenExpected)?;
+        let left_paren = self.expect(TokenKind::LeftParen, |_| {
+            LanguageErrorKind::LeftParenExpected
+        })?;
         let mut parameters = Vec::new();
         self.parse_comma_separated(&mut parameters, TokenKind::RightParen, |p| {
             let name = p.lexer.next_token()?;
@@ -459,9 +496,15 @@ impl Parser {
 
         // We allow either `constructor` or `static`, but not both.
         let kind = if let Some(token) = self.try_next(TokenKind::Constructor)? {
-            self.ast.build_node(NodeKind::Constructor, ()).with_location(token.location).done()
+            self.ast
+                .build_node(NodeKind::Constructor, ())
+                .with_location(token.location)
+                .done()
         } else if let Some(token) = self.try_next(TokenKind::Static)? {
-            self.ast.build_node(NodeKind::Static, ()).with_location(token.location).done()
+            self.ast
+                .build_node(NodeKind::Static, ())
+                .with_location(token.location)
+                .done()
         } else {
             NodeId::EMPTY
         };
@@ -506,14 +549,22 @@ impl Parser {
         } else {
             self.parse_expression(0)?
         };
-        Ok(self.ast.build_node(kind, result).with_location(token.location).done())
+        Ok(self
+            .ast
+            .build_node(kind, result)
+            .with_location(token.location)
+            .done())
     }
 
     /// Parses a struct declaration.
     fn parse_struct(&mut self, struct_token: Token) -> Result<NodeId, LanguageError> {
         let name = self.lexer.next_token()?;
         let name = self.parse_identifier(name)?;
-        Ok(self.ast.build_node(NodeKind::Struct, name).with_location(struct_token.location).done())
+        Ok(self
+            .ast
+            .build_node(NodeKind::Struct, name)
+            .with_location(struct_token.location)
+            .done())
     }
 
     /// Parses an `as` block.
@@ -567,7 +618,11 @@ impl Parser {
             TokenKind::At => {
                 let name = self.lexer.next_token()?;
                 let name = self.parse_identifier(name)?;
-                Ok(self.ast.build_node(NodeKind::Field, name).with_location(token.location).done())
+                Ok(self
+                    .ast
+                    .build_node(NodeKind::Field, name)
+                    .with_location(token.location)
+                    .done())
             }
 
             TokenKind::LeftParen => self.parse_paren_or_tuple(token),
@@ -602,7 +657,11 @@ impl Parser {
         let precedence = Self::precedence(&token.kind)
             - (Self::associativity(&token.kind) == Associativity::Right) as i8;
         let right = self.parse_expression(precedence)?;
-        Ok(self.ast.build_node(kind, (left, right)).with_location(token.location).done())
+        Ok(self
+            .ast
+            .build_node(kind, (left, right))
+            .with_location(token.location)
+            .done())
     }
 
     /// Parses a function call.

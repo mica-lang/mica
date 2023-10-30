@@ -10,7 +10,11 @@ struct CountUp {
 
 impl CountUp {
     fn with_step(min: i64, max: i64, step: i64) -> Self {
-        Self { current: min, max, step }
+        Self {
+            current: min,
+            max,
+            step,
+        }
     }
 
     fn new(min: i64, max: i64) -> Self {
@@ -38,7 +42,11 @@ struct CountDown {
 
 impl CountDown {
     fn with_step(max: i64, min: i64, step: i64) -> Self {
-        Self { current: max, min, step }
+        Self {
+            current: max,
+            min,
+            step,
+        }
     }
 
     fn new(max: i64, min: i64) -> Self {

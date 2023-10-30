@@ -56,7 +56,10 @@ struct TestSpec {
 impl TestSpec {
     fn parse(file_name: &str, code: &str) -> Self {
         let mut parser = SpecParser {
-            spec: TestSpec { file_name: file_name.to_string(), ..Default::default() },
+            spec: TestSpec {
+                file_name: file_name.to_string(),
+                ..Default::default()
+            },
             error_lines: vec![],
             current_line: 1,
         };
@@ -112,7 +115,9 @@ impl SpecParser {
         match directive {
             "error" => self.error_lines.push(argument.to_string()),
             "line" => {
-                self.spec.line_markers.insert(argument.to_string(), self.current_line);
+                self.spec
+                    .line_markers
+                    .insert(argument.to_string(), self.current_line);
             }
             _ => return false,
         }
@@ -150,11 +155,17 @@ struct ErrorMatcher<'s> {
 
 impl<'s> ErrorMatcher<'s> {
     fn error_char(&self) -> u8 {
-        self.error.get(self.position_in_error).copied().unwrap_or(b'\0')
+        self.error
+            .get(self.position_in_error)
+            .copied()
+            .unwrap_or(b'\0')
     }
 
     fn pattern_char(&self) -> u8 {
-        self.pattern.get(self.position_in_pattern).copied().unwrap_or(b'\0')
+        self.pattern
+            .get(self.position_in_pattern)
+            .copied()
+            .unwrap_or(b'\0')
     }
 
     fn match_string(&mut self, s: &str) -> bool {
@@ -268,8 +279,13 @@ impl Outcome {
 
     fn match_error_against_pattern(error: &str, pattern: &str, spec: &TestSpec) -> bool {
         let (error, pattern) = (error.as_bytes(), pattern.as_bytes());
-        let mut matcher =
-            ErrorMatcher { spec, error, pattern, position_in_error: 0, position_in_pattern: 0 };
+        let mut matcher = ErrorMatcher {
+            spec,
+            error,
+            pattern,
+            position_in_error: 0,
+            position_in_pattern: 0,
+        };
         matcher.check()
     }
 
@@ -419,8 +435,11 @@ fn collect_all_tests(base_path: impl AsRef<Path>) -> Vec<Test> {
             let entry = entry.expect("cannot read directory entry");
             let file_type = entry.file_type().expect("cannot stat directory entry");
             let path = entry.path();
-            let file_name =
-                path.file_name().unwrap().to_str().expect("invalid UTF-8 found in path");
+            let file_name = path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .expect("invalid UTF-8 found in path");
 
             if file_type.is_dir() {
                 let suite = if suite.is_empty() {
@@ -431,7 +450,11 @@ fn collect_all_tests(base_path: impl AsRef<Path>) -> Vec<Test> {
                 let suite = Arc::from(suite);
                 visit(tests, suite, &entry.path());
             } else if let Some(test_name) = file_name.strip_suffix(".test.mi") {
-                tests.push(Test { suite: Arc::clone(&suite), name: test_name.to_owned(), path });
+                tests.push(Test {
+                    suite: Arc::clone(&suite),
+                    name: test_name.to_owned(),
+                    path,
+                });
             }
         }
     }
@@ -460,16 +483,31 @@ fn main() -> ExitCode {
     let tests = collect_all_tests("tests");
     let start_time = Instant::now();
     let outcomes: Vec<_> = if args.single_threaded {
-        tests.iter().map(|test| (test.run(args.include_ignored), test)).collect()
+        tests
+            .iter()
+            .map(|test| (test.run(args.include_ignored), test))
+            .collect()
     } else {
-        tests.par_iter().map(|test| (test.run(args.include_ignored), test)).collect()
+        tests
+            .par_iter()
+            .map(|test| (test.run(args.include_ignored), test))
+            .collect()
     };
     let end_time = Instant::now();
 
     let total = outcomes.len();
-    let successful = outcomes.iter().filter(|(outcome, _)| outcome.is_success()).count();
-    let failures: Vec<_> = outcomes.iter().filter(|(outcome, _)| outcome.is_failure()).collect();
-    let ignored = outcomes.iter().filter(|(outcome, _)| outcome.is_ignored()).count();
+    let successful = outcomes
+        .iter()
+        .filter(|(outcome, _)| outcome.is_success())
+        .count();
+    let failures: Vec<_> = outcomes
+        .iter()
+        .filter(|(outcome, _)| outcome.is_failure())
+        .collect();
+    let ignored = outcomes
+        .iter()
+        .filter(|(outcome, _)| outcome.is_ignored())
+        .count();
 
     if !failures.is_empty() {
         for (outcome, test) in &failures {

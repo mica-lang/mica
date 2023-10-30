@@ -34,7 +34,8 @@ impl Chunk {
     /// Pushes an encodable piece of data into the chunk. Returns where it's located.
     pub fn emit(&mut self, instruction: impl EncodeInstruction) -> usize {
         let position = self.bytes.len();
-        self.bytes.extend_from_slice(&instruction.encode_instruction());
+        self.bytes
+            .extend_from_slice(&instruction.encode_instruction());
         // Only push one location, since all encoded instructions are 4 bytes long.
         self.locations.push(self.codegen_location);
         position
@@ -95,7 +96,9 @@ impl Chunk {
         let mut bytes = <[u8; Opcode::INSTRUCTION_SIZE]>::try_from(bytes).unwrap();
         let opcode: Opcode = std::mem::transmute(bytes[0]);
         bytes[0] = 0;
-        let operand = Opr24 { bytes: [bytes[1], bytes[2], bytes[3]] };
+        let operand = Opr24 {
+            bytes: [bytes[1], bytes[2], bytes[3]],
+        };
         *pc += Opcode::INSTRUCTION_SIZE;
         (opcode, operand)
     }
@@ -154,7 +157,10 @@ impl Chunk {
     /// Returns the location (in file) of the program counter.
     pub fn location(&self, pc: usize) -> Location {
         let index = pc >> 2;
-        self.locations.get(index).copied().unwrap_or(Location::UNINIT)
+        self.locations
+            .get(index)
+            .copied()
+            .unwrap_or(Location::UNINIT)
     }
 
     /// Returns whether the given program counter is at the end of the chunk.

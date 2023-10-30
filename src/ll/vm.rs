@@ -238,8 +238,11 @@ impl Fiber {
 
     /// Returns an upvalue for the local at the given stack slot.
     fn get_upvalue_for_local(&mut self, stack_slot: u32) -> Pin<Rc<Upvalue>> {
-        if let Some((_, upvalue)) =
-            self.open_upvalues.iter().rev().find(|(slot, _)| *slot == stack_slot)
+        if let Some((_, upvalue)) = self
+            .open_upvalues
+            .iter()
+            .rev()
+            .find(|(slot, _)| *slot == stack_slot)
         {
             Pin::clone(upvalue)
         } else {
@@ -254,7 +257,8 @@ impl Fiber {
 
     /// Allocates `n` storage slots for local variables.
     fn allocate_chunk_storage_slots(&mut self, n: usize) {
-        self.stack.extend(std::iter::repeat_with(|| RawValue::from(())).take(n));
+        self.stack
+            .extend(std::iter::repeat_with(|| RawValue::from(())).take(n));
     }
 
     /// Calls a function. For bytecode functions this saves the stack and begins executing the
@@ -279,8 +283,10 @@ impl Fiber {
                 self.allocate_chunk_storage_slots(chunk.preallocate_stack_slots as usize);
             }
             FunctionKind::Foreign(f) => {
-                let arguments =
-                    unsafe { self.stack.get_unchecked(self.stack.len() - argument_count..) };
+                let arguments = unsafe {
+                    self.stack
+                        .get_unchecked(self.stack.len() - argument_count..)
+                };
                 let result = match f(library, gc, arguments) {
                     Ok(value) => value,
                     Err(kind) => {
@@ -359,7 +365,10 @@ impl Fiber {
     ) -> GcRaw<Closure> {
         let function = unsafe { env.get_function_unchecked(function_id) };
         let mut captures = Vec::new();
-        if let FunctionKind::Bytecode { captured_locals, .. } = &function.kind {
+        if let FunctionKind::Bytecode {
+            captured_locals, ..
+        } = &function.kind
+        {
             for capture in captured_locals {
                 captures.push(match capture {
                     CaptureKind::Local(slot) => {
@@ -373,7 +382,11 @@ impl Fiber {
                 });
             }
         }
-        gc.allocate(Closure { name, function_id, captures })
+        gc.allocate(Closure {
+            name,
+            function_id,
+            captures,
+        })
     }
 
     /// Returns the dispatch table of the given value.
@@ -387,9 +400,10 @@ impl Fiber {
                 ValueKind::Function => &library.builtin_dtables.function,
                 ValueKind::Struct => value.get_raw_struct_unchecked().get().dtable(),
                 ValueKind::Trait => value.get_raw_trait_unchecked().get().dtable(),
-                ValueKind::UserData => {
-                    value.get_raw_user_data_unchecked().get().dtable(Some(library))
-                }
+                ValueKind::UserData => value
+                    .get_raw_user_data_unchecked()
+                    .get()
+                    .dtable(Some(library)),
             }
         }
     }
@@ -414,7 +428,12 @@ impl Fiber {
     fn initialize_dtable_with_trait_methods(
         &mut self,
         methods: impl Iterator<
-            Item = (Rc<str>, MethodParameterCount, ImplementedTraitIndex, FunctionIndex),
+            Item = (
+                Rc<str>,
+                MethodParameterCount,
+                ImplementedTraitIndex,
+                FunctionIndex,
+            ),
         >,
         traits: &[GcRaw<Trait>],
         env: &Environment,
@@ -475,7 +494,10 @@ impl Fiber {
 
     /// Returns an iterator over all GC roots.
     fn roots<'a>(&'a self, globals: &'a mut Globals) -> impl Iterator<Item = RawValue> + 'a {
-        globals.iter().chain(self.stack.iter().copied()).chain(self.closure.map(RawValue::from))
+        globals
+            .iter()
+            .chain(self.stack.iter().copied())
+            .chain(self.closure.map(RawValue::from))
     }
 
     /// Interprets bytecode in the chunk, with the provided user state.
@@ -612,8 +634,10 @@ impl Fiber {
                     }
                     let _sentinel = unsafe { self.chunk.read_u32(&mut self.pc) };
 
-                    let record: Box<dyn UserData> =
-                        Box::new(Record { record_type: Rc::clone(record_type), fields });
+                    let record: Box<dyn UserData> = Box::new(Record {
+                        record_type: Rc::clone(record_type),
+                        fields,
+                    });
                     let record = gc.allocate(record);
                     self.push(RawValue::from(record));
                 }
@@ -954,7 +978,10 @@ impl Fiber {
             }
         }
 
-        let result = self.stack.pop().expect("no result found on the top of the stack");
+        let result = self
+            .stack
+            .pop()
+            .expect("no result found on the top of the stack");
 
         self.stack.resize(
             self.stack.len() - self.chunk.preallocate_stack_slots as usize,

@@ -31,7 +31,10 @@ pub enum Control {
 
 /// The kind of the function (bytecode or FFI).
 pub enum FunctionKind {
-    Bytecode { chunk: Rc<Chunk>, captured_locals: Vec<CaptureKind> },
+    Bytecode {
+        chunk: Rc<Chunk>,
+        captured_locals: Vec<CaptureKind>,
+    },
     Foreign(ForeignFunction),
     Control(Control),
 }
@@ -39,7 +42,10 @@ pub enum FunctionKind {
 impl std::fmt::Debug for FunctionKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Bytecode { chunk, captured_locals } => f
+            Self::Bytecode {
+                chunk,
+                captured_locals,
+            } => f
                 .debug_struct("Bytecode")
                 .field("chunk", chunk)
                 .field("captured_locals", captured_locals)

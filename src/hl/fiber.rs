@@ -17,9 +17,18 @@ impl<'e> Fiber<'e> {
         if self.inner.halted() {
             Ok(None)
         } else {
-            let Engine { env, library, globals, gc, .. } = &mut self.engine;
+            let Engine {
+                env,
+                library,
+                globals,
+                gc,
+                ..
+            } = &mut self.engine;
             let result = self.inner.interpret(env, library, globals, gc)?;
-            Ok(Some(T::try_from_value(&Value::from_raw(result), &self.engine.library)?))
+            Ok(Some(T::try_from_value(
+                &Value::from_raw(result),
+                &self.engine.library,
+            )?))
         }
     }
 

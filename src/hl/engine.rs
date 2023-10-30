@@ -136,7 +136,10 @@ impl Engine {
                 builtin_traits: &BuiltinTraits,
                 identifier: &str,
             ) -> Gc<DispatchTable> {
-                let fields = identifier.split('+').enumerate().map(|(index, name)| (name, index));
+                let fields = identifier
+                    .split('+')
+                    .enumerate()
+                    .map(|(index, name)| (name, index));
                 let type_name = if identifier.is_empty() {
                     String::from("Record{}")
                 } else {
@@ -182,7 +185,9 @@ impl Engine {
                 records: vec![],
                 records_by_identifier: HashMap::new(),
             },
-            Box::new(DtableGenerator { corelib: corelib.clone() }),
+            Box::new(DtableGenerator {
+                corelib: corelib.clone(),
+            }),
             builtin_traits,
         );
 
@@ -195,7 +200,13 @@ impl Engine {
 
         let iterator = create_trait_value(&mut env, &mut gc, library.builtin_traits.iterator);
 
-        let mut engine = Self { env, library, globals: Globals::new(), gc, debug_options };
+        let mut engine = Self {
+            env,
+            library,
+            globals: Globals::new(),
+            gc,
+            debug_options,
+        };
         // Unwrapping here is fine because at this point we haven't got quite that many globals
         // registered to overflow an Opr24.
         engine.set_built_type(&nil).unwrap();
@@ -205,7 +216,9 @@ impl Engine {
         engine.set_built_type(&list).unwrap();
         engine.set("Iterator", iterator).unwrap();
 
-        corelib.load(&mut engine).expect("corelib failed to load (in CoreLibrary::load)");
+        corelib
+            .load(&mut engine)
+            .expect("corelib failed to load (in CoreLibrary::load)");
 
         engine
     }
@@ -247,7 +260,10 @@ impl Engine {
             eprintln!("{main_chunk:#?}");
         }
 
-        Ok(Script { engine: self, main_chunk })
+        Ok(Script {
+            engine: self,
+            main_chunk,
+        })
     }
 
     /// Compiles and starts executing a script in a fiber.
@@ -298,8 +314,11 @@ impl Engine {
     where
         T: TryFromValue,
     {
-        let stack: Vec<_> =
-            Some(function).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
+        let stack: Vec<_> = Some(function)
+            .into_iter()
+            .chain(arguments)
+            .map(|x| x.to_raw(&mut self.gc))
+            .collect();
         // Having to construct a chunk here isn't the most clean, but it's the simplest way of
         // making the VM perform a function call. It reuses sanity checks such as ensuring
         // `function` can actually be called.
@@ -312,7 +331,10 @@ impl Engine {
         ));
         chunk.emit(Opcode::Halt);
         let chunk = Rc::new(chunk);
-        let fiber = Fiber { engine: self, inner: vm::Fiber::new(chunk, stack) };
+        let fiber = Fiber {
+            engine: self,
+            inner: vm::Fiber::new(chunk, stack),
+        };
         fiber.trampoline()
     }
 
@@ -381,8 +403,11 @@ impl Engine {
         // Unwrapping here is fine because `to_method_id` ensures that a method with a given ID
         // exists.
         let signature = self.env.get_method_signature(method_id.0).unwrap();
-        let stack: Vec<_> =
-            Some(receiver).into_iter().chain(arguments).map(|x| x.to_raw(&mut self.gc)).collect();
+        let stack: Vec<_> = Some(receiver)
+            .into_iter()
+            .chain(arguments)
+            .map(|x| x.to_raw(&mut self.gc))
+            .collect();
         let argument_count = MethodParameterCount::from_count_with_self(
             u8::try_from(stack.len()).map_err(|_| Error::TooManyArguments)?,
         );
@@ -399,7 +424,10 @@ impl Engine {
         ));
         chunk.emit(Opcode::Halt);
         let chunk = Rc::new(chunk);
-        let fiber = Fiber { engine: self, inner: vm::Fiber::new(chunk, stack) };
+        let fiber = Fiber {
+            engine: self,
+            inner: vm::Fiber::new(chunk, stack),
+        };
         fiber.trampoline()
     }
 
@@ -502,7 +530,9 @@ impl Engine {
         let id = id.to_global_id(&mut self.env)?;
         self.globals.set(
             id.0,
-            value.into_value_with_engine_state(&self.library, &mut self.gc).to_raw(&mut self.gc),
+            value
+                .into_value_with_engine_state(&self.library, &mut self.gc)
+                .to_raw(&mut self.gc),
         );
         Ok(())
     }
@@ -585,8 +615,11 @@ impl Engine {
                 hidden_in_stack_traces: false,
             })
             .map_err(|_| Error::TooManyFunctions)?;
-        let function =
-            RawValue::from(self.gc.allocate(Closure { name, function_id, captures: Vec::new() }));
+        let function = RawValue::from(self.gc.allocate(Closure {
+            name,
+            function_id,
+            captures: Vec::new(),
+        }));
         self.globals.set(global_id.0, function);
         Ok(())
     }
@@ -684,7 +717,9 @@ impl<'e> Script<'e> {
 
 impl<'e> fmt::Debug for Script<'e> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Script").field("main_chunk", &self.main_chunk).finish_non_exhaustive()
+        f.debug_struct("Script")
+            .field("main_chunk", &self.main_chunk)
+            .finish_non_exhaustive()
     }
 }
 
@@ -720,7 +755,9 @@ impl GlobalName for &str {
         Ok(if let Some(slot) = env.get_global(self) {
             GlobalId(slot)
         } else {
-            env.create_global(self).map(GlobalId).map_err(|_| Error::TooManyGlobals)?
+            env.create_global(self)
+                .map(GlobalId)
+                .map_err(|_| Error::TooManyGlobals)?
         })
     }
 }

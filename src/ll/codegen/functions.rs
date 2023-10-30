@@ -42,7 +42,12 @@ impl FunctionCallConv {
     }
 
     fn allow_new_fields(&self) -> bool {
-        matches!(self, Self::Constructor { allow_new_fields: true })
+        matches!(
+            self,
+            Self::Constructor {
+                allow_new_fields: true
+            }
+        )
     }
 }
 
@@ -72,8 +77,12 @@ impl<'e> CodeGenerator<'e> {
         let (_, parameters) = ast.node_pair(head);
         let parameter_list = ast.children(parameters).unwrap();
 
-        let mut generator =
-            CodeGenerator::new(Rc::clone(&self.chunk.module_name), self.env, self.library, self.gc);
+        let mut generator = CodeGenerator::new(
+            Rc::clone(&self.chunk.module_name),
+            self.env,
+            self.library,
+            self.gc,
+        );
         // NOTE: Hopefully the allocation from this mem::take gets optimized out.
         generator.locals.parent = Some(mem::take(&mut self.locals));
         if call_conv.has_field_access() {
@@ -87,13 +96,17 @@ impl<'e> CodeGenerator<'e> {
         // Create local variables for all the parameters.
         // Note that in bare functions, the function itself acts as the `self` parameter.
         let receiver = if call_conv.has_visible_self() {
-            let receiver = generator.create_variable("self", VariableAllocation::Inherit).unwrap();
+            let receiver = generator
+                .create_variable("self", VariableAllocation::Inherit)
+                .unwrap();
             if let Some(struct_data) = generator.struct_data.as_deref_mut() {
                 struct_data.receiver = Some(receiver);
             }
             receiver
         } else {
-            generator.create_variable("<receiver>", VariableAllocation::Inherit).unwrap()
+            generator
+                .create_variable("<receiver>", VariableAllocation::Inherit)
+                .unwrap()
         };
         for &parameter in parameter_list {
             let parameter_name = ast.string(parameter).unwrap();
@@ -126,9 +139,14 @@ impl<'e> CodeGenerator<'e> {
         if let Some(create_struct) = create_struct {
             let field_count = generator.struct_data.as_ref().unwrap().fields.len();
             let field_count = Opr24::try_from(field_count).map_err(|_| {
-                ast.error(ast.node_pair(parameters).0, LanguageErrorKind::TooManyFields)
+                ast.error(
+                    ast.node_pair(parameters).0,
+                    LanguageErrorKind::TooManyFields,
+                )
             })?;
-            generator.chunk.patch(create_struct, (Opcode::CreateStruct, field_count));
+            generator
+                .chunk
+                .patch(create_struct, (Opcode::CreateStruct, field_count));
             // We also have to discard whatever was at the top of the stack at the moment (ie. the
             // result of the function's body) and instead return the struct.
             generator.chunk.emit(Opcode::Discard);
@@ -171,10 +189,15 @@ impl<'e> CodeGenerator<'e> {
             },
             hidden_in_stack_traces: false,
         };
-        let function_id =
-            self.env.create_function(function).map_err(|kind| ast.error(node, kind))?;
+        let function_id = self
+            .env
+            .create_function(function)
+            .map_err(|kind| ast.error(node, kind))?;
 
-        Ok(GeneratedFunction { id: function_id, parameter_count })
+        Ok(GeneratedFunction {
+            id: function_id,
+            parameter_count,
+        })
     }
 
     /// Ensures that a `Func` node is a valid bare function - without a kind, and with a body.
@@ -212,10 +235,14 @@ impl<'e> CodeGenerator<'e> {
         let function = self.generate_function(
             ast,
             node,
-            GenerateFunctionOptions { name: Rc::clone(name), call_conv: FunctionCallConv::Bare },
+            GenerateFunctionOptions {
+                name: Rc::clone(name),
+                call_conv: FunctionCallConv::Bare,
+            },
         )?;
 
-        self.chunk.emit((Opcode::CreateClosure, function.id.to_opr24()));
+        self.chunk
+            .emit((Opcode::CreateClosure, function.id.to_opr24()));
         self.generate_variable_sink(variable);
 
         Ok(ExpressionResult::Absent)
@@ -238,7 +265,8 @@ impl<'e> CodeGenerator<'e> {
             },
         )?;
 
-        self.chunk.emit((Opcode::CreateClosure, function.id.to_opr24()));
+        self.chunk
+            .emit((Opcode::CreateClosure, function.id.to_opr24()));
         Ok(ExpressionResult::Present)
     }
 }

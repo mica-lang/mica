@@ -62,9 +62,17 @@ impl DispatchTableDescriptor {
             })
             .map_err(|_| Error::TooManyFunctions)?;
         let signature = signature.resolve(builtin_traits);
-        let index =
-            env.get_or_create_method_index(&signature).map_err(|_| Error::TooManyMethods)?;
-        dtable.set_method(index, gc.allocate(Closure { name, function_id, captures: Vec::new() }));
+        let index = env
+            .get_or_create_method_index(&signature)
+            .map_err(|_| Error::TooManyMethods)?;
+        dtable.set_method(
+            index,
+            gc.allocate(Closure {
+                name,
+                function_id,
+                captures: Vec::new(),
+            }),
+        );
         Ok(())
     }
 
@@ -149,9 +157,12 @@ where
     /// Internal converter for use with `BareExactArgs` parameter counts.
     fn function_to_method_parameter_count(count: FunctionParameterCount) -> MethodParameterCount {
         MethodParameterCount::from_count_without_self(
-            count.to_fixed().expect("BareExactArgs functions are never varargs"),
+            count
+                .to_fixed()
+                .expect("BareExactArgs functions are never varargs"),
         )
-        .expect("generated ForeignFunction variants only support up to 8 arguments") // Thus, overflow is impossible.
+        .expect("generated ForeignFunction variants only support up to 8 arguments")
+        // Thus, overflow is impossible.
     }
 
     /// Adds a static function to the struct.

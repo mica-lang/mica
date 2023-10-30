@@ -19,7 +19,11 @@ impl<'a> Arguments<'a> {
     /// [raw function][RawForeignFunction].
     pub fn new(raw_arguments: &'a [RawValue], library: &'a Library) -> Self {
         // Skip the first argument, which is `self` (or the currently called function).
-        Self { this: raw_arguments[0], inner: &raw_arguments[1..], library }
+        Self {
+            this: raw_arguments[0],
+            inner: &raw_arguments[1..],
+            library,
+        }
     }
 
     /// Returns the number of arguments passed to the function.
@@ -30,7 +34,10 @@ impl<'a> Arguments<'a> {
     /// Raises an error if there weren't exactly `n` arguments passed to the function.
     pub fn expect_exactly(&self, n: usize) -> Result<(), Error> {
         if self.count() != n {
-            Err(Error::ArgumentCount { expected: n, got: self.count() })
+            Err(Error::ArgumentCount {
+                expected: n,
+                got: self.count(),
+            })
         } else {
             Ok(())
         }
@@ -39,7 +46,10 @@ impl<'a> Arguments<'a> {
     /// Raises an error if there weren't at least `n` arguments passed to the function.
     pub fn expect_at_least(&self, n: usize) -> Result<(), Error> {
         if self.count() < n {
-            Err(Error::ArgumentCount { expected: n, got: self.count() })
+            Err(Error::ArgumentCount {
+                expected: n,
+                got: self.count(),
+            })
         } else {
             Ok(())
         }
@@ -64,7 +74,11 @@ impl<'a> Arguments<'a> {
         let value = self.inner.get(n).cloned().unwrap_or(RawValue::from(()));
         T::try_from_value(&Value::from_raw(value), self.library).map_err(|error| {
             if let Error::TypeMismatch { expected, got } = error {
-                Error::ArgumentTypeMismatch { index: n, expected, got }
+                Error::ArgumentTypeMismatch {
+                    index: n,
+                    expected,
+                    got,
+                }
             } else {
                 error
             }

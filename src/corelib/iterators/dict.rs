@@ -17,7 +17,11 @@ pub(crate) struct DictIter {
 impl DictIter {
     pub(crate) unsafe fn new(value: RawValue) -> Self {
         let dict = value.downcast_user_data_unchecked::<Dict>();
-        Self { dict: value, iter: dict.raw_iter(), len: dict.len() }
+        Self {
+            dict: value,
+            iter: dict.raw_iter(),
+            len: dict.len(),
+        }
     }
 
     fn checked_next(
@@ -29,7 +33,10 @@ impl DictIter {
         // otherwise the iterator becomes invalid.
         let current_len = unsafe { dict.downcast_user_data_unchecked::<Dict>().len() };
         if len != current_len {
-            return Err(LenChangedDuringIteration { was: len, became: current_len });
+            return Err(LenChangedDuringIteration {
+                was: len,
+                became: current_len,
+            });
         }
         Ok(iter.next())
     }
@@ -63,7 +70,11 @@ struct LenChangedDuringIteration {
 
 impl std::fmt::Display for LenChangedDuringIteration {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "dict length changed during iteration (was {}, became {})", self.was, self.became)
+        write!(
+            f,
+            "dict length changed during iteration (was {}, became {})",
+            self.was, self.became
+        )
     }
 }
 

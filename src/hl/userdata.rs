@@ -63,7 +63,10 @@ pub(crate) struct Type<T> {
 
 impl<T> Type<T> {
     pub(crate) fn new(dtable: Gc<DispatchTable>) -> Self {
-        Self { dtable, _data: PhantomData }
+        Self {
+            dtable,
+            _data: PhantomData,
+        }
     }
 }
 
@@ -144,7 +147,12 @@ impl<T> Object<T> {
         }
         self.shared_borrows.set(self.shared_borrows.get() + 1);
         let reference = &*self.data.get();
-        Ok((reference, UnsafeRefGuard { object: self as *const _ }))
+        Ok((
+            reference,
+            UnsafeRefGuard {
+                object: self as *const _,
+            },
+        ))
     }
 
     /// Borrows the object mutably using an unsafe guard.
@@ -159,7 +167,12 @@ impl<T> Object<T> {
         }
         self.borrowed_mutably.set(true);
         let reference = &mut *self.data.get();
-        Ok((reference, UnsafeMutGuard { object: self as *const _ }))
+        Ok((
+            reference,
+            UnsafeMutGuard {
+                object: self as *const _,
+            },
+        ))
     }
 }
 

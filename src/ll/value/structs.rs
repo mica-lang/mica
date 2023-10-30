@@ -33,7 +33,9 @@ impl Struct {
             dtable: UnsafeCell::new(self.dtable().instance.unwrap_unchecked()),
             sealed: Cell::new(true),
             fields: UnsafeCell::new(
-                std::iter::repeat(RawValue::from(())).take(field_count).collect(),
+                std::iter::repeat(RawValue::from(()))
+                    .take(field_count)
+                    .collect(),
             ),
         }
     }

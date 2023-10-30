@@ -25,7 +25,9 @@ pub struct List {
 impl List {
     /// Creates a new, empty list.
     pub fn new(elements: Vec<RawValue>) -> List {
-        List { elements: UnsafeCell::new(elements) }
+        List {
+            elements: UnsafeCell::new(elements),
+        }
     }
 
     /// Returns a mutable reference to the vector inside.

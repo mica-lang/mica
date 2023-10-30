@@ -29,11 +29,16 @@ fn user_data_parameters_can_be_passed_into_functions() {
         .add_type(TypeBuilder::<Vec2>::new("Vec2").add_static("new", |x, y| Vec2 { x, y }))
         .reveal();
     engine
-        .add_function("same_vec2", |v: Vec2, x: f32, y: f32| assert_eq!(v, Vec2 { x, y }))
+        .add_function("same_vec2", |v: Vec2, x: f32, y: f32| {
+            assert_eq!(v, Vec2 { x, y })
+        })
         .reveal();
 
-    let _: Value =
-        engine.start("test.mi", "same_vec2(Vec2.new(1, 2), 1, 2)").reveal().trampoline().reveal();
+    let _: Value = engine
+        .start("test.mi", "same_vec2(Vec2.new(1, 2), 1, 2)")
+        .reveal()
+        .trampoline()
+        .reveal();
 }
 
 #[test]

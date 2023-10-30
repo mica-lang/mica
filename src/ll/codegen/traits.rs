@@ -30,7 +30,13 @@ impl<'b> TraitBuilder<'b> {
         name: Rc<str>,
     ) -> Result<Self, LanguageErrorKind> {
         let trait_id = env.create_trait(name)?;
-        Ok(Self { env, parent_chunk, trait_id, required_methods: HashSet::new(), shims: vec![] })
+        Ok(Self {
+            env,
+            parent_chunk,
+            trait_id,
+            required_methods: HashSet::new(),
+            shims: vec![],
+        })
     }
 
     /// Generates the *shim* for a trait method. The shim is responsible for calling the actual
@@ -44,24 +50,36 @@ impl<'b> TraitBuilder<'b> {
         let parameter_count = method_signature.parameter_count.to_count_with_self();
 
         let (module_name, codegen_location) = if let Some(parent_chunk) = self.parent_chunk {
-            (Rc::clone(&parent_chunk.module_name), parent_chunk.codegen_location)
+            (
+                Rc::clone(&parent_chunk.module_name),
+                parent_chunk.codegen_location,
+            )
         } else {
             (Rc::from("FFI"), Location::UNINIT)
         };
 
         let mut chunk = Chunk::new(module_name);
         chunk.codegen_location = codegen_location;
-        chunk.emit((Opcode::CallMethod, Opr24::pack((method_id.to_u16(), parameter_count))));
+        chunk.emit((
+            Opcode::CallMethod,
+            Opr24::pack((method_id.to_u16(), parameter_count)),
+        ));
         chunk.emit(Opcode::Return);
 
-        let shim_name = Rc::from(format!("trait {trait_name}.{} <shim>", method_signature.name));
+        let shim_name = Rc::from(format!(
+            "trait {trait_name}.{} <shim>",
+            method_signature.name
+        ));
         let chunk = Rc::new(chunk);
         let function_id = self.env.create_function(Function {
             name: shim_name,
             parameter_count: FunctionParameterCount::Fixed(
                 method_signature.parameter_count.to_count_without_self() as u16,
             ),
-            kind: FunctionKind::Bytecode { chunk, captured_locals: vec![] },
+            kind: FunctionKind::Bytecode {
+                chunk,
+                captured_locals: vec![],
+            },
             hidden_in_stack_traces: true,
         })?;
 
@@ -77,7 +95,11 @@ impl<'b> TraitBuilder<'b> {
         parameter_count: MethodParameterCount,
     ) -> Result<MethodIndex, LanguageErrorKind> {
         let trait_name = Rc::clone(&self.env.get_trait(self.trait_id).unwrap().name);
-        let signature = MethodSignature { name, parameter_count, trait_id: Some(self.trait_id) };
+        let signature = MethodSignature {
+            name,
+            parameter_count,
+            trait_id: Some(self.trait_id),
+        };
         let method_id = self.env.get_or_create_method_index(&signature)?;
 
         let parameter_count_with_receiving_trait = MethodParameterCount::from_count_with_self(
@@ -96,12 +118,14 @@ impl<'b> TraitBuilder<'b> {
         self.shims.push((shim_method_id, shim_function_id));
 
         if !self.required_methods.insert(method_id) {
-            return Err(LanguageErrorKind::TraitAlreadyHasMethod(RenderedSignature {
-                name: signature.name,
-                parameter_count: signature.parameter_count.to_count_without_self(),
-                // Do not duplicate the trait name in the error message.
-                trait_name: None,
-            }));
+            return Err(LanguageErrorKind::TraitAlreadyHasMethod(
+                RenderedSignature {
+                    name: signature.name,
+                    parameter_count: signature.parameter_count.to_count_without_self(),
+                    // Do not duplicate the trait name in the error message.
+                    trait_name: None,
+                },
+            ));
         }
 
         Ok(method_id)

@@ -89,9 +89,13 @@ impl Locals {
         let slot = Opr24::new(self.local_count).map_err(|_| LanguageErrorKind::TooManyLocals)?;
         let slot = LocalIndex(slot);
         let scope = self.scopes.last_mut().unwrap();
-        scope
-            .variables_by_name
-            .insert(name.to_owned(), Variable { stack_slot: slot, is_captured: false });
+        scope.variables_by_name.insert(
+            name.to_owned(),
+            Variable {
+                stack_slot: slot,
+                is_captured: false,
+            },
+        );
         self.local_count += 1;
         if allocation == VariableAllocation::Allocate {
             self.allocated_local_count += 1;
@@ -101,10 +105,12 @@ impl Locals {
     }
 
     fn variables_in_scope_mut(&mut self) -> impl Iterator<Item = (&str, &'_ mut Variable)> {
-        self.scopes
-            .iter_mut()
-            .rev()
-            .flat_map(|scope| scope.variables_by_name.iter_mut().map(|(s, v)| (s.as_str(), v)))
+        self.scopes.iter_mut().rev().flat_map(|scope| {
+            scope
+                .variables_by_name
+                .iter_mut()
+                .map(|(s, v)| (s.as_str(), v))
+        })
     }
 
     /// Returns the index of the given capture.
@@ -112,12 +118,18 @@ impl Locals {
         // Iterating over captures maybe isn't most efficient here but it's not like we have
         // thousands of them anyways. Unless somebody absolutely crazy starts writing Mica code.
         // Then all I can say is: I hate you.
-        let index = self.captures.iter().rposition(|c| c.eq(&capture)).unwrap_or_else(|| {
-            let index = self.captures.len();
-            self.captures.push(capture);
-            index
-        });
-        Ok(UpvalueIndex(Opr24::try_from(index).map_err(|_| LanguageErrorKind::TooManyCaptures)?))
+        let index = self
+            .captures
+            .iter()
+            .rposition(|c| c.eq(&capture))
+            .unwrap_or_else(|| {
+                let index = self.captures.len();
+                self.captures.push(capture);
+                index
+            });
+        Ok(UpvalueIndex(
+            Opr24::try_from(index).map_err(|_| LanguageErrorKind::TooManyCaptures)?,
+        ))
     }
 
     /// Performs a local variable lookup. This may modify parent Locals and capture upvalues.
@@ -178,8 +190,10 @@ impl<'e> CodeGenerator<'e> {
     ) -> Result<VariablePlace, LanguageErrorKind> {
         if !self.locals.scopes.is_empty() {
             let place = self.locals.create_local(name, allocation)?;
-            self.chunk.preallocate_stack_slots =
-                self.chunk.preallocate_stack_slots.max(self.locals.allocated_local_count);
+            self.chunk.preallocate_stack_slots = self
+                .chunk
+                .preallocate_stack_slots
+                .max(self.locals.allocated_local_count);
             Ok(place)
         } else {
             let slot = self.env.create_global(name)?;
@@ -252,11 +266,17 @@ impl<'e> CodeGenerator<'e> {
         node: NodeId,
     ) -> Result<ExpressionResult, LanguageError> {
         let name = ast.string(node).unwrap();
-        if let Some(variable) = self.lookup_variable(name).map_err(|kind| ast.error(node, kind))? {
+        if let Some(variable) = self
+            .lookup_variable(name)
+            .map_err(|kind| ast.error(node, kind))?
+        {
             self.generate_variable_load(variable);
             Ok(ExpressionResult::Present)
         } else {
-            Err(ast.error(node, LanguageErrorKind::VariableDoesNotExist(name.to_owned())))
+            Err(ast.error(
+                node,
+                LanguageErrorKind::VariableDoesNotExist(name.to_owned()),
+            ))
         }
     }
 }

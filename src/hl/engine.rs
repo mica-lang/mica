@@ -137,10 +137,10 @@ impl Engine {
                 identifier: &str,
             ) -> Gc<DispatchTable> {
                 let fields = identifier.split('+').enumerate().map(|(index, name)| (name, index));
-                let type_name = if identifier.len() == 0 {
+                let type_name = if identifier.is_empty() {
                     String::from("Record{}")
                 } else {
-                    format!("Record{{{}}}", identifier.replace("+", ", "))
+                    format!("Record{{{}}}", identifier.replace('+', ", "))
                 };
                 self.corelib
                     .define_record(fields, TypeBuilder::new(type_name))

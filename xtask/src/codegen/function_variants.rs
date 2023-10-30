@@ -266,8 +266,7 @@ fn generate_variant(
         SelfMode::Disabled => None,
         SelfMode::Enabled { .. } => Some("arg_self".to_string()),
     };
-    let variable_list: Vec<_> =
-        self_variable.into_iter().chain(variable_list.into_iter()).collect();
+    let variable_list: Vec<_> = self_variable.into_iter().chain(variable_list).collect();
 
     let args = variable_list.join(", ");
     write!(

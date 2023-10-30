@@ -101,7 +101,7 @@ impl RawValue {
                 .to_owned()
                 .into(),
             ValueKind::UserData => unsafe {
-                self.0.get_raw_user_data_unchecked().get().type_name().into()
+                self.0.get_raw_user_data_unchecked().get().type_name()
             },
         }
     }

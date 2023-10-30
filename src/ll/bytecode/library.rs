@@ -93,7 +93,7 @@ impl Library {
             );
             self.builtin_dtables.records.push(Rc::new(RecordType {
                 dtable,
-                identifier: Rc::clone(&identifier),
+                identifier: Rc::clone(identifier),
                 field_count: if identifier.len() > 0 {
                     identifier.chars().filter(|&c| c == '+').count() + 1
                 } else {
@@ -112,7 +112,7 @@ pub fn make_record_identifier<'a>(fields: impl Iterator<Item = &'a str>) -> Rc<s
     let mut identifier = fields.fold(String::new(), |mut a, b| {
         a.reserve(b.len() + 1);
         a.push_str(b);
-        a.push_str("+");
+        a.push('+');
         a
     });
     identifier.pop();

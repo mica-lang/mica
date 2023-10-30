@@ -66,7 +66,7 @@ impl<'e> CodeGenerator<'e> {
         let identifier = make_record_identifier(fields.iter().map(|&rc| rc.deref()));
         let record_type_index = self
             .library
-            .get_or_generate_record(&mut self.env, &mut self.gc, &identifier)
+            .get_or_generate_record(self.env, self.gc, &identifier)
             .map_err(|_| ast.error(node, LanguageErrorKind::TooManyRecords))?;
 
         self.chunk.emit((Opcode::CreateRecord, record_type_index.to_opr24()));
@@ -90,7 +90,12 @@ impl<'e> CodeGenerator<'e> {
         let is_non_exhaustive =
             !pairs.is_empty() && ast.kind(*pairs.last().unwrap()) == NodeKind::Rest;
 
-        fn destructure_member(generator: &mut CodeGenerator, ast: &Ast, key: NodeId, value: NodeId) -> Result<(), LanguageError> {
+        fn destructure_member(
+            generator: &mut CodeGenerator,
+            ast: &Ast,
+            key: NodeId,
+            value: NodeId,
+        ) -> Result<(), LanguageError> {
             let pattern = if value == NodeId::EMPTY { key } else { value };
             if ast.kind(pattern) == NodeKind::DiscardPattern {
                 generator.chunk.emit(Opcode::Discard);

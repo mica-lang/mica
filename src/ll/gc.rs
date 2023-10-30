@@ -439,7 +439,7 @@ impl<T> GcRaw<T> {
 
 impl<T> Clone for GcRaw<T> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        *self
     }
 }
 

@@ -170,9 +170,7 @@ pub mod into_value {
     impl EngineUse for DoesNotUseEngine {
         type EngineState<'a> = ();
 
-        fn change_type<'a>(_: &Library, _: &mut Memory) -> Self::EngineState<'static> {
-            ()
-        }
+        fn change_type<'a>(_: &Library, _: &mut Memory) -> Self::EngineState<'static> {}
     }
 }
 

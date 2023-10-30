@@ -181,7 +181,7 @@ impl Parser {
             match &token.kind {
                 TokenKind::Eof => return Err(self.error(&token, LanguageErrorKind::UnexpectedEof)),
                 kind if is_end(kind) => {
-                    return Ok(self.lexer.next_token()?);
+                    return self.lexer.next_token();
                 }
                 _ => (),
             }

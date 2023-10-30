@@ -1,0 +1,3 @@
+# Discard a value using the `_` pattern.
+
+let _ = "a string"
